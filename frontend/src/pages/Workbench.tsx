@@ -1276,6 +1276,8 @@ export default function Workbench() {
                 onSave={handleUpdateTask}
                 members={members}
                 currentUser={currentUser}
+                sprintId={selectedSprintId || undefined}
+                projectId={selectedProjectId || undefined}
             />
 
             {/* Story Details Drawer */}
@@ -1286,18 +1288,8 @@ export default function Workbench() {
                 onSave={handleUpdateStory}
                 members={members}
                 currentUser={currentUser}
-            />
-            {/* Story Details Drawer - This seems to be duplicated at bottom? Checking file structure... */}
-            {/* The previous View showed TaskDetailsDrawer at the end. StoryDetailsDrawer implies it exists too. */}
-            {/* Let's look at lines 1060-1080 if they exist in this view... No, view ended at 100. */}
-            {/* I will use the chunk I saw in previous failed attempt or assume location. */}
-            {/* Actually, I will just inspect the end of file again to be sure where StoryDetailsDrawer is. */}
-            <StoryDetailsDrawer
-                story={selectedStoryForEdit}
-                open={isStoryDrawerOpen}
-                onClose={() => setIsStoryDrawerOpen(false)}
-                onSave={handleUpdateStory}
-                members={members}
+                sprintId={selectedSprintId || undefined}
+                projectId={selectedProjectId || undefined}
             />
         </div >
     );

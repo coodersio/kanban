@@ -18,9 +18,11 @@ interface Props {
     onSave: (updatedStory: any) => void;
     members: Member[];
     currentUser?: { id: number, role: string, displayName: string };
+    sprintId?: number;
+    projectId?: number;
 }
 
-export default function StoryDetailsDrawer({ story, open, onClose, onSave, members, currentUser }: Props) {
+export default function StoryDetailsDrawer({ story, open, onClose, onSave, members, currentUser, sprintId, projectId }: Props) {
     const [title, setTitle] = useState('');
     const [status, setStatus] = useState('not_started');
     const [assignedTo, setAssignedTo] = useState<number | null>(null);
@@ -56,6 +58,8 @@ export default function StoryDetailsDrawer({ story, open, onClose, onSave, membe
         if (!story) return;
         onSave({
             storyId: story.id,
+            sprintId,
+            projectId,
             title,
             status,
             assignedTo,

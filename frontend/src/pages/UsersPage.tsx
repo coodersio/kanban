@@ -45,10 +45,16 @@ export default function UsersPage() {
         const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
         const method = editingUser ? 'PUT' : 'POST';
 
+        // For PUT (edit), don't send user_name (it's not allowed to be changed)
+        // For POST (create), include user_name
+        const payload = editingUser
+            ? { display_name: formData.display_name, role: formData.role, password: formData.password }
+            : formData;
+
         const res = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
+            body: JSON.stringify(payload)
         });
 
         if (res.ok) {

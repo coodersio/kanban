@@ -22,9 +22,11 @@ interface Props {
     onSave: (updatedTask: any) => void;
     members: Member[];
     currentUser?: { id: number, role: string, displayName: string };
+    sprintId?: number;
+    projectId?: number;
 }
 
-export default function TaskDetailsDrawer({ task, open, onClose, onSave, members, currentUser }: Props) {
+export default function TaskDetailsDrawer({ task, open, onClose, onSave, members, currentUser, sprintId, projectId }: Props) {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [status, setStatus] = useState<Task['status']>('not_started');
@@ -63,6 +65,8 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
         if (!task) return;
         onSave({
             id: task.id,
+            sprintId,
+            projectId,
             title,
             description,
             status,

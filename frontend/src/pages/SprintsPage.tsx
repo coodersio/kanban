@@ -29,10 +29,16 @@ export default function SprintsPage() {
         const url = editingItem ? `/api/sprints/${editingItem.id}` : '/api/sprints';
         const method = editingItem ? 'PUT' : 'POST';
 
+        // For POST (create), don't send status (backend sets it to 'planned')
+        // For PUT (update), include status
+        const payload = editingItem
+            ? formData
+            : { name: formData.name, start_date: formData.start_date, end_date: formData.end_date };
+
         await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
+            body: JSON.stringify(payload)
         });
 
         setIsOpen(false);
