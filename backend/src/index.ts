@@ -10,6 +10,7 @@ import projectTypeRoutes from './routes/project_types';
 import sprintRoutes from './routes/sprints';
 import projectRoutes from './routes/projects';
 import workbenchRoutes from './routes/workbench';
+import reportRoutes from './routes/reports';
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ app.use('/api/project-types', projectTypeRoutes);
 app.use('/api/sprints', sprintRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/workbench', workbenchRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Database connection
 const pool = new Pool({

@@ -212,7 +212,7 @@ export default function DashboardLayout() {
 
                 {/* Dynamic Page Content */}
                 <div className="flex-1 overflow-auto px-8 pb-8">
-                    <Outlet />
+                    <Outlet context={{ currentUser }} />
                 </div>
             </main>
         </div>

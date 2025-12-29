@@ -27,14 +27,19 @@ export interface Task {
     assigned_to_user?: Member;
     tags?: string[];
     due_date?: string;
+    progress?: number;
+    risk_and_countermeasure?: string;
+    created_by?: number;
 }
 
 export interface Story {
     id: number;
     title: string;
     status: string;
+    progress?: number;
     task_count?: number;
     assigned_to_user?: Member;
+    created_by?: number;
 }
 
 export interface Sprint {

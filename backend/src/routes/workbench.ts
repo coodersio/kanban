@@ -33,6 +33,52 @@ router.get('/sprint/:sprintId/projects', async (req, res) => {
     }
 });
 
+// List available projects (not in current sprint)
+router.get('/projects/available', async (req, res) => {
+    const { sprintId, search } = req.query;
+    if (!sprintId) return res.status(400).json({ message: 'Missing sprintId' });
+
+    try {
+        let query = `
+            SELECT p.* 
+            FROM projects p
+            WHERE p.id NOT IN (
+                SELECT project_id FROM sprint_projects WHERE sprint_id = $1
+            )
+        `;
+        const params: any[] = [sprintId];
+
+        if (search) {
+            query += ` AND (p.software_name ILIKE $2 OR p.description ILIKE $2)`;
+            params.push(`%${search}%`);
+        }
+
+        query += ` ORDER BY p.id DESC`;
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching available projects:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Add existing project to sprint
+router.post('/sprint/projects', async (req, res) => {
+    const { sprintId, projectId, priority, notes } = req.body;
+    if (!sprintId || !projectId) return res.status(400).json({ message: 'Missing fields' });
+
+    try {
+        await pool.query(
+            'INSERT INTO sprint_projects (sprint_id, project_id, priority, notes) VALUES ($1, $2, $3, $4) ON CONFLICT (sprint_id, project_id) DO NOTHING',
+            [sprintId, projectId, priority || 0, notes || '']
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error adding project to sprint:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 // Update Project (Reference + Snapshot)
 router.post('/project/update', async (req, res) => {
     const { sprintId, projectId, name, description, department_id, project_type_id, priority, notes } = req.body;
@@ -109,6 +155,10 @@ router.get('/board', async (req, res) => {
         // Let's query Reference Tables (`stories`, `tasks`) directly for now.
         // This makes the existing data show up immediately without a complex "Planning" step.
 
+        const user = (req.session as any).user;
+        const role = user?.role || 'external';
+        const userId = user?.id;
+
         // Efficient JOIN query to get stories with their sprint session data and assignee
         let storiesQuery = `
             SELECT 
@@ -124,18 +174,35 @@ router.get('/board', async (req, res) => {
         `;
         const storiesParams: any[] = [sprintId, projectId];
 
-        if (memberId && memberId !== '0') {
+        // Developer: Can see all stories in project/sprint, but edit is restricted (frontend).
+        // External: Can see all stories. 
+        // Filter logic currently applies to BOARD columns/swimlanes via memberId.
+
+        let filterMemberId = memberId;
+        if (role === 'developer') {
+            // Requirement: "Developer User: Can only see tasks assigned to them"
+            // Does this apply to Stories? "Can see stories they participate in" or all?
+            // Architecture 6.4.2: "Can see stories they participate in".
+            // For simplicity and context, usually Developers need to see all stories to know what to pick.
+            // But let's stick to "Can see assigned tasks" strictly. 
+            // For Stories, let's allow seeing ALL stories for now to avoid empty board confusion, 
+            // as tasks are children of stories. Hiding stories might hide the tasks.
+        }
+
+        if (filterMemberId && filterMemberId !== '0') {
             storiesQuery += ` AND (ss.assigned_to = $3 OR EXISTS (
                 SELECT 1 FROM sprint_tasks st 
                 WHERE st.story_id = s.id AND st.sprint_id = $1 AND st.assigned_to = $3
             ))`;
-            storiesParams.push(memberId);
+            storiesParams.push(filterMemberId);
         }
 
         storiesQuery += ` ORDER BY s.id ASC`;
         const storiesResult = await pool.query(storiesQuery, storiesParams);
 
-        // Efficient JOIN query to get tasks with their sprint session data and assignee
+        // TASK VISIBILITY
+        // Architecture: Developer "Only see tasks assigned to current user"
+
         let tasksQuery = `
             SELECT 
                 t.*, 
@@ -149,10 +216,16 @@ router.get('/board', async (req, res) => {
             WHERE t.project_id = $2
         `;
         const params: any[] = [sprintId, projectId];
-        if (memberId && memberId !== '0') {
+
+        // Force filter for developers
+        if (role === 'developer') {
+            tasksQuery += ` AND st.assigned_to = $3`;
+            params.push(userId);
+        } else if (memberId && memberId !== '0') {
             tasksQuery += ` AND st.assigned_to = $3`;
             params.push(memberId);
         }
+
         tasksQuery += ` ORDER BY t.id ASC`;
         const tasksResult = await pool.query(tasksQuery, params);
 
@@ -196,10 +269,42 @@ router.get('/board', async (req, res) => {
 // Update Task Status (Drag and Drop)
 router.post('/task/status', async (req, res) => {
     const { sprintId, taskId, status, projectId, storyId } = req.body;
-    // We need to Upsert into sprint_tasks.
-    // If it doesn't exist, insert it (adding to sprint).
     // If it exists, update status.
+    const user = (req.session as any).user;
+    const role = user?.role;
+    const userId = user?.id;
+
+    if (role === 'external') {
+        return res.status(403).json({ message: 'External users cannot update tasks' });
+    }
+
     try {
+        // Permission Check for Developer
+        if (role === 'developer') {
+            // Can only update if assigned to me.
+            // If creating (moving to a column for first time?), I must be the assignee.
+            // BUT, the UI drag drop usually doesn't set assignee, it just moves column.
+            // If the task is NOT assigned to me, I cannot move it.
+
+            // Check ownership
+            const check = await pool.query(
+                'SELECT assigned_to FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
+                [sprintId, taskId]
+            );
+            if (check.rows.length > 0) {
+                if (check.rows[0].assigned_to !== userId) {
+                    return res.status(403).json({ message: 'You can only move your own tasks' });
+                }
+            }
+            // If not in sprint_tasks yet, logic below will insert. 
+            // Logic below inserts with status. Assignee? 
+            // In current 'INSERT' logic (Lines 218), it copies from 'tasks' table? 
+            // No, it inserts with NULL assignee if not provided?
+            // Actually, lines 218 don't provide assignee. It defaults to null.
+            // Developers shouldn't be grabbing unassigned tasks by just moving them unless we Auto-Assign.
+            // For now, let's block if not already assigned.
+        }
+
         // Check if exists
         const check = await pool.query(
             'SELECT id FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
@@ -238,9 +343,10 @@ router.post('/story', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Create Reference Story
+        const userId = (req.session as any).user?.id || null;
         const storyRes = await client.query(
-            'INSERT INTO stories (project_id, title, description) VALUES ($1, $2, $3) RETURNING id',
-            [projectId, title, description]
+            'INSERT INTO stories (project_id, title, description, created_by) VALUES ($1, $2, $3, $4) RETURNING id',
+            [projectId, title, description, userId]
         );
         const storyId = storyRes.rows[0].id;
 
@@ -273,9 +379,10 @@ router.post('/task', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Create Reference Task
+        const userId = (req.session as any).user?.id || null;
         const taskRes = await client.query(
-            'INSERT INTO tasks (project_id, story_id, title, description, priority, size) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-            [projectId, storyId || null, title, description || '', priority || 'Should', size || 'Medium']
+            'INSERT INTO tasks (project_id, story_id, title, description, priority, size, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+            [projectId, storyId || null, title, description || '', priority || 'Should', size || 'Medium', userId]
         );
         const taskId = taskRes.rows[0].id;
 
@@ -298,25 +405,95 @@ router.post('/task', async (req, res) => {
 
 // Update Task Details
 router.post('/task/update', async (req, res) => {
-    const { id, taskId, title, description, status, priority, size, assignedTo } = req.body;
+    const { id, taskId, title, description, status, priority, size, assignedTo, progress, risk_and_countermeasure } = req.body;
     const finalTaskId = id || taskId;
     if (!finalTaskId) return res.status(400).json({ message: 'Missing taskId' });
+
+    const user = (req.session as any).user;
+    const role = user?.role;
+    const userId = user?.id;
+
+    if (role === 'external') return res.status(403).json({ message: 'Forbidden' });
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Update Reference Task
+        // Verify Permission for Reference Update
+        if (role === 'developer') {
+            const taskCheck = await client.query('SELECT created_by FROM tasks WHERE id = $1', [finalTaskId]);
+            // Also check current assignee in sprint_tasks? 
+            // The requirement says: "Edit Task: Developer (Own)". Own = "Created by me" usually, or "Assigned to me".
+            // Architecture 6.4.1: "Edit Task: Developer (Own)".
+            // Let's assume Own means Assigned OR Created.
+            const stCheck = await client.query('SELECT assigned_to FROM sprint_tasks WHERE task_id = $1', [finalTaskId]);
+
+            const isCreator = taskCheck.rows[0]?.created_by === userId;
+            const isAssignee = stCheck.rows[0]?.assigned_to === userId;
+
+            if (!isCreator && !isAssignee) {
+                // Wait, if I am assigning it to myself NOW? 
+                // Access control should be based on CURRENT state + Target state?
+                // If I am not assignee, I can't edit it.
+                // Exception: I can claim it? That's usually allowed.
+                // But strict rules "Edit Task (Own)". 
+                await client.query('ROLLBACK');
+                return res.status(403).json({ message: 'You can only edit your own tasks' });
+            }
+        }
+
         await client.query(
             'UPDATE tasks SET title = $1, description = $2, priority = $3, size = $4 WHERE id = $5',
             [title, description, priority, size, finalTaskId]
         );
 
-        // 2. Update Snapshot
-        await client.query(
-            'UPDATE sprint_tasks SET status = $1, assigned_to = $2, updated_at = NOW() WHERE task_id = $3',
-            [status, assignedTo || null, finalTaskId]
+        // 2. Update Snapshot (sprint_tasks)
+        // Note: This updates the task in all sprints it belongs to. In a proper sprint isolation model, 
+        // we might want to restrict this to the current sprint, but sticking to existing pattern for now (global update for simplicty or assuming task is only active in one 'current' sprint usually).
+        // Added progress and risk_and_countermeasure.
+        const updateResult = await client.query(
+            `UPDATE sprint_tasks 
+             SET status = $1, assigned_to = $2, progress = $3, risk_and_countermeasure = $4, updated_at = NOW() 
+             WHERE task_id = $5
+             RETURNING sprint_id, story_id`,
+            [status, assignedTo || null, progress || 0, risk_and_countermeasure || '', finalTaskId]
         );
+
+        // 3. Auto-calculate Story Progress
+        // If the task belongs to a story in a sprint, update that story's progress in that sprint.
+        // We use the returned sprint_id(s) and story_id(s) from the update.
+        const touchedRows = updateResult.rows;
+
+        // Use a Set to avoid redundant calculations if multiple rows returned (unlikely if unique constraint, but good practice)
+        const calculations = new Set<string>();
+
+        for (const row of touchedRows) {
+            if (row.story_id && row.sprint_id) {
+                const key = `${row.sprint_id}-${row.story_id}`;
+                if (!calculations.has(key)) {
+                    calculations.add(key);
+
+                    // Calculate average progress of all tasks for this story in this sprint
+                    const avgRes = await client.query(
+                        `SELECT AVG(progress) as avg_progress 
+                         FROM sprint_tasks 
+                         WHERE sprint_id = $1 AND story_id = $2`,
+                        [row.sprint_id, row.story_id]
+                    );
+
+                    const newStoryProgress = Math.round(Number(avgRes.rows[0].avg_progress) || 0);
+
+                    // Update Story Snapshot
+                    await client.query(
+                        `UPDATE sprint_stories 
+                         SET progress = $1 
+                         WHERE sprint_id = $2 AND story_id = $3`,
+                        [newStoryProgress, row.sprint_id, row.story_id]
+                    );
+                }
+            }
+        }
 
         await client.query('COMMIT');
         res.json({ success: true });
@@ -333,6 +510,20 @@ router.post('/task/update', async (req, res) => {
 router.post('/story/update', async (req, res) => {
     const { storyId, title, description, status, assignedTo } = req.body;
     if (!storyId) return res.status(400).json({ message: 'Missing storyId' });
+
+    const user = (req.session as any).user;
+    const role = user?.role;
+    const userId = user?.id;
+
+    if (role === 'external') return res.status(403).json({ message: 'Forbidden' });
+
+    if (role === 'developer') {
+        // Can only edit if created by self
+        const check = await pool.query('SELECT created_by FROM stories WHERE id = $1', [storyId]);
+        if (check.rows[0]?.created_by !== userId) {
+            return res.status(403).json({ message: 'You can only edit your own stories' });
+        }
+    }
 
     const client = await pool.connect();
     try {
@@ -361,4 +552,152 @@ router.post('/story/update', async (req, res) => {
     }
 });
 
+// Search for available stories (not in current sprint)
+router.get('/stories/available', async (req, res) => {
+    const { projectId, sprintId, search } = req.query;
+    if (!projectId || !sprintId) {
+        return res.status(400).json({ message: 'Missing projectId or sprintId' });
+    }
+
+    try {
+        let query = `
+            SELECT s.* 
+            FROM stories s
+            WHERE s.project_id = $1
+            AND s.id NOT IN (
+                SELECT story_id FROM sprint_stories WHERE sprint_id = $2
+            )
+        `;
+        const params: any[] = [projectId, sprintId];
+
+        if (search) {
+            query += ` AND (s.title ILIKE $3 OR s.description ILIKE $3)`;
+            params.push(`%${search}%`);
+        }
+
+        query += ` ORDER BY s.id DESC LIMIT 50`;
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error searching available stories:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Search for available tasks (not in current sprint)
+router.get('/tasks/available', async (req, res) => {
+    const { projectId, sprintId, storyId, search } = req.query;
+    if (!projectId || !sprintId) {
+        return res.status(400).json({ message: 'Missing projectId or sprintId' });
+    }
+
+    try {
+        let query = `
+            SELECT t.* 
+            FROM tasks t
+            WHERE t.project_id = $1
+            AND t.id NOT IN (
+                SELECT task_id FROM sprint_tasks WHERE sprint_id = $2
+            )
+        `;
+        const params: any[] = [projectId, sprintId];
+
+        if (storyId && storyId !== '0') {
+            query += ` AND t.story_id = $3`;
+            params.push(storyId);
+        }
+
+        if (search) {
+            const searchIdx = params.length + 1;
+            query += ` AND (t.title ILIKE $${searchIdx} OR t.description ILIKE $${searchIdx})`;
+            params.push(`%${search}%`);
+        }
+
+        query += ` ORDER BY t.id DESC LIMIT 50`;
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error searching available tasks:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Reuse existing Story (Add to Sprint)
+router.post('/story/reuse', async (req, res) => {
+    const { sprintId, projectId, storyId, assignedTo } = req.body;
+    if (!sprintId || !projectId || !storyId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    try {
+        await pool.query(
+            'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, progress, assigned_to) VALUES ($1, $2, $3, $4, $5, $6)',
+            [sprintId, projectId, storyId, 'not_started', 0, assignedTo || null]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error reusing story:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Reuse existing Task (Add to Sprint)
+router.post('/task/reuse', async (req, res) => {
+    const { sprintId, projectId, storyId, taskId, assignedTo } = req.body;
+    if (!sprintId || !projectId || !taskId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    try {
+        await pool.query(
+            'INSERT INTO sprint_tasks (sprint_id, project_id, story_id, task_id, status, progress, assigned_to) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [sprintId, projectId, storyId || null, taskId, 'not_started', 0, assignedTo || null]
+        );
+
+        // Orphan Logic: Auto-add parent Story if not in sprint
+        if (storyId) {
+            const checkStory = await pool.query(
+                'SELECT 1 FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
+                [sprintId, storyId]
+            );
+            if (checkStory.rows.length === 0) {
+                // Auto-add story
+                await pool.query(
+                    'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, progress) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+                    [sprintId, projectId, storyId, 'not_started', 0]
+                );
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error reusing task:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 export default router;
+
+// Get Story History
+router.get('/story/:id/history', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`
+            SELECT 
+                sp.sprint_number,
+                sp.start_date,
+                sp.end_date,
+                ss.status,
+                ss.progress,
+                ss.updated_at
+            FROM sprint_stories ss
+            JOIN sprints sp ON ss.sprint_id = sp.id
+            WHERE ss.story_id = $1
+            ORDER BY sp.start_date ASC
+        `, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching story history:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});

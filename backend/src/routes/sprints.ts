@@ -88,10 +88,41 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/:id/activate', async (req, res) => {
     const { id } = req.params;
+    const client = await pool.connect();
     try {
-        // Set this sprint to current
-        const result = await pool.query(
+        await client.query('BEGIN');
+
+        // 1. Archive any current sprints
+        await client.query("UPDATE sprints SET status = 'archived' WHERE status = 'current'");
+
+        // 2. Activate target sprint
+        const result = await client.query(
             "UPDATE sprints SET status = 'current' WHERE id = $1 RETURNING *",
+            [id]
+        );
+
+        await client.query('COMMIT');
+
+        const row = result.rows[0];
+        res.json({
+            ...row,
+            name: row.sprint_number,
+            status: toUiStatus(row.status)
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error activating sprint:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
+
+router.post('/:id/close', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(
+            "UPDATE sprints SET status = 'archived' WHERE id = $1 RETURNING *",
             [id]
         );
         const row = result.rows[0];
@@ -101,7 +132,7 @@ router.post('/:id/activate', async (req, res) => {
             status: toUiStatus(row.status)
         });
     } catch (err) {
-        console.error('Error activating sprint:', err);
+        console.error('Error closing sprint:', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 });

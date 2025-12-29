@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 export default function Workbench() {
+    const { currentUser } = useOutletContext<{ currentUser: { id: number, role: string, displayName: string } }>();
+    const isAdmin = currentUser?.role === 'admin';
+    const isExternal = currentUser?.role === 'external';
+
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [selectedSprintId, setSelectedSprintId] = useState<string>('');
     const [projects, setProjects] = useState<Project[]>([]);
@@ -59,17 +64,92 @@ export default function Workbench() {
     const [selectedStoryForEdit, setSelectedStoryForEdit] = useState<Story | null>(null);
     const [isStoryDrawerOpen, setIsStoryDrawerOpen] = useState(false);
 
-    // Initial Fetch: Get Sprints & Members from DB
+    // Reuse Flow State
+    const [storyReuseSearch, setStoryReuseSearch] = useState('');
+    const [availableStories, setAvailableStories] = useState<Story[]>([]);
+    const [selectedReuseStoryId, setSelectedReuseStoryId] = useState<number | null>(null);
+
+    const [taskReuseSearch, setTaskReuseSearch] = useState('');
+    const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
+    const [selectedReuseTaskId, setSelectedReuseTaskId] = useState<number | null>(null);
+
+    const [activeStoryTab, setActiveStoryTab] = useState('create');
+    const [activeTaskTab, setActiveTaskTab] = useState('create');
+    const [activeProjectTab, setActiveProjectTab] = useState('create');
+
+    const [projectReuseSearch, setProjectReuseSearch] = useState('');
+    const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
+    const [selectedReuseProjectId, setSelectedReuseProjectId] = useState<number | null>(null);
+
+    // Sprint Manager State
+    const [isSprintManagerOpen, setIsSprintManagerOpen] = useState(false);
+    const [newSprintName, setNewSprintName] = useState('');
+    const [newSprintStart, setNewSprintStart] = useState('');
+    const [newSprintEnd, setNewSprintEnd] = useState('');
+
+    const handleCloseSprint = async (sprintId: number) => {
+        try {
+            const res = await fetch(`/api/sprints/${sprintId}/close`, { method: 'POST' });
+            if (res.ok) {
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error closing sprint:', err);
+        }
+    };
+
+    const handleActivateSprint = async (sprintId: number) => {
+        try {
+            const res = await fetch(`/api/sprints/${sprintId}/activate`, { method: 'POST' });
+            if (res.ok) {
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error activating sprint:', err);
+        }
+    };
+
+    const handleCreateSprint = async () => {
+        if (!newSprintName || !newSprintStart || !newSprintEnd) return;
+        try {
+            const res = await fetch('/api/sprints', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: newSprintName,
+                    start_date: newSprintStart,
+                    end_date: newSprintEnd
+                })
+            });
+            if (res.ok) {
+                setNewSprintName('');
+                setNewSprintStart('');
+                setNewSprintEnd('');
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error creating sprint:', err);
+        }
+    };
+
+    // Re-fetch sprints when refreshTrigger changes
     useEffect(() => {
         fetch('/api/sprints')
             .then(res => res.json())
             .then(data => {
                 setSprints(data);
+                // If current selection is not in data, or it's empty, pick the active one
                 const active = data.find((s: Sprint) => s.status === 'active');
-                if (active) setSelectedSprintId(active.id.toString());
-                else if (data.length > 0) setSelectedSprintId(data[0].id.toString());
+                if (active && (!selectedSprintId || !data.some((s: Sprint) => s.id.toString() === selectedSprintId))) {
+                    setSelectedSprintId(active.id.toString());
+                } else if (!selectedSprintId && data.length > 0) { // If no sprint is selected initially, pick the first one if no active
+                    setSelectedSprintId(data[0].id.toString());
+                }
             });
+    }, [refreshTrigger]);
 
+    // Initial Fetch: Get Members, Departments, Project Types from DB
+    useEffect(() => {
         // Fetch Real Users
         fetch('/api/users')
             .then(res => res.json())
@@ -146,6 +226,38 @@ export default function Workbench() {
         }
     };
 
+    const handleReuseStory = async () => {
+        if (!selectedReuseStoryId || !selectedSprintId || !selectedProjectId) return;
+        try {
+            const res = await fetch('/api/workbench/story/reuse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId: selectedSprintId,
+                    projectId: selectedProjectId,
+                    storyId: selectedReuseStoryId,
+                    assignedTo: assignedTo
+                })
+            });
+            if (res.ok) {
+                setIsStoryDialogOpen(false);
+                setSelectedReuseStoryId(null);
+                setAssignedTo(null);
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error reusing story:', err);
+        }
+    };
+
+    useEffect(() => {
+        if (isStoryDialogOpen && activeStoryTab === 'reuse' && selectedProjectId && selectedSprintId) {
+            fetch(`/api/workbench/stories/available?projectId=${selectedProjectId}&sprintId=${selectedSprintId}&search=${storyReuseSearch}`)
+                .then(res => res.json())
+                .then(data => setAvailableStories(data));
+        }
+    }, [isStoryDialogOpen, activeStoryTab, storyReuseSearch, selectedProjectId, selectedSprintId]);
+
     const handleAddTask = async () => {
         if (!newTitle || !selectedSprintId || !selectedProjectId) return;
         try {
@@ -178,6 +290,79 @@ export default function Workbench() {
         }
     };
 
+    const handleReuseTask = async () => {
+        if (!selectedReuseTaskId || !selectedSprintId || !selectedProjectId) return;
+        try {
+            const res = await fetch('/api/workbench/task/reuse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId: selectedSprintId,
+                    projectId: selectedProjectId,
+                    storyId: targetStoryId,
+                    taskId: selectedReuseTaskId,
+                    assignedTo: assignedTo
+                })
+            });
+            if (res.ok) {
+                setIsTaskDialogOpen(false);
+                setSelectedReuseTaskId(null);
+                setTargetStoryId(null);
+                setAssignedTo(null);
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error reusing task:', err);
+        }
+    };
+
+    useEffect(() => {
+        if (isTaskDialogOpen && activeTaskTab === 'reuse' && selectedProjectId && selectedSprintId) {
+            fetch(`/api/workbench/tasks/available?projectId=${selectedProjectId}&sprintId=${selectedSprintId}&storyId=${targetStoryId || '0'}&search=${taskReuseSearch}`)
+                .then(res => res.json())
+                .then(data => setAvailableTasks(data));
+        }
+    }, [isTaskDialogOpen, activeTaskTab, taskReuseSearch, selectedProjectId, selectedSprintId, targetStoryId]);
+
+    // Fetch available projects for reuse
+    useEffect(() => {
+        if (isProjectDialogOpen && activeProjectTab === 'reuse' && selectedSprintId) {
+            fetch(`/api/workbench/projects/available?sprintId=${selectedSprintId}&search=${projectReuseSearch}`)
+                .then(res => res.json())
+                .then(data => setAvailableProjects(data));
+        }
+    }, [isProjectDialogOpen, activeProjectTab, projectReuseSearch, selectedSprintId]);
+
+    const handleReuseProject = async () => {
+        if (!selectedReuseProjectId || !selectedSprintId) return;
+        try {
+            const res = await fetch('/api/workbench/sprint/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId: selectedSprintId,
+                    projectId: selectedReuseProjectId,
+                    priority: projectPriority,
+                    notes: priorityNotes
+                })
+            });
+
+            if (res.ok) {
+                setIsProjectDialogOpen(false);
+                resetProjectForm();
+                // Refresh project list
+                fetch(`/api/workbench/sprint/${selectedSprintId}/projects`)
+                    .then(r => r.json())
+                    .then(data => {
+                        setProjects(data);
+                        setSelectedProjectId(selectedReuseProjectId);
+                    });
+            }
+        } catch (err) {
+            console.error('Error reusing project:', err);
+        }
+    };
+
     const handleSaveProject = async () => {
         if (!newTitle) return;
         try {
@@ -193,7 +378,6 @@ export default function Workbench() {
             };
 
             const url = isEditMode ? '/api/workbench/project/update' : '/api/projects';
-            const method = isEditMode ? 'POST' : 'POST'; // Both are POST in my new implementation for workbench updates
 
             const res = await fetch(url, {
                 method: 'POST',
@@ -230,6 +414,8 @@ export default function Workbench() {
         setProjectPriority(0);
         setIsEditMode(false);
         setEditingProjectId(null);
+        setActiveProjectTab('create');
+        setSelectedReuseProjectId(null);
     };
 
     const openAddProjectDialog = () => {
@@ -309,34 +495,30 @@ export default function Workbench() {
             {/* Workbench Header */}
             <header className="flex items-center justify-between mb-8 flex-shrink-0">
                 <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2 group cursor-pointer">
+                    <div className="flex items-center gap-4">
                         <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
-                            <SelectTrigger className="border-none shadow-none bg-transparent p-0 h-auto focus:ring-0">
-                                <span className="text-3xl font-extrabold tracking-tight text-slate-900 pr-2">
-                                    {selectedSprint?.name || "选择迭代"}
-                                </span>
-                                <ChevronDown className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" />
+                            <SelectTrigger className="w-[180px] h-11 rounded-2xl border-none bg-slate-100 shadow-inner font-bold text-sm">
+                                <SelectValue placeholder="选择迭代..." />
                             </SelectTrigger>
-                            <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                            <SelectContent className="rounded-2xl border-none shadow-2xl">
                                 {sprints.map(s => (
-                                    <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl py-3 cursor-pointer">
-                                        <div className="flex items-center justify-between w-full gap-4">
-                                            <span className="font-bold">{s.name}</span>
-                                            {s.status === 'active' && <Badge className="bg-green-500/10 text-green-600 border-none">进行中</Badge>}
+                                    <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl font-bold py-3">
+                                        <div className="flex items-center gap-2">
+                                            <span>{s.name}</span>
+                                            {s.status === 'active' && <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[8px] px-1.5 h-4">ACTIVE</Badge>}
                                         </div>
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                    </div>
 
-                    <div className="flex items-center gap-1.5">
-                        <Button variant="ghost" size="sm" className="bg-primary/10 text-primary hover:bg-primary/20 rounded-lg px-3 font-bold text-[11px] h-7">
-                            当前迭代
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-600 rounded-lg px-2 font-bold text-[11px] h-7 gap-1">
-                            <Settings className="w-3 h-3" />
-                            管理迭代
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsSprintManagerOpen(true)}
+                            className="w-11 h-11 rounded-2xl hover:bg-slate-100 text-slate-400 hover:text-primary transition-all"
+                        >
+                            <Settings className="w-5 h-5" />
                         </Button>
                     </div>
 
@@ -375,20 +557,24 @@ export default function Workbench() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button
-                        onClick={openAddStoryDialog}
-                        size="sm"
-                        className="bg-primary hover:bg-primary/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-primary/10 transition-all active:scale-95 text-white text-xs"
-                    >
-                        <Plus className="w-4 h-4 mr-1" /> 添加需求
-                    </Button>
-                    <Button
-                        onClick={() => openAddTaskDialog()}
-                        size="sm"
-                        className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-[#8E87F1]/10 transition-all active:scale-95 text-white text-xs"
-                    >
-                        <Plus className="w-4 h-4 mr-1" /> 添加任务
-                    </Button>
+                    {!isExternal && (
+                        <>
+                            <Button
+                                onClick={openAddStoryDialog}
+                                size="sm"
+                                className="bg-primary hover:bg-primary/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-primary/10 transition-all active:scale-95 text-white text-xs"
+                            >
+                                <Plus className="w-4 h-4 mr-1" /> 添加需求
+                            </Button>
+                            <Button
+                                onClick={() => openAddTaskDialog()}
+                                size="sm"
+                                className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-[#8E87F1]/10 transition-all active:scale-95 text-white text-xs"
+                            >
+                                <Plus className="w-4 h-4 mr-1" /> 添加任务
+                            </Button>
+                        </>
+                    )}
                 </div>
             </header>
 
@@ -396,9 +582,11 @@ export default function Workbench() {
                 <aside className="w-80 flex flex-col min-h-0 flex-shrink-0 animate-in fade-in duration-700">
                     <div className="flex items-center justify-between px-6 mb-8">
                         <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">项目列表</h3>
-                        <Button variant="ghost" size="icon" onClick={openAddProjectDialog} className="w-8 h-8 rounded-full text-slate-300 hover:bg-white hover:text-primary transition-all">
-                            <Plus className="w-5 h-5" />
-                        </Button>
+                        {isAdmin && (
+                            <Button variant="ghost" size="icon" onClick={openAddProjectDialog} className="w-8 h-8 rounded-full text-slate-300 hover:bg-white hover:text-primary transition-all">
+                                <Plus className="w-5 h-5" />
+                            </Button>
+                        )}
                     </div>
                     <div className="flex-1 overflow-y-auto pr-2">
                         <ProjectSidebar
@@ -441,58 +629,229 @@ export default function Workbench() {
             <Dialog open={isStoryDialogOpen} onOpenChange={setIsStoryDialogOpen}>
                 <DialogContent className="rounded-[2rem] border-none shadow-2xl p-8 max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-3xl font-black tracking-tight mb-2">Create New Story</DialogTitle>
+                        <DialogTitle className="text-3xl font-black tracking-tight mb-2">添加需求</DialogTitle>
                     </DialogHeader>
-                    <div className="grid gap-6 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="title" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Story Title</Label>
-                            <Input
-                                id="title"
-                                placeholder="E.g. Implement User Authentication"
-                                value={newTitle}
-                                onChange={(e) => setNewTitle(e.target.value)}
-                                className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
-                            />
+
+                    <nav className="flex gap-4 border-b border-slate-100 mb-6">
+                        <button
+                            onClick={() => setActiveStoryTab('create')}
+                            className={cn(
+                                "pb-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeStoryTab === 'create' ? "border-primary text-primary" : "border-transparent text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            新建需求
+                        </button>
+                        <button
+                            onClick={() => setActiveStoryTab('reuse')}
+                            className={cn(
+                                "pb-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeStoryTab === 'reuse' ? "border-primary text-primary" : "border-transparent text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            选用已有
+                        </button>
+                    </nav>
+
+                    {activeStoryTab === 'create' ? (
+                        <div className="grid gap-6 py-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="title" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">需求名称</Label>
+                                <Input
+                                    id="title"
+                                    placeholder="例如：实现用户认证系统"
+                                    value={newTitle}
+                                    onChange={(e) => setNewTitle(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">负责人</Label>
+                                <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4 text-slate-400" />
+                                            <SelectValue placeholder="指派负责人..." />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        <SelectItem value="0" className="rounded-xl font-bold">待定</SelectItem>
+                                        {members.map(m => (
+                                            <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-5 h-5">
+                                                        <AvatarImage src={m.avatar_url} />
+                                                        <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    {m.display_name}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">需求描述</Label>
+                                <Textarea
+                                    id="desc"
+                                    placeholder="输入详细的需求说明..."
+                                    value={newDesc}
+                                    onChange={(e) => setNewDesc(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[140px] text-sm font-medium leading-relaxed"
+                                />
+                            </div>
                         </div>
-                        <div className="grid gap-2">
-                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Assignee</Label>
-                            <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
-                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <User className="w-4 h-4 text-slate-400" />
-                                        <SelectValue placeholder="Assign to user..." />
-                                    </div>
-                                </SelectTrigger>
-                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
-                                    <SelectItem value="0" className="rounded-xl font-bold">Unassigned</SelectItem>
-                                    {members.map(m => (
-                                        <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
-                                            <div className="flex items-center gap-2">
-                                                <Avatar className="w-5 h-5">
-                                                    <AvatarImage src={m.avatar_url} />
-                                                    <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                {m.display_name}
-                                            </div>
-                                        </SelectItem>
+                    ) : (
+                        <div className="grid gap-6 py-4">
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">搜索已有需求</Label>
+                                <Input
+                                    placeholder="输入关键词搜索..."
+                                    value={storyReuseSearch}
+                                    onChange={(e) => setStoryReuseSearch(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">选择需求</Label>
+                                <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {availableStories.map(s => (
+                                        <div
+                                            key={s.id}
+                                            onClick={() => setSelectedReuseStoryId(s.id)}
+                                            className={cn(
+                                                "p-4 rounded-xl border-2 transition-all cursor-pointer",
+                                                selectedReuseStoryId === s.id
+                                                    ? "border-primary bg-primary/5 shadow-sm"
+                                                    : "border-slate-50 hover:border-slate-100 hover:bg-slate-50"
+                                            )}
+                                        >
+                                            <div className="font-bold text-sm text-slate-900">{s.title}</div>
+                                            {s.description && (
+                                                <div className="text-xs text-slate-400 mt-1 line-clamp-1">{s.description}</div>
+                                            )}
+                                        </div>
                                     ))}
-                                </SelectContent>
-                            </Select>
+                                    {availableStories.length === 0 && (
+                                        <div className="text-center py-8 text-slate-300 text-xs font-bold uppercase tracking-widest italic">
+                                            没有可复用的需求
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">负责人</Label>
+                                <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4 text-slate-400" />
+                                            <SelectValue placeholder="指派负责人..." />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        <SelectItem value="0" className="rounded-xl font-bold">待定</SelectItem>
+                                        {members.map(m => (
+                                            <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-5 h-5">
+                                                        <AvatarImage src={m.avatar_url} />
+                                                        <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    {m.display_name}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">需求描述</Label>
-                            <Textarea
-                                id="desc"
-                                placeholder="提供更多上下文信息..."
-                                value={newDesc}
-                                onChange={(e) => setNewDesc(e.target.value)}
-                                className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[140px] text-sm font-medium leading-relaxed"
-                            />
-                        </div>
-                    </div>
+                    )}
+
                     <DialogFooter className="mt-4">
                         <Button variant="ghost" onClick={() => setIsStoryDialogOpen(false)} className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-8 h-12">取消</Button>
-                        <Button onClick={handleAddStory} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20">创建需求</Button>
+                        {activeStoryTab === 'create' ? (
+                            <Button onClick={handleAddStory} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20">创建需求</Button>
+                        ) : (
+                            <Button onClick={handleReuseStory} disabled={!selectedReuseStoryId} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20 disabled:opacity-50">选用需求</Button>
+                        )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Sprint Manager Dialog */}
+            <Dialog open={isSprintManagerOpen} onOpenChange={setIsSprintManagerOpen}>
+                <DialogContent className="rounded-[2rem] border-none shadow-2xl p-8 max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-3xl font-black tracking-tight mb-6">迭代管理</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="grid gap-4">
+                            {sprints.map(s => (
+                                <div key={s.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all bg-white">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400">
+                                            {s.name.replace(/\D/g, '')}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-slate-900">{s.name}</div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Badge variant={s.status === 'active' ? 'default' : s.status === 'archived' ? 'secondary' : 'outline'} className="rounded-md px-2 py-0.5 text-[10px] uppercase font-bold tracking-widest">
+                                                    {s.status}
+                                                </Badge>
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    {new Date(s.start_date).toLocaleDateString()} - {new Date(s.end_date).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        {isAdmin && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => window.open(`http://localhost:4004/api/reports/weekly?sprintId=${s.id}`, '_blank')}
+                                                className="border-slate-200 text-slate-500 hover:text-primary hover:border-primary/30 rounded-xl font-bold text-[10px] uppercase tracking-widest h-9 px-3"
+                                                title="导出周报"
+                                            >
+                                                <Layout className="w-3.5 h-3.5 mr-1" />
+                                                导出
+                                            </Button>
+                                        )}
+                                        {s.status === 'planning' && isAdmin && (
+                                            <Button
+                                                size="sm"
+                                                onClick={() => handleActivateSprint(s.id)}
+                                                className="bg-primary hover:bg-primary/90 text-white rounded-xl font-black text-[10px] uppercase tracking-widest h-9 px-4 shadow-md shadow-primary/10"
+                                            >
+                                                立即启动
+                                            </Button>
+                                        )}
+                                        {s.status === 'active' && isAdmin && (
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={() => handleCloseSprint(s.id)}
+                                                className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-[10px] uppercase tracking-widest h-9 px-4 shadow-md shadow-slate-200"
+                                            >
+                                                归档结算
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <DialogFooter className="mt-8">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setIsSprintManagerOpen(false)}
+                            className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-10 h-14"
+                        >
+                            完成管理
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -501,102 +860,209 @@ export default function Workbench() {
             <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
                 <DialogContent className="rounded-[2rem] border-none shadow-2xl p-8 max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-3xl font-black tracking-tight mb-2">创建新任务</DialogTitle>
+                        <DialogTitle className="text-3xl font-black tracking-tight mb-2">添加任务</DialogTitle>
                     </DialogHeader>
-                    <div className="grid gap-6 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="task-title" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">任务标题</Label>
-                            <Input
-                                id="task-title"
-                                placeholder="例如：设计登录表单"
-                                value={newTitle}
-                                onChange={(e) => setNewTitle(e.target.value)}
-                                className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
-                            />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">负责人</Label>
-                            <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
-                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <User className="w-4 h-4 text-slate-400" />
-                                        <SelectValue placeholder="指派给用户..." />
-                                    </div>
-                                </SelectTrigger>
-                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
-                                    <SelectItem value="0" className="rounded-xl font-bold">待指派</SelectItem>
-                                    {members.map(m => (
-                                        <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
-                                            <div className="flex items-center gap-2">
-                                                <Avatar className="w-5 h-5">
-                                                    <AvatarImage src={m.avatar_url} />
-                                                    <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                {m.display_name}
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">关联需求 (可选)</Label>
-                            <Select value={targetStoryId?.toString() || '0'} onValueChange={(v) => setTargetStoryId(v === '0' ? null : parseInt(v))}>
-                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
-                                    <SelectValue placeholder="选择关联需求" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
-                                    <SelectItem value="0" className="rounded-xl font-bold">无关联需求</SelectItem>
-                                    {stories.map(s => (
-                                        <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl font-bold">
-                                            {s.title}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
+
+                    <nav className="flex gap-4 border-b border-slate-100 mb-6">
+                        <button
+                            onClick={() => setActiveTaskTab('create')}
+                            className={cn(
+                                "pb-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeTaskTab === 'create' ? "border-[#8E87F1] text-[#8E87F1]" : "border-transparent text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            新建任务
+                        </button>
+                        <button
+                            onClick={() => setActiveTaskTab('reuse')}
+                            className={cn(
+                                "pb-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeTaskTab === 'reuse' ? "border-[#8E87F1] text-[#8E87F1]" : "border-transparent text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            选用已有
+                        </button>
+                    </nav>
+
+                    {activeTaskTab === 'create' ? (
+                        <div className="grid gap-6 py-4">
                             <div className="grid gap-2">
-                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Priority</Label>
-                                <Select value={priority} onValueChange={setPriority}>
-                                    <SelectTrigger className="rounded-2xl border-slate-100 h-12 font-bold text-xs">
-                                        <SelectValue />
+                                <Label htmlFor="task-title" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">任务标题</Label>
+                                <Input
+                                    id="task-title"
+                                    placeholder="例如：设计登录表单"
+                                    value={newTitle}
+                                    onChange={(e) => setNewTitle(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">负责人</Label>
+                                <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4 text-slate-400" />
+                                            <SelectValue placeholder="指派给用户..." />
+                                        </div>
                                     </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                                        <SelectItem value="Must" className="text-red-600 font-black">Must</SelectItem>
-                                        <SelectItem value="Should" className="text-blue-600 font-black">Should</SelectItem>
-                                        <SelectItem value="Could" className="text-emerald-600 font-black">Could</SelectItem>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        <SelectItem value="0" className="rounded-xl font-bold">待指派</SelectItem>
+                                        {members.map(m => (
+                                            <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-5 h-5">
+                                                        <AvatarImage src={m.avatar_url} />
+                                                        <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    {m.display_name}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="grid gap-2">
-                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Size</Label>
-                                <Select value={size} onValueChange={setSize}>
-                                    <SelectTrigger className="rounded-2xl border-slate-100 h-12 font-bold text-xs">
-                                        <SelectValue />
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">关联需求 (可选)</Label>
+                                <Select value={targetStoryId?.toString() || '0'} onValueChange={(v) => setTargetStoryId(v === '0' ? null : parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <SelectValue placeholder="选择关联需求" />
                                     </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                                        <SelectItem value="Tiny" className="font-black">极小 (Tiny)</SelectItem>
-                                        <SelectItem value="Medium" className="font-black">适中 (Medium)</SelectItem>
-                                        <SelectItem value="Huge" className="font-black">极大 (Huge)</SelectItem>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        <SelectItem value="0" className="rounded-xl font-bold">无关联需求</SelectItem>
+                                        {stories.map(s => (
+                                            <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl font-bold">
+                                                {s.title}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">优先级</Label>
+                                    <Select value={priority} onValueChange={setPriority}>
+                                        <SelectTrigger className="rounded-2xl border-slate-100 h-12 font-bold text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                                            <SelectItem value="Must" className="text-red-600 font-black">Must</SelectItem>
+                                            <SelectItem value="Should" className="text-blue-600 font-black">Should</SelectItem>
+                                            <SelectItem value="Could" className="text-emerald-600 font-black">Could</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">工时</Label>
+                                    <Select value={size} onValueChange={setSize}>
+                                        <SelectTrigger className="rounded-2xl border-slate-100 h-12 font-bold text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                                            <SelectItem value="Tiny" className="font-black">极小 (Tiny)</SelectItem>
+                                            <SelectItem value="Medium" className="font-black">适中 (Medium)</SelectItem>
+                                            <SelectItem value="Huge" className="font-black">极大 (Huge)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="task-desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">任务描述</Label>
+                                <Textarea
+                                    id="task-desc"
+                                    placeholder="输入任务描述..."
+                                    value={newDesc}
+                                    onChange={(e) => setNewDesc(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[100px] text-sm font-medium"
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid gap-6 py-4">
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">搜索已有任务</Label>
+                                <Input
+                                    placeholder="输入关键词搜索..."
+                                    value={taskReuseSearch}
+                                    onChange={(e) => setTaskReuseSearch(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">关联需求 (可选)</Label>
+                                <Select value={targetStoryId?.toString() || '0'} onValueChange={(v) => setTargetStoryId(v === '0' ? null : parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <SelectValue placeholder="选择关联需求" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        <SelectItem value="0" className="rounded-xl font-bold">查看所有任务</SelectItem>
+                                        {stories.map(s => (
+                                            <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl font-bold">
+                                                {s.title}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">选择任务</Label>
+                                <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {availableTasks.map(t => (
+                                        <div
+                                            key={t.id}
+                                            onClick={() => setSelectedReuseTaskId(t.id)}
+                                            className={cn(
+                                                "p-4 rounded-xl border-2 transition-all cursor-pointer",
+                                                selectedReuseTaskId === t.id
+                                                    ? "border-[#8E87F1] bg-[#8E87F1]/5 shadow-sm"
+                                                    : "border-slate-50 hover:border-slate-100 hover:bg-slate-50"
+                                            )}
+                                        >
+                                            <div className="font-bold text-sm text-slate-900">{t.title || '无标题任务'}</div>
+                                            <div className="text-xs text-slate-400 mt-1 line-clamp-1">{t.description}</div>
+                                        </div>
+                                    ))}
+                                    {availableTasks.length === 0 && (
+                                        <div className="text-center py-8 text-slate-300 text-xs font-bold uppercase tracking-widest italic">
+                                            没有可复用的任务
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">负责人</Label>
+                                <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4 text-slate-400" />
+                                            <SelectValue placeholder="指派负责人..." />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        <SelectItem value="0" className="rounded-xl font-bold">待定</SelectItem>
+                                        {members.map(m => (
+                                            <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-5 h-5">
+                                                        <AvatarImage src={m.avatar_url} />
+                                                        <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    {m.display_name}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="task-desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">任务描述</Label>
-                            <Textarea
-                                id="task-desc"
-                                placeholder="输入任务描述..."
-                                value={newDesc}
-                                onChange={(e) => setNewDesc(e.target.value)}
-                                className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[100px] text-sm font-medium"
-                            />
-                        </div>
-                    </div>
+                    )}
+
                     <DialogFooter className="mt-4">
                         <Button variant="ghost" onClick={() => setIsTaskDialogOpen(false)} className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-8 h-12">取消</Button>
-                        <Button onClick={handleAddTask} className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-[#8E87F1]/20">创建任务</Button>
+                        {activeTaskTab === 'create' ? (
+                            <Button onClick={handleAddTask} className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-[#8E87F1]/20">创建任务</Button>
+                        ) : (
+                            <Button onClick={handleReuseTask} disabled={!selectedReuseTaskId} className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-[#8E87F1]/20 disabled:opacity-50">选用任务</Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -609,83 +1075,169 @@ export default function Workbench() {
                             {isEditMode ? '编辑项目' : '创建新项目'}
                         </DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-6">
-                        <div className="grid gap-2">
-                            <Label htmlFor="project-name" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目名称</Label>
-                            <Input
-                                id="project-name"
-                                placeholder="例如：电商平台重构"
-                                value={newTitle}
-                                onChange={(e) => setNewTitle(e.target.value)}
-                                className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
-                            />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">所属部门</Label>
-                            <Select value={selectedDeptId?.toString() || ''} onValueChange={(v) => setSelectedDeptId(parseInt(v))}>
-                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
-                                    <SelectValue placeholder="选择部门" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
-                                    {departments.map(d => (
-                                        <SelectItem key={d.id} value={d.id.toString()} className="rounded-xl font-bold">
-                                            {d.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目类型</Label>
-                            <Select value={selectedTypeId?.toString() || ''} onValueChange={(v) => setSelectedTypeId(parseInt(v))}>
-                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
-                                    <SelectValue placeholder="选择类型" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
-                                    {projectTypes.map(t => (
-                                        <SelectItem key={t.id} value={t.id.toString()} className="rounded-xl font-bold">
-                                            {t.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
+                    <nav className="flex gap-4 border-b border-slate-100 mb-6">
+                        <button
+                            onClick={() => setActiveProjectTab('create')}
+                            className={cn(
+                                "pb-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeProjectTab === 'create' ? "border-primary text-primary" : "border-transparent text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            创建新项目
+                        </button>
+                        <button
+                            onClick={() => setActiveProjectTab('reuse')}
+                            className={cn(
+                                "pb-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeProjectTab === 'reuse' ? "border-primary text-primary" : "border-transparent text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            选用已有项目
+                        </button>
+                    </nav>
+
+                    {activeProjectTab === 'create' ? (
+                        <div className="space-y-6">
                             <div className="grid gap-2">
-                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代优先级</Label>
+                                <Label htmlFor="project-name" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目名称</Label>
                                 <Input
-                                    type="number"
-                                    value={projectPriority}
-                                    onChange={(e) => setProjectPriority(parseInt(e.target.value) || 0)}
+                                    id="project-name"
+                                    placeholder="例如：电商平台重构"
+                                    value={newTitle}
+                                    onChange={(e) => setNewTitle(e.target.value)}
                                     className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
                                 />
                             </div>
                             <div className="grid gap-2">
-                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代备注</Label>
-                                <Input
-                                    value={priorityNotes}
-                                    onChange={(e) => setPriorityNotes(e.target.value)}
-                                    placeholder="例如：本迭代关口"
-                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">所属部门</Label>
+                                <Select value={selectedDeptId?.toString() || ''} onValueChange={(v) => setSelectedDeptId(parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <SelectValue placeholder="选择部门" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        {departments.map(d => (
+                                            <SelectItem key={d.id} value={d.id.toString()} className="rounded-xl font-bold">
+                                                {d.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目类型</Label>
+                                <Select value={selectedTypeId?.toString() || ''} onValueChange={(v) => setSelectedTypeId(parseInt(v))}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                        <SelectValue placeholder="选择类型" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                        {projectTypes.map(t => (
+                                            <SelectItem key={t.id} value={t.id.toString()} className="rounded-xl font-bold">
+                                                {t.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代优先级</Label>
+                                    <Input
+                                        type="number"
+                                        value={projectPriority}
+                                        onChange={(e) => setProjectPriority(parseInt(e.target.value) || 0)}
+                                        className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代备注</Label>
+                                    <Input
+                                        value={priorityNotes}
+                                        onChange={(e) => setPriorityNotes(e.target.value)}
+                                        placeholder="例如：本迭代关口"
+                                        className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="project-desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目描述</Label>
+                                <Textarea
+                                    id="project-desc"
+                                    placeholder="输入项目描述..."
+                                    value={newDesc}
+                                    onChange={(e) => setNewDesc(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[100px] text-sm font-medium"
                                 />
                             </div>
                         </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="project-desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目描述</Label>
-                            <Textarea
-                                id="project-desc"
-                                placeholder="输入项目描述..."
-                                value={newDesc}
-                                onChange={(e) => setNewDesc(e.target.value)}
-                                className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[100px] text-sm font-medium"
-                            />
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">搜索已有项目</Label>
+                                <Input
+                                    placeholder="输入关键词搜索..."
+                                    value={projectReuseSearch}
+                                    onChange={(e) => setProjectReuseSearch(e.target.value)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">选择项目</Label>
+                                <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {availableProjects.map(p => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => setSelectedReuseProjectId(p.id)}
+                                            className={cn(
+                                                "p-4 rounded-xl border-2 transition-all cursor-pointer",
+                                                selectedReuseProjectId === p.id
+                                                    ? "border-primary bg-primary/5 shadow-sm"
+                                                    : "border-slate-50 hover:border-slate-100 hover:bg-slate-50"
+                                            )}
+                                        >
+                                            <div className="font-bold text-sm text-slate-900">{p.name || p.software_name}</div>
+                                            <div className="text-xs text-slate-400 mt-1">{p.description}</div>
+                                        </div>
+                                    ))}
+                                    {availableProjects.length === 0 && (
+                                        <div className="text-center py-8 text-slate-300 text-xs font-bold uppercase tracking-widest italic">
+                                            没有可复用的项目
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代优先级</Label>
+                                    <Input
+                                        type="number"
+                                        value={projectPriority}
+                                        onChange={(e) => setProjectPriority(parseInt(e.target.value) || 0)}
+                                        className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代备注</Label>
+                                    <Input
+                                        value={priorityNotes}
+                                        onChange={(e) => setPriorityNotes(e.target.value)}
+                                        placeholder="例如：本迭代关口"
+                                        className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                    />
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    )}
                     <DialogFooter className="mt-8">
                         <Button variant="ghost" onClick={() => setIsProjectDialogOpen(false)} className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-8 h-12">取消</Button>
-                        <Button onClick={handleSaveProject} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20">
-                            {isEditMode ? '保存修改' : '创建项目'}
-                        </Button>
+                        {activeProjectTab === 'create' ? (
+                            <Button onClick={handleSaveProject} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20">
+                                {isEditMode ? '保存修改' : '创建项目'}
+                            </Button>
+                        ) : (
+                            <Button onClick={handleReuseProject} disabled={!selectedReuseProjectId} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20 disabled:opacity-50">
+                                选用项目
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -696,7 +1248,9 @@ export default function Workbench() {
                 onClose={() => setIsDrawerOpen(false)}
                 onSave={handleUpdateTask}
                 members={members}
+                currentUser={currentUser}
             />
+
             {/* Story Details Drawer */}
             <StoryDetailsDrawer
                 story={selectedStoryForEdit}
@@ -704,7 +1258,20 @@ export default function Workbench() {
                 onClose={() => setIsStoryDrawerOpen(false)}
                 onSave={handleUpdateStory}
                 members={members}
+                currentUser={currentUser}
             />
-        </div>
+            {/* Story Details Drawer - This seems to be duplicated at bottom? Checking file structure... */}
+            {/* The previous View showed TaskDetailsDrawer at the end. StoryDetailsDrawer implies it exists too. */}
+            {/* Let's look at lines 1060-1080 if they exist in this view... No, view ended at 100. */}
+            {/* I will use the chunk I saw in previous failed attempt or assume location. */}
+            {/* Actually, I will just inspect the end of file again to be sure where StoryDetailsDrawer is. */}
+            <StoryDetailsDrawer
+                story={selectedStoryForEdit}
+                open={isStoryDrawerOpen}
+                onClose={() => setIsStoryDrawerOpen(false)}
+                onSave={handleUpdateStory}
+                members={members}
+            />
+        </div >
     );
 }
