@@ -4,10 +4,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Briefcase } from 'lucide-react';
+import { Plus, Pencil, Trash2, Briefcase, Filter, Search as SearchIcon } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 
 interface Project {
@@ -29,6 +29,7 @@ export default function ProjectsPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [departments, setDepartments] = useState<Option[]>([]);
     const [types, setTypes] = useState<Option[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const [isOpen, setIsOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Project | null>(null);
@@ -73,7 +74,7 @@ export default function ProjectsPage() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Delete this project?')) return;
+        if (!confirm('确定要删除该项目吗？')) return;
         await fetch(`/api/projects/${id}`, { method: 'DELETE' });
         fetchProjects();
     };
@@ -89,38 +90,63 @@ export default function ProjectsPage() {
         setIsOpen(true);
     };
 
+    const filteredProjects = projects.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
+        <div className="p-6 space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
-                    <p className="text-muted-foreground">Manage your master project list.</p>
+                    <h2 className="text-2xl font-semibold text-foreground">项目列表</h2>
+                    <p className="text-sm text-muted-foreground mt-1">管理所有项目及其基本信息</p>
                 </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     <DialogTrigger asChild>
-                        <Button onClick={() => { setEditingItem(null); setFormData({ name: '', description: '', department_id: '', project_type_id: '' }); }}>
-                            <Plus className="w-4 h-4 mr-2" /> Create Project
+                        <Button
+                            onClick={() => {
+                                setEditingItem(null);
+                                setFormData({ name: '', description: '', department_id: '', project_type_id: '' });
+                            }}
+                            className="gap-2"
+                        >
+                            <Plus className="w-4 h-4" />
+                            新建项目
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[500px]">
                         <DialogHeader>
-                            <DialogTitle>{editingItem ? 'Edit Project' : 'Create Project'}</DialogTitle>
+                            <DialogTitle>{editingItem ? '编辑项目' : '新建项目'}</DialogTitle>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Project Name</Label>
-                                <Input id="name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+                        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="name">项目名称 *</Label>
+                                <Input
+                                    id="name"
+                                    value={formData.name}
+                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    placeholder="请输入项目名称"
+                                    required
+                                />
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="description">Description (Optional)</Label>
-                                <Textarea id="description" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                            <div className="space-y-2">
+                                <Label htmlFor="description">项目描述</Label>
+                                <Textarea
+                                    id="description"
+                                    value={formData.description}
+                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                    placeholder="请输入项目描述（可选）"
+                                    rows={3}
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="dept">Department</Label>
+                                <div className="space-y-2">
+                                    <Label htmlFor="dept">所属部门</Label>
                                     <Select value={formData.department_id} onValueChange={(val) => setFormData({ ...formData, department_id: val })}>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select..." />
+                                            <SelectValue placeholder="选择部门" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {departments.map(d => (
@@ -129,11 +155,11 @@ export default function ProjectsPage() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="type">Type</Label>
+                                <div className="space-y-2">
+                                    <Label htmlFor="type">项目类型</Label>
                                     <Select value={formData.project_type_id} onValueChange={(val) => setFormData({ ...formData, project_type_id: val })}>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select..." />
+                                            <SelectValue placeholder="选择类型" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {types.map(t => (
@@ -143,57 +169,113 @@ export default function ProjectsPage() {
                                     </Select>
                                 </div>
                             </div>
-                            <DialogFooter>
-                                <Button type="submit">Save</Button>
+                            <DialogFooter className="gap-2">
+                                <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+                                    取消
+                                </Button>
+                                <Button type="submit">
+                                    {editingItem ? '保存' : '创建'}
+                                </Button>
                             </DialogFooter>
                         </form>
                     </DialogContent>
                 </Dialog>
             </div>
 
-            <Card className="border-0 shadow-sm">
+            {/* Toolbar */}
+            <Card className="shadow-sm">
+                <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                        <div className="relative flex-1 max-w-sm">
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                                placeholder="搜索项目..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-10"
+                            />
+                        </div>
+                        <Button variant="outline" size="sm" className="gap-2">
+                            <Filter className="w-4 h-4" />
+                            筛选
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Projects Table */}
+            <Card className="shadow-sm">
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead>ID</TableHead>
-                                <TableHead>Project Name</TableHead>
-                                <TableHead>Department</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="w-[80px]">ID</TableHead>
+                                <TableHead>项目名称</TableHead>
+                                <TableHead>所属部门</TableHead>
+                                <TableHead>项目类型</TableHead>
+                                <TableHead className="text-right w-[120px]">操作</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {projects.map((proj) => (
-                                <TableRow key={proj.id}>
-                                    <TableCell>{proj.id}</TableCell>
+                            {filteredProjects.map((proj) => (
+                                <TableRow key={proj.id} className="hover:bg-muted/50">
+                                    <TableCell className="font-mono text-xs text-muted-foreground">
+                                        #{proj.id}
+                                    </TableCell>
                                     <TableCell>
-                                        <div className="flex flex-col">
-                                            <span className="font-medium text-base flex items-center gap-2">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
                                                 <Briefcase className="w-4 h-4 text-primary" />
-                                                {proj.name}
-                                            </span>
-                                            <span className="text-muted-foreground text-xs truncate max-w-[300px]">{proj.description}</span>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-sm">{proj.name}</span>
+                                                {proj.description && (
+                                                    <span className="text-xs text-muted-foreground line-clamp-2 mt-0.5 max-w-md">
+                                                        {proj.description}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell>{proj.department_name}</TableCell>
                                     <TableCell>
-                                        {proj.project_type_name && <Badge variant="outline">{proj.project_type_name}</Badge>}
+                                        <span className="text-sm">{proj.department_name || '-'}</span>
+                                    </TableCell>
+                                    <TableCell>
+                                        {proj.project_type_name && (
+                                            <Badge variant="secondary" className="font-normal">
+                                                {proj.project_type_name}
+                                            </Badge>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" onClick={() => openEdit(proj)}>
-                                            <Pencil className="w-4 h-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="text-red-500" onClick={() => handleDelete(proj.id)}>
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                onClick={() => openEdit(proj)}
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                onClick={() => handleDelete(proj.id)}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}
-                            {projects.length === 0 && (
+                            {filteredProjects.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                        No projects found.
+                                    <TableCell colSpan={5} className="h-32 text-center">
+                                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                                            <Briefcase className="w-8 h-8 opacity-20" />
+                                            <p className="text-sm">暂无项目数据</p>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             )}

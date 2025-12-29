@@ -14,9 +14,19 @@ import {
     Search,
     Grid3x3,
     HelpCircle,
-    Bell
+    Bell,
+    LogOut,
+    User as UserIcon
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function DashboardLayout() {
     const location = useLocation();
@@ -81,39 +91,23 @@ export default function DashboardLayout() {
                 {/* Logo */}
                 <div className="h-16 px-4 flex items-center border-b border-sidebar-border">
                     <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 bg-primary rounded-md flex items-center justify-center">
-                            <div className="text-white text-xs font-bold">K</div>
+                        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-md">
+                            <LayoutDashboard className="w-4 h-4 text-white" />
                         </div>
-                        <span className="text-base font-semibold text-foreground">KanBan</span>
+                        <span className="text-base font-semibold text-foreground">项目看板</span>
                     </div>
                 </div>
 
                 {/* Navigation */}
                 <div className="flex-1 overflow-y-auto py-4 px-3">
-                    <nav className="space-y-0.5 mb-6">
+                    <nav className="space-y-0.5">
                         <NavItem href="/dashboard" icon={Home} label="主页" />
-                        <NavItem href="/dashboard/workbench" icon={Briefcase} label="我的工作台" />
-                        <NavItem href="/dashboard/team" icon={Users} label="团队" />
-                        <NavItem href="/dashboard/analytics" icon={BarChart3} label="数据分析" />
+                        <NavItem href="/dashboard/workbench" icon={Briefcase} label="工作台" />
+                        <NavItem href="/dashboard/projects" icon={Layers} label="项目管理" />
+                        <NavItem href="/dashboard/sprints" icon={Calendar} label="迭代管理" />
+                        <NavItem href="/dashboard/users" icon={Users} label="成员管理" />
                         <NavItem href="/dashboard/settings" icon={Settings} label="设置" />
                     </nav>
-
-                    {/* Workspaces Section */}
-                    <div className="mt-6">
-                        <div className="flex items-center justify-between px-3 mb-2">
-                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                工作空间
-                            </span>
-                            <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                                <span className="text-lg leading-none">+</span>
-                            </Button>
-                        </div>
-                        <div className="space-y-1">
-                            <NavItem href="/dashboard/projects" icon={Layers} label="项目管理" />
-                            <NavItem href="/dashboard/sprints" icon={Calendar} label="迭代计划" />
-                            <NavItem href="/dashboard/users" icon={Users} label="成员管理" />
-                        </div>
-                    </div>
                 </div>
             </aside>
 
@@ -157,21 +151,46 @@ export default function DashboardLayout() {
                             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
                         </Button>
 
-                        {/* User Avatar */}
-                        <div className="ml-2 flex items-center gap-2">
-                            <Avatar
-                                className="h-8 w-8 cursor-pointer ring-2 ring-background hover:ring-ring/20 transition-all"
-                                onClick={handleLogout}
-                            >
-                                <AvatarImage src={`https://i.pravatar.cc/150?u=${currentUser?.id}`} />
-                                <AvatarFallback className="text-xs font-semibold">
-                                    {currentUser?.displayName?.charAt(0) || 'U'}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className="text-xs font-medium text-foreground hidden lg:block">
-                                {currentUser?.displayName?.split(' ')[0] || 'User'}
-                            </div>
-                        </div>
+                        {/* User Avatar with Dropdown */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="ml-2 h-auto p-0 hover:bg-transparent">
+                                    <div className="flex items-center gap-2">
+                                        <Avatar className="h-8 w-8 ring-2 ring-background hover:ring-ring/20 transition-all">
+                                            <AvatarImage src={`https://i.pravatar.cc/150?u=${currentUser?.id}`} />
+                                            <AvatarFallback className="text-xs font-semibold">
+                                                {currentUser?.displayName?.charAt(0) || 'U'}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="text-xs font-medium text-foreground hidden lg:block">
+                                            {currentUser?.displayName?.split(' ')[0] || 'User'}
+                                        </div>
+                                    </div>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>
+                                    <div className="flex flex-col space-y-1">
+                                        <p className="text-sm font-medium leading-none">{currentUser?.displayName}</p>
+                                        <p className="text-xs leading-none text-muted-foreground">
+                                            {currentUser?.role === 'admin' ? '管理员' : '团队成员'}
+                                        </p>
+                                    </div>
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                    <Link to="/dashboard/settings" className="cursor-pointer">
+                                        <Settings className="mr-2 h-4 w-4" />
+                                        <span>设置</span>
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
+                                    <LogOut className="mr-2 h-4 w-4" />
+                                    <span>退出登录</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </header>
 

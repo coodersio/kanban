@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Pencil, Trash2, UserCircle, Shield, User as UserIcon } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from '@/lib/utils';
 
 interface UserData {
     id: number;
@@ -22,7 +24,6 @@ export default function UsersPage() {
     const [isOpen, setIsOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<UserData | null>(null);
 
-    // Form State
     const [formData, setFormData] = useState({
         user_name: '',
         display_name: '',
@@ -59,7 +60,7 @@ export default function UsersPage() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure?')) return;
+        if (!confirm('确定要删除该成员吗？')) return;
         await fetch(`/api/users/${id}`, { method: 'DELETE' });
         fetchUsers();
     }
@@ -69,130 +70,180 @@ export default function UsersPage() {
         setFormData({
             user_name: user.user_name,
             display_name: user.display_name,
-            password: '', // Don't fill password
+            password: '',
             role: user.role
         });
         setIsOpen(true);
     }
 
+    const getRoleBadge = (role: string) => {
+        const config = {
+            admin: { label: '管理员', icon: Shield, className: 'bg-purple-100 text-purple-700 border-purple-200' },
+            developer: { label: '开发者', icon: UserIcon, className: 'bg-blue-100 text-blue-700 border-blue-200' },
+            external: { label: '外部成员', icon: UserCircle, className: 'bg-slate-100 text-slate-700 border-slate-200' }
+        };
+        const { label, icon: Icon, className } = config[role as keyof typeof config] || config.developer;
+        return (
+            <Badge variant="outline" className={cn('font-normal gap-1', className)}>
+                <Icon className="w-3 h-3" />
+                {label}
+            </Badge>
+        );
+    };
+
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
+        <div className="p-6 space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Team Members</h2>
-                    <p className="text-muted-foreground">Manage your team and their permissions.</p>
+                    <h2 className="text-2xl font-semibold text-foreground">团队成员</h2>
+                    <p className="text-sm text-muted-foreground mt-1">管理团队成员及其权限</p>
                 </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     <DialogTrigger asChild>
-                        <Button onClick={() => { setEditingUser(null); setFormData({ user_name: '', display_name: '', password: '', role: 'developer' }) }}>
-                            <Plus className="w-4 h-4 mr-2" /> Add Member
+                        <Button
+                            onClick={() => {
+                                setEditingUser(null);
+                                setFormData({ user_name: '', display_name: '', password: '', role: 'developer' });
+                            }}
+                            className="gap-2"
+                        >
+                            <Plus className="w-4 h-4" />
+                            添加成员
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
-                            <DialogTitle>{editingUser ? 'Edit User' : 'Add New Member'}</DialogTitle>
+                            <DialogTitle>{editingUser ? '编辑成员' : '添加新成员'}</DialogTitle>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="user_name">Username</Label>
+                        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="user_name">用户名 *</Label>
                                 <Input
                                     id="user_name"
                                     value={formData.user_name}
                                     onChange={e => setFormData({ ...formData, user_name: e.target.value })}
                                     disabled={!!editingUser}
+                                    placeholder="用于登录的用户名"
+                                    required
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="display_name">Display Name</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="display_name">显示名称 *</Label>
                                 <Input
                                     id="display_name"
                                     value={formData.display_name}
                                     onChange={e => setFormData({ ...formData, display_name: e.target.value })}
+                                    placeholder="显示的姓名"
+                                    required
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="role">Role</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="role">角色</Label>
                                 <Select value={formData.role} onValueChange={(val) => setFormData({ ...formData, role: val })}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select role" />
+                                        <SelectValue placeholder="选择角色" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="admin">Admin</SelectItem>
-                                        <SelectItem value="developer">Developer</SelectItem>
-                                        <SelectItem value="external">External</SelectItem>
+                                        <SelectItem value="admin">管理员</SelectItem>
+                                        <SelectItem value="developer">开发者</SelectItem>
+                                        <SelectItem value="external">外部成员</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="password">{editingUser ? 'New Password (Optional)' : 'Password'}</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="password">
+                                    {editingUser ? '新密码（可选）' : '密码 *'}
+                                </Label>
                                 <Input
                                     id="password"
                                     type="password"
                                     value={formData.password}
                                     onChange={e => setFormData({ ...formData, password: e.target.value })}
+                                    placeholder={editingUser ? '留空则不修改' : '请设置登录密码'}
+                                    required={!editingUser}
                                 />
                             </div>
-                            <DialogFooter>
-                                <Button type="submit">Save changes</Button>
+                            <DialogFooter className="gap-2">
+                                <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+                                    取消
+                                </Button>
+                                <Button type="submit">
+                                    {editingUser ? '保存' : '创建'}
+                                </Button>
                             </DialogFooter>
                         </form>
                     </DialogContent>
                 </Dialog>
             </div>
 
-            <Card className="border-0 shadow-sm">
+            {/* Users Table */}
+            <Card className="shadow-sm">
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader>
                             <TableRow className="hover:bg-transparent">
-                                <TableHead className="w-[300px] pl-6">Member</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Joined</TableHead>
-                                <TableHead className="text-right pr-6">Actions</TableHead>
+                                <TableHead className="w-[300px]">成员</TableHead>
+                                <TableHead>角色</TableHead>
+                                <TableHead>加入时间</TableHead>
+                                <TableHead className="text-right w-[120px]">操作</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <AnimatePresence>
-                                {users.map((user) => (
-                                    <motion.tr
-                                        key={user.id}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, x: -10 }}
-                                        className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                                    >
-                                        <TableCell className="pl-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
+                            {users.map((user) => (
+                                <TableRow key={user.id} className="hover:bg-muted/50">
+                                    <TableCell>
+                                        <div className="flex items-center gap-3">
+                                            <Avatar className="h-10 w-10 border-2 border-background ring-1 ring-border">
+                                                <AvatarImage src={`https://i.pravatar.cc/150?u=${user.id}`} />
+                                                <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                                                     {user.display_name.charAt(0).toUpperCase()}
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium">{user.display_name}</div>
-                                                    <div className="text-xs text-muted-foreground">@{user.user_name}</div>
-                                                </div>
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="font-medium text-sm">{user.display_name}</div>
+                                                <div className="text-xs text-muted-foreground">@{user.user_name}</div>
                                             </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                                    ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                                                    user.role === 'developer' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
-                                                {user.role}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">
-                                            {new Date(user.created_at!).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell className="text-right pr-6">
-                                            <Button variant="ghost" size="icon" onClick={() => openEdit(user)}>
-                                                <Pencil className="w-4 h-4 text-muted-foreground" />
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {getRoleBadge(user.role)}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">
+                                        {user.created_at ? new Date(user.created_at).toLocaleDateString('zh-CN') : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                onClick={() => openEdit(user)}
+                                            >
+                                                <Pencil className="w-4 h-4" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(user.id)}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                onClick={() => handleDelete(user.id)}
+                                            >
                                                 <Trash2 className="w-4 h-4" />
                                             </Button>
-                                        </TableCell>
-                                    </motion.tr>
-                                ))}
-                            </AnimatePresence>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {users.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="h-32 text-center">
+                                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                                            <UserCircle className="w-8 h-8 opacity-20" />
+                                            <p className="text-sm">暂无成员数据</p>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </CardContent>
