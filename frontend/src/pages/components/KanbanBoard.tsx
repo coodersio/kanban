@@ -87,7 +87,7 @@ export default function KanbanBoard({ sprintId, projectId, onAddTask, onEditTask
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
-            <div className="h-full overflow-y-auto px-6 py-6 custom-scrollbar">
+            <div className="h-full overflow-y-auto px-4 py-4">
                 {data.stories.map((story: Story) => (
                     <StoryRow
                         key={story.id}
@@ -112,7 +112,7 @@ export default function KanbanBoard({ sprintId, projectId, onAddTask, onEditTask
                 )}
 
                 {data.stories.length === 0 && data.tasks.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center py-20 opacity-20 italic font-black text-2xl uppercase tracking-tighter text-slate-400">
+                    <div className="h-full flex flex-col items-center justify-center py-20 opacity-50 text-sm text-muted-foreground">
                         暂无内容
                     </div>
                 )}

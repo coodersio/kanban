@@ -80,95 +80,94 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
 
     return (
         <Sheet open={open} onOpenChange={onClose}>
-            <SheetContent className="sm:max-w-md w-full border-l-0 shadow-2xl p-0 flex flex-col bg-[#F8F9FD]">
-                <SheetHeader className="p-8 pb-4 bg-white border-b border-slate-100">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black uppercase text-[10px]">T</div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">任务详情</span>
-                    </div>
-                    <SheetTitle>
+            <SheetContent className="sm:max-w-md w-full border-l shadow-xl p-0 flex flex-col bg-white">
+                <SheetHeader className="px-6 py-4 border-b flex flex-row items-center justify-between space-y-0">
+                    <SheetTitle className="flex-1">
                         <Input
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             disabled={!canEdit}
-                            className="text-2xl font-black tracking-tight border-none shadow-none focus-visible:ring-0 p-0 h-auto bg-transparent placeholder:text-slate-200 disabled:opacity-100 disabled:cursor-not-allowed"
-                            placeholder="任务标题"
+                            className="text-xl font-semibold border-none shadow-none focus-visible:ring-0 p-0 h-auto placeholder:text-muted-foreground/50"
+                            placeholder="Task Name"
                         />
                     </SheetTitle>
+                    <div className="flex items-center gap-2">
+                        {/* Actions could go here */}
+                    </div>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                    {/* Status & Priority Row */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                                <Flag className="w-3 h-3" /> 状态
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* Status & Priority */}
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                                <Flag className="w-3.5 h-3.5" /> Status
                             </Label>
                             <Select value={status} onValueChange={(val: any) => setStatus(val)} disabled={!canEdit}>
-                                <SelectTrigger className="rounded-xl border-slate-100 bg-white font-bold h-11 disabled:opacity-80">
+                                <SelectTrigger className="h-9 border-transparent hover:bg-secondary/50 transition-colors focus:ring-0 px-2 -ml-2 font-medium">
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                                    <SelectItem value="not_started">未开始</SelectItem>
-                                    <SelectItem value="in_progress">进行中</SelectItem>
-                                    <SelectItem value="completed">已完成</SelectItem>
+                                <SelectContent>
+                                    <SelectItem value="not_started">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-slate-400" />
+                                            <span>Not Started</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="in_progress">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-orange-400" />
+                                            <span>Working on it</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="completed">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                                            <span>Done</span>
+                                        </div>
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-3">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                                <Tag className="w-3 h-3" /> 优先级
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                                <Tag className="w-3.5 h-3.5" /> Priority
                             </Label>
                             <Select value={priority} onValueChange={setPriority} disabled={!canEdit}>
-                                <SelectTrigger className="rounded-xl border-slate-100 bg-white font-bold h-11 text-indigo-600 disabled:opacity-80">
+                                <SelectTrigger className="h-9 border-transparent hover:bg-secondary/50 transition-colors focus:ring-0 px-2 -ml-2 font-medium">
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                                    <SelectItem value="Must">🔥 必须做 (Must)</SelectItem>
-                                    <SelectItem value="Should">⭐ 应该做 (Should)</SelectItem>
-                                    <SelectItem value="Could">💎 可以做 (Could)</SelectItem>
+                                <SelectContent>
+                                    <SelectItem value="High">High</SelectItem>
+                                    <SelectItem value="Medium">Medium</SelectItem>
+                                    <SelectItem value="Low">Low</SelectItem>
+                                    <SelectItem value="Must">Must</SelectItem>
+                                    <SelectItem value="Should">Should</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
-                    {/* Progress Slider */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                                <Percent className="w-3 h-3" /> 进度 ({progress}%)
-                            </Label>
-                        </div>
-                        <Slider
-                            value={[progress]}
-                            onValueChange={(vals) => setProgress(vals[0])}
-                            max={100}
-                            step={5}
-                            disabled={!canEdit}
-                            className="w-full disabled:opacity-50"
-                        />
-                    </div>
-
-                    {/* Assignee & Size Row */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                                <User className="w-3 h-3" /> 负责人
+                    {/* People & Dates */}
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                                <User className="w-3.5 h-3.5" /> Person
                             </Label>
                             <Select value={assignedTo?.toString() || "none"} onValueChange={(val) => setAssignedTo(val === "none" ? null : parseInt(val))} disabled={!canEdit}>
-                                <SelectTrigger className="rounded-xl border-slate-100 bg-white font-bold h-11 disabled:opacity-80">
+                                <SelectTrigger className="h-9 border-transparent hover:bg-secondary/50 transition-colors focus:ring-0 px-2 -ml-2">
                                     <div className="flex items-center gap-2">
                                         {assignedTo ? (
                                             <Avatar className="w-5 h-5">
                                                 <AvatarImage src={`https://i.pravatar.cc/150?u=${assignedTo}`} />
-                                                <AvatarFallback>{members.find(m => m.id === assignedTo)?.display_name.charAt(0)}</AvatarFallback>
+                                                <AvatarFallback className="text-[9px]">{members.find(m => m.id === assignedTo)?.display_name.charAt(0)}</AvatarFallback>
                                             </Avatar>
-                                        ) : <User className="w-4 h-4 text-slate-300" />}
-                                        <SelectValue placeholder="待指派" />
+                                        ) : <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center"><User className="w-3 h-3 text-slate-400" /></div>}
+                                        <span className="text-sm font-medium">{assignedTo ? members.find(m => m.id === assignedTo)?.display_name : "Unassigned"}</span>
                                     </div>
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                                    <SelectItem value="none">待指派</SelectItem>
+                                <SelectContent>
+                                    <SelectItem value="none">Unassigned</SelectItem>
                                     {members.map(m => (
                                         <SelectItem key={m.id} value={m.id.toString()}>
                                             <div className="flex items-center gap-2">
@@ -183,96 +182,74 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-3">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                                <Hash className="w-3 h-3" /> 规模
-                            </Label>
-                            <Select value={size} onValueChange={setSize}>
-                                <SelectTrigger className="rounded-xl border-slate-100 bg-white font-bold h-11 text-emerald-600">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                                    <SelectItem value="Tiny">🍃 极小 (Tiny)</SelectItem>
-                                    <SelectItem value="Medium">🌱 适中 (Medium)</SelectItem>
-                                    <SelectItem value="Huge">🌳 极大 (Huge)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    {/* Risk & Countermeasure */}
-                    {!isExternal && (
-                        <div className="space-y-3">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 text-rose-500">
-                                <AlertTriangle className="w-3 h-3" /> 风险与对策
-                            </Label>
-                            <Textarea
-                                value={risk}
-                                onChange={(e) => setRisk(e.target.value)}
-                                disabled={!canEdit}
-                                placeholder="描述潜在风险及应对措施..."
-                                className="min-h-[80px] rounded-2xl border-rose-100 bg-rose-50/30 focus:ring-rose-200 resize-none p-4 font-medium text-sm leading-relaxed disabled:opacity-80"
-                            />
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                                <CalendarIcon className="w-3 h-3" /> 截止日期
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                                <CalendarIcon className="w-3.5 h-3.5" /> Due Date
                             </Label>
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
-                                        variant={"outline"}
+                                        variant={"ghost"}
                                         className={cn(
-                                            "w-full justify-start text-left font-bold h-11 rounded-xl border-slate-100 bg-white hover:bg-slate-50 transition-colors",
-                                            !dueDate && "text-slate-400"
+                                            "w-full justify-start text-left font-medium h-9 px-2 -ml-2 hover:bg-secondary/50",
+                                            !dueDate && "text-muted-foreground"
                                         )}
                                     >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {dueDate ? format(dueDate, "PPP", { locale: zhCN }) : <span>选择日期</span>}
+                                        {dueDate ? format(dueDate, "PPP", { locale: zhCN }) : <span>Set Date</span>}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 rounded-2xl border-slate-100 shadow-2xl" align="start">
+                                <PopoverContent className="w-auto p-0" align="start">
                                     <Calendar
                                         mode="single"
                                         selected={dueDate}
                                         onSelect={setDueDate}
                                         initialFocus
                                         locale={zhCN}
-                                        className="rounded-2xl"
                                     />
                                 </PopoverContent>
                             </Popover>
                         </div>
                     </div>
 
+                    {/* Progress */}
                     <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">描述</Label>
+                        <div className="flex items-center justify-between">
+                            <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                                <Percent className="w-3.5 h-3.5" /> Progress
+                            </Label>
+                            <span className="text-xs text-muted-foreground">{progress}%</span>
+                        </div>
+                        <Slider
+                            value={[progress]}
+                            onValueChange={(vals) => setProgress(vals[0])}
+                            max={100}
+                            step={5}
+                            disabled={!canEdit}
+                            className="w-full"
+                        />
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-2 pt-2 border-t">
+                        <Label className="text-sm font-semibold text-foreground">Valid info</Label>
                         <Textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             disabled={!canEdit}
-                            placeholder="添加更多关于此任务的细节..."
-                            className="min-h-[150px] rounded-2xl border-slate-100 bg-white focus:ring-primary/20 resize-none p-4 font-medium text-sm leading-relaxed disabled:opacity-80 disabled:cursor-not-allowed"
+                            placeholder="Add a description..."
+                            className="min-h-[120px] border-none bg-secondary/20 focus:bg-secondary/40 focus:ring-0 resize-none p-4 text-sm"
                         />
                     </div>
                 </div>
 
-                <div className="p-8 bg-white border-t border-slate-100">
-                    {canEdit && (
-                        <Button
-                            onClick={handleSave}
-                            className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl h-12 font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 transition-all active:scale-95"
-                        >
-                            保存更改
-                        </Button>
-                    )}
-                    {!canEdit && (
-                        <div className="w-full flex justify-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-                            仅查看模式
-                        </div>
+                <div className="p-4 border-t bg-slate-50 flex justify-end gap-2">
+                    {canEdit ? (
+                        <>
+                            <Button variant="outline" onClick={onClose} size="sm">Cancel</Button>
+                            <Button onClick={handleSave} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">Save Changes</Button>
+                        </>
+                    ) : (
+                        <span className="text-xs text-muted-foreground self-center">View Only</span>
                     )}
                 </div>
             </SheetContent>

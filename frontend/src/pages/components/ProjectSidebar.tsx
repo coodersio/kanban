@@ -1,5 +1,4 @@
-import { Building2, Folder, Globe, Plus, Settings } from "lucide-react";
-import { motion } from "framer-motion";
+import { Settings, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Project } from "@/types";
@@ -12,88 +11,75 @@ interface Props {
     onEditClick?: (project: Project) => void;
 }
 
-const ProjectIcon = ({ name = "", isSelected }: { name?: string, isSelected?: boolean }) => {
-    const n = name?.toLowerCase() || "";
-    const baseClass = "w-4 h-4 transition-colors";
-
-    if (n.includes('enterprise')) return <Building2 className={cn(baseClass, isSelected ? "text-primary" : "text-blue-600")} />;
-    if (n.includes('web platform')) return <Globe className={cn(baseClass, isSelected ? "text-primary" : "text-sky-500")} />;
-    if (n.includes('mac')) return <div className="text-sm">🍔</div>;
-    if (n.includes('cosmetic')) return <div className="text-sm">💅</div>;
-
-    return <Folder className={cn(baseClass, isSelected ? "text-primary" : "text-slate-400")} />;
-};
-
 export default function ProjectSidebar({ projects, selectedId, onSelect, onAddClick, onEditClick }: Props) {
-    return (
-        <div className="space-y-1 pb-10 px-2 lg:px-4">
-            <div className="px-2 mb-4">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">项目列表</h3>
-            </div>
-            {projects.map((project) => {
-                const isSelected = selectedId === project.id;
-                const name = project.name || (project as any).software_name || '未命名项目';
+    // Helper to generate color based on project ID (mocking the reference's colored squares)
+    const getProjectColor = (id: number) => {
+        const colors = [
+            "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-orange-500",
+            "bg-pink-500", "bg-indigo-500", "bg-teal-500", "bg-red-500"
+        ];
+        return colors[id % colors.length];
+    };
 
-                return (
-                    <motion.div key={project.id} whileHover={{ x: 4 }} whileTap={{ scale: 0.98 }}>
-                        <Button
-                            variant="ghost"
-                            onClick={() => onSelect(project.id)}
-                            className={cn(
-                                "w-full justify-start h-12 rounded-xl px-3 transition-all duration-200 group border border-transparent",
-                                isSelected
-                                    ? "bg-primary/10 text-primary border-primary/20 shadow-sm"
-                                    : "text-slate-600 hover:bg-slate-100/80 active:bg-slate-200/50"
-                            )}
-                        >
-                            <div className="flex items-center gap-3 w-full min-w-0">
-                                <div className={cn(
-                                    "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all",
-                                    isSelected ? "bg-white shadow-sm" : "bg-slate-100 group-hover:bg-white shadow-sm"
-                                )}>
-                                    <ProjectIcon name={name} isSelected={isSelected} />
-                                </div>
-                                <div className={cn(
-                                    "text-sm font-bold tracking-tight flex-1 text-left truncate min-w-0",
-                                    isSelected ? "text-primary transition-none" : "text-slate-700"
-                                )}>
-                                    {name}
-                                </div>
-                                {isSelected && onEditClick && (
+    return (
+        <div className="flex flex-col h-full bg-background">
+            <div className="flex-1 p-2 overflow-y-auto">
+                <div className="space-y-1">
+                    {projects.map((project) => {
+                        const isSelected = selectedId === project.id;
+                        return (
+                            <div
+                                key={project.id}
+                                onClick={() => onSelect(project.id)}
+                                className={cn(
+                                    "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors group relative",
+                                    isSelected ? "bg-accent/50 text-accent-foreground" : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                <div className={cn("w-3 h-3 rounded flex-shrink-0", getProjectColor(project.id))} />
+                                <span className="text-sm truncate font-medium flex-1">
+                                    {project.name || 'Untitled'}
+                                </span>
+
+                                {onEditClick && (
                                     <Button
-                                        variant="ghost"
                                         size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             onEditClick(project);
                                         }}
-                                        className="w-6 h-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-primary/20 hover:text-primary transition-all flex-shrink-0"
                                     >
-                                        <Settings className="w-3.5 h-3.5" />
+                                        <Settings size={12} />
                                     </Button>
                                 )}
+
+                                {isSelected && (
+                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-4 bg-primary rounded-r-full" />
+                                )}
                             </div>
-                        </Button>
-                    </motion.div>
-                );
-            })}
+                        );
+                    })}
 
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="mt-4 px-2">
-                <Button
-                    variant="outline"
-                    onClick={onAddClick}
-                    className="w-full h-11 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:text-primary hover:border-primary/50 hover:bg-primary/5 group transition-all font-bold text-xs flex items-center justify-center gap-2"
-                >
-                    <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                    <span>添加项目</span>
-                </Button>
-            </motion.div>
-
-            {projects.length === 0 && (
-                <div className="text-xs text-slate-300 font-medium px-4 py-10 text-center border-2 border-dashed border-slate-100 rounded-3xl">
-                    未找到项目
+                    <Button
+                        variant="ghost"
+                        onClick={onAddClick}
+                        className="w-full justify-start h-9 text-muted-foreground hover:text-foreground border border-dashed border-border/50 hover:bg-muted/20 gap-2 px-3 mt-2"
+                    >
+                        <Plus className="w-4 h-4" />
+                        <span className="text-sm">添加项目</span>
+                    </Button>
                 </div>
-            )}
+            </div>
+
+            {/* Bottom User/Settings (Optional, matching typical sidebar footer) */}
+            <div className="p-4 border-t mt-auto">
+                <Button variant="ghost" className="w-full justify-start gap-3 h-10 text-muted-foreground">
+                    <Settings size={20} />
+                    <span>设置</span>
+                </Button>
+            </div>
         </div>
     );
 }

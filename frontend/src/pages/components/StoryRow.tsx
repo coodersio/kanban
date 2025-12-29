@@ -6,39 +6,40 @@ import { ChevronDown, MoreHorizontal, Plus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-function KanbanColumn({ id, status, tasks, title, onAddTask, onEditTask }: { id: string, status: string, tasks: Task[], title: string, onAddTask?: () => void, onEditTask?: (task: Task) => void }) {
+// Monday.com style status headers
+const STATUS_CONFIG: Record<string, { label: string, color: string, bg: string }> = {
+    'not_started': { label: 'Not Started', color: 'bg-slate-400', bg: 'bg-slate-50' },
+    'in_progress': { label: 'Working on it', color: 'bg-orange-400', bg: 'bg-orange-50/30' },
+    'completed': { label: 'Done', color: 'bg-emerald-400', bg: 'bg-emerald-50/30' },
+    'blocked': { label: 'Stuck', color: 'bg-red-400', bg: 'bg-red-50/30' }
+};
+
+function KanbanColumn({ id, status, tasks, onAddTask, onEditTask }: { id: string, status: string, tasks: Task[], onAddTask?: () => void, onEditTask?: (task: Task) => void }) {
     const { setNodeRef, isOver } = useDroppable({
         id: id,
     });
 
-    const statusIcons: Record<string, any> = {
-        'not_started': <div className="w-5 h-5 rounded-md bg-slate-200 flex items-center justify-center text-[10px] font-black mr-2">N</div>,
-        'in_progress': <div className="w-5 h-5 rounded-md bg-orange-100 text-orange-600 flex items-center justify-center text-[10px] font-black mr-2">P</div>,
-        'completed': <div className="w-5 h-5 rounded-md bg-green-100 text-green-600 flex items-center justify-center text-[10px] font-black mr-2">D</div>
-    };
+    const config = STATUS_CONFIG[status] || STATUS_CONFIG['not_started'];
 
     return (
         <div className="flex flex-col h-full min-w-0">
-            {/* Column Header */}
-            <div className="flex items-center justify-between mb-4 px-1 text-slate-900">
-                <div className="flex items-center">
-                    {statusIcons[status]}
-                    <span className="text-sm font-black uppercase tracking-tight">{title}</span>
-                    <span className="ml-2 text-[10px] font-black bg-slate-100 text-slate-400 w-5 h-5 rounded-full flex items-center justify-center">
+            {/* Column Header - Monday Style: Text matches status color */}
+            <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2">
+                    <div className={cn("w-3 h-3 rounded-full", config.color)} />
+                    <span className="text-sm font-medium text-slate-700">{config.label}</span>
+                    <span className="text-xs text-muted-foreground ml-1">
                         {tasks.length}
                     </span>
                 </div>
-                <Button variant="ghost" size="icon" className="w-6 h-6 text-slate-300 hover:text-slate-600">
-                    <MoreHorizontal className="w-4 h-4" />
-                </Button>
             </div>
 
             {/* Column Body (Droppable) */}
             <div
                 ref={setNodeRef}
                 className={cn(
-                    "flex-1 min-h-[150px] rounded-2xl p-2 transition-all duration-300 space-y-4",
-                    isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-inset" : "bg-transparent"
+                    "flex-1 min-h-[100px] rounded-lg transition-all duration-300 space-y-3 p-1",
+                    isOver ? "bg-accent/50 ring-2 ring-primary/10" : ""
                 )}
             >
                 {tasks.map(task => (
@@ -49,10 +50,10 @@ function KanbanColumn({ id, status, tasks, title, onAddTask, onEditTask }: { id:
                 <Button
                     variant="ghost"
                     onClick={onAddTask}
-                    className="w-full h-12 border-2 border-dashed border-slate-100 rounded-2xl text-slate-300 hover:text-primary hover:border-primary/50 hover:bg-primary/5 group transition-all"
+                    className="w-full h-9 border border-dashed border-slate-200 rounded-md text-slate-400 hover:text-primary hover:border-primary/30 hover:bg-primary/5 group"
                 >
-                    <Plus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">添加任务</span>
+                    <Plus className="w-3.5 h-3.5 mr-2" />
+                    <span className="text-xs font-normal">Add Task</span>
                 </Button>
             </div>
         </div>
@@ -60,38 +61,61 @@ function KanbanColumn({ id, status, tasks, title, onAddTask, onEditTask }: { id:
 }
 
 export default function StoryRow({ story, tasks, onAddTask, onEditTask, onEditStory }: { story: Story, tasks: Task[], onAddTask: () => void, onEditTask?: (task: Task) => void, onEditStory?: (story: Story) => void }) {
+    // Generate a consistent color for the group line based on ID
+    const groupColors = ["bg-blue-500", "bg-purple-500", "bg-pink-500", "bg-indigo-500"];
+    const groupColor = groupColors[story.id % groupColors.length] || "bg-blue-500";
+
     return (
-        <div className="mb-12 last:mb-0 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-            {/* Story Header */}
-            <div className="flex items-center gap-3 mb-6 group cursor-pointer w-fit">
-                <ChevronDown className="w-5 h-5 text-slate-400 group-hover:text-primary transition-colors" />
-                <div className="flex items-center gap-2 group/title" onClick={() => onEditStory?.(story)}>
-                    <h4 className="text-xl font-black text-slate-900 tracking-tight group-hover:text-primary transition-colors">
-                        {story.title}
-                    </h4>
-                    <Button variant="ghost" size="icon" className="w-6 h-6 opacity-0 group-hover/title:opacity-100 text-slate-300 hover:text-primary transition-all">
-                        <Pencil className="w-3.5 h-3.5" />
+        <div className="mb-8 last:mb-0">
+            {/* Story Header (Group Header) */}
+            <div className="flex items-center gap-2 mb-4 group cursor-pointer w-full">
+                <div className="flex items-center gap-2 flex-1 relative">
+                    {/* Colored Line Indicator */}
+                    <div className={cn("w-1.5 h-6 rounded-r-md absolute -left-6 md:-left-6", groupColor)} />
+
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+
+                    <div className="flex items-center gap-3 group/title" onClick={() => onEditStory?.(story)}>
+                        <h4 className={cn("text-lg font-semibold tracking-tight transition-colors",
+                            story.id === 0 ? "text-slate-500" : "text-foreground group-hover:text-primary"
+                        )}>
+                            {story.title}
+                        </h4>
+                        {story.id !== 0 && (
+                            <Button variant="ghost" size="icon" className="w-5 h-5 opacity-0 group-hover/title:opacity-100 text-slate-400 hover:text-primary">
+                                <Pencil className="w-3 h-3" />
+                            </Button>
+                        )}
+                    </div>
+
+                    {story.assigned_to_user && (
+                        <Avatar className="w-5 h-5 border border-white shadow-sm">
+                            <AvatarImage src={story.assigned_to_user.avatar_url} />
+                            <AvatarFallback className="text-[9px]">{story.assigned_to_user.display_name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                    )}
+
+                    <div className="text-xs text-muted-foreground ml-2 px-2 py-0.5 bg-secondary rounded-full">
+                        {tasks.length} items
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground">
+                        Collapse
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                        <MoreHorizontal className="w-4 h-4" />
                     </Button>
                 </div>
-                {story.assigned_to_user && (
-                    <Avatar className="w-6 h-6 border border-white shadow-sm ml-1">
-                        <AvatarImage src={story.assigned_to_user.avatar_url} />
-                        <AvatarFallback className="text-[8px]">{story.assigned_to_user.display_name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                )}
-                {story.id !== 0 && (
-                    <div className="px-2 py-0.5 bg-slate-100 rounded-lg text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                        {tasks.length}
-                    </div>
-                )}
             </div>
 
             {/* Kanban Columns Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+            {/* Using a cleaner grid with less gap to match the compact nature of monday.com */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pl-2">
                 <KanbanColumn
                     id={`${story.id}::not_started`}
                     status="not_started"
-                    title="未开始"
                     tasks={tasks.filter(t => t.status === 'not_started' || !t.status)}
                     onAddTask={onAddTask}
                     onEditTask={onEditTask}
@@ -99,7 +123,6 @@ export default function StoryRow({ story, tasks, onAddTask, onEditTask, onEditSt
                 <KanbanColumn
                     id={`${story.id}::in_progress`}
                     status="in_progress"
-                    title="进行中"
                     tasks={tasks.filter(t => t.status === 'in_progress')}
                     onAddTask={onAddTask}
                     onEditTask={onEditTask}
@@ -107,7 +130,6 @@ export default function StoryRow({ story, tasks, onAddTask, onEditTask, onEditSt
                 <KanbanColumn
                     id={`${story.id}::completed`}
                     status="completed"
-                    title="已完成"
                     tasks={tasks.filter(t => t.status === 'completed')}
                     onAddTask={onAddTask}
                     onEditTask={onEditTask}

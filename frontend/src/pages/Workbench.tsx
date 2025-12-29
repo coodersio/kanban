@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, Layout, User, Settings } from 'lucide-react';
+import { Plus, ChevronDown, Layout, User, Settings, LayoutGrid, ArrowUpDown } from 'lucide-react';
 import KanbanBoard from './components/KanbanBoard';
 import ProjectSidebar from './components/ProjectSidebar';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -488,24 +488,26 @@ export default function Workbench() {
         setIsStoryDrawerOpen(true);
     };
 
-    const selectedSprint = sprints.find(s => s.id.toString() === selectedSprintId);
+    const project = projects.find(p => p.id === selectedProjectId);
+    const sprint = sprints.find(s => s.id.toString() === selectedSprintId);
 
     return (
-        <div className="flex flex-col h-full overflow-hidden">
-            {/* Workbench Header */}
-            <header className="flex items-center justify-between mb-8 flex-shrink-0">
+        <div className="flex flex-col h-full bg-background">
+            {/* Workbench Header - Original Structure Preserved, Monday Styling Applied */}
+            <header className="flex items-center justify-between px-6 py-4 border-b bg-background flex-shrink-0 z-10">
                 <div className="flex items-center gap-6">
+                    {/* Sprint Selector */}
                     <div className="flex items-center gap-4">
                         <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
-                            <SelectTrigger className="w-[180px] h-11 rounded-2xl border-none bg-slate-100 shadow-inner font-bold text-sm">
+                            <SelectTrigger className="w-[180px] h-9 bg-secondary/30 border-secondary-foreground/10 text-sm font-medium focus:ring-primary/20">
                                 <SelectValue placeholder="选择迭代..." />
                             </SelectTrigger>
-                            <SelectContent className="rounded-2xl border-none shadow-2xl">
+                            <SelectContent className="shadow-xl border-border/60">
                                 {sprints.map(s => (
-                                    <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl font-bold py-3">
+                                    <SelectItem key={s.id} value={s.id.toString()}>
                                         <div className="flex items-center gap-2">
                                             <span>{s.name}</span>
-                                            {s.status === 'active' && <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[8px] px-1.5 h-4">ACTIVE</Badge>}
+                                            {s.status === 'active' && <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 text-[10px] h-4">ACTIVE</Badge>}
                                         </div>
                                     </SelectItem>
                                 ))}
@@ -516,38 +518,34 @@ export default function Workbench() {
                             variant="ghost"
                             size="icon"
                             onClick={() => setIsSprintManagerOpen(true)}
-                            className="w-11 h-11 rounded-2xl hover:bg-slate-100 text-slate-400 hover:text-primary transition-all"
+                            className="w-9 h-9 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md"
                         >
-                            <Settings className="w-5 h-5" />
+                            <Settings className="w-4 h-4" />
                         </Button>
                     </div>
 
-                    <div className="flex items-center pl-4 border-l ml-2 gap-2">
+                    {/* Member Filter */}
+                    <div className="flex items-center pl-6 border-l gap-3">
                         <Button
-                            variant="ghost"
+                            variant={filterMemberId === null ? "secondary" : "ghost"}
                             size="sm"
                             onClick={() => setFilterMemberId(null)}
-                            className={cn(
-                                "rounded-full px-3 h-7 font-black uppercase tracking-widest text-[9px] transition-all",
-                                filterMemberId === null
-                                    ? "bg-primary text-white shadow-md shadow-primary/20"
-                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                            )}
+                            className="h-8 px-3 text-xs font-medium rounded-md"
                         >
                             全部
                         </Button>
-                        <div className="flex -space-x-3 items-center">
+                        <div className="flex -space-x-2 items-center">
                             {members.map(m => (
                                 <Avatar
                                     key={m.id}
                                     onClick={() => setFilterMemberId(m.id === filterMemberId ? null : m.id)}
                                     className={cn(
-                                        "w-9 h-9 border-4 border-[#F8F9FD] ring-1 transition-all hover:scale-110 hover:z-10 cursor-pointer",
-                                        m.id === filterMemberId ? "ring-primary ring-2 z-10 scale-110 shadow-lg" : "ring-slate-100 shadow-sm"
+                                        "w-8 h-8 border-2 border-background cursor-pointer hover:z-10 transition-transform hover:scale-105",
+                                        m.id === filterMemberId ? "ring-2 ring-primary z-10" : ""
                                     )}
                                 >
                                     <AvatarImage src={m.avatar_url} />
-                                    <AvatarFallback className="font-bold text-[10px] bg-slate-100 text-slate-600">
+                                    <AvatarFallback className="text-[10px] bg-muted text-muted-foreground font-medium">
                                         {m.display_name.charAt(0)}
                                     </AvatarFallback>
                                 </Avatar>
@@ -556,39 +554,42 @@ export default function Workbench() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Right Actions - Add Buttons */}
+                <div className="flex items-center gap-3">
                     {!isExternal && (
                         <>
                             <Button
                                 onClick={openAddStoryDialog}
                                 size="sm"
-                                className="bg-primary hover:bg-primary/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-primary/10 transition-all active:scale-95 text-white text-xs"
+                                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm font-medium h-9 px-4 rounded-md text-xs gap-1.5"
                             >
-                                <Plus className="w-4 h-4 mr-1" /> 添加需求
+                                <Plus className="w-4 h-4" /> 添加需求
                             </Button>
                             <Button
                                 onClick={() => openAddTaskDialog()}
                                 size="sm"
-                                className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-[#8E87F1]/10 transition-all active:scale-95 text-white text-xs"
+                                variant="outline"
+                                className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 h-9 px-4 rounded-md text-xs gap-1.5 font-medium"
                             >
-                                <Plus className="w-4 h-4 mr-1" /> 添加任务
+                                <Plus className="w-4 h-4" /> 添加任务
                             </Button>
                         </>
                     )}
                 </div>
             </header>
 
-            <div className="flex-1 flex gap-8 min-h-0 overflow-hidden">
-                <aside className="w-80 flex flex-col min-h-0 flex-shrink-0 animate-in fade-in duration-700">
-                    <div className="flex items-center justify-between px-6 mb-8">
-                        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">项目列表</h3>
+            <div className="flex-1 flex gap-0 min-h-0 overflow-hidden">
+                {/* Sidebar */}
+                <aside className="w-64 flex flex-col min-h-0 flex-shrink-0 border-r bg-background z-10">
+                    <div className="flex items-center justify-between px-4 py-4 border-b">
+                        <h3 className="text-sm font-bold text-foreground">项目列表</h3>
                         {isAdmin && (
-                            <Button variant="ghost" size="icon" onClick={openAddProjectDialog} className="w-8 h-8 rounded-full text-slate-300 hover:bg-white hover:text-primary transition-all">
-                                <Plus className="w-5 h-5" />
+                            <Button variant="ghost" size="icon" onClick={openAddProjectDialog} className="w-7 h-7 hover:bg-muted/50 text-muted-foreground hover:text-foreground rounded-md">
+                                <Plus className="w-4 h-4" />
                             </Button>
                         )}
                     </div>
-                    <div className="flex-1 overflow-y-auto pr-2">
+                    <div className="flex-1 overflow-y-auto">
                         <ProjectSidebar
                             projects={projects}
                             selectedId={selectedProjectId}
@@ -599,7 +600,22 @@ export default function Workbench() {
                     </div>
                 </aside>
 
-                <section className="flex-1 min-h-0 bg-white/40 backdrop-blur-sm rounded-[2rem] border-white/60 border-2 shadow-sm flex flex-col animate-in fade-in duration-700">
+                {/* Main Content - Kanban Board */}
+                <main className="flex-1 min-h-0 bg-slate-50/50 flex flex-col relative overflow-hidden">
+                    {/* Optional: Board Header Title if needed, otherwise just the board */}
+                    {selectedProjectId && (
+                        <div className="px-6 py-3 border-b bg-background/50 backdrop-blur-sm flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+                                {project?.name}
+                                {sprint?.status === 'active' && <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-200 bg-emerald-50">Active</Badge>}
+                            </h2>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Layout className="w-4 h-4" />
+                                <span className="text-xs font-medium">看板视图</span>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex-1 overflow-hidden relative">
                         {selectedSprintId && selectedProjectId ? (
                             <KanbanBoard
@@ -612,18 +628,15 @@ export default function Workbench() {
                                 onEditStory={openEditStory}
                             />
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
-                                <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center">
-                                    <Layout className="w-10 h-10 opacity-20" />
-                                </div>
-                                <div className="text-sm font-bold uppercase tracking-widest opacity-40 italic">
-                                    Select a Project to view Board
-                                </div>
+                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+                                <Layout className="w-12 h-12 opacity-10" />
+                                <div className="text-sm font-medium">请选择一个项目</div>
                             </div>
                         )}
                     </div>
-                </section>
+                </main>
             </div>
+
 
             {/* Add Story Dialog */}
             <Dialog open={isStoryDialogOpen} onOpenChange={setIsStoryDialogOpen}>
