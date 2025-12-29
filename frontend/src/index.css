@@ -4,26 +4,44 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* Monday.com inspired color palette */
+    --background: 220 20% 97.5%; /* #f6f7fb - Very light blue-grey */
     --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
+    --card: 0 0% 100%; /* Pure white cards */
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
+    --primary: 240 5.9% 10%; /* Dark primary */
     --primary-foreground: 0 0% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
+    --muted: 220 13% 93%; /* #ececf0 - Light grey */
+    --muted-foreground: 240 3.8% 46.1%; /* #717182 - Medium grey */
+    --accent: 220 13% 91%; /* #e9ebef - Light accent */
     --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 348 83% 47%; /* #d4183d - Monday red */
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
+    --border: 220 13% 91%; /* Lighter border */
+    --input: 240 4.9% 95%; /* #f3f3f5 - Input background */
+    --input-background: 240 4.9% 95%; /* Explicit input bg */
     --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    --radius: 0.625rem; /* 10px - Monday.com radius */
+
+    /* Sidebar specific colors */
+    --sidebar: 0 0% 98.5%; /* Almost white sidebar */
+    --sidebar-accent: 0 0% 97%; /* Sidebar hover */
+    --sidebar-border: 220 13% 92%;
+    --sidebar-active: 240 5.9% 10%; /* Dark active state */
+    --sidebar-active-foreground: 0 0% 98%;
+
+    /* Status colors */
+    --status-completed: 142 71% 45%; /* Green #22c55e */
+    --status-in-progress: 217 91% 60%; /* Blue #3b82f6 */
+    --status-review: 38 92% 50%; /* Orange #f59e0b */
+    --status-todo: 220 9% 46%; /* Grey #6b7280 */
+
+    /* Font size */
+    font-size: 14px;
   }
 
   .dark {

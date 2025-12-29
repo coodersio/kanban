@@ -44,7 +44,21 @@ export default {
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
+        'input-background': 'hsl(var(--input-background))',
         ring: 'hsl(var(--ring))',
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          accent: 'hsl(var(--sidebar-accent))',
+          border: 'hsl(var(--sidebar-border))',
+          active: 'hsl(var(--sidebar-active))',
+          'active-foreground': 'hsl(var(--sidebar-active-foreground))'
+        },
+        status: {
+          completed: 'hsl(var(--status-completed))',
+          'in-progress': 'hsl(var(--status-in-progress))',
+          review: 'hsl(var(--status-review))',
+          todo: 'hsl(var(--status-todo))'
+        },
         chart: {
           '1': 'hsl(var(--chart-1))',
           '2': 'hsl(var(--chart-2))',

@@ -3,29 +3,24 @@ import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-    Layout,
+    Home,
+    Briefcase,
+    LayoutDashboard,
     Layers,
     Calendar,
-    User,
-    Bell,
-    Mail,
-    Moon,
-    FileText,
-    ShoppingCart,
-    MessageSquare,
-    Trash2,
-    Grid,
-    ChevronRight,
-    ChevronLeft
+    Users,
+    Settings,
+    BarChart3,
+    Search,
+    Grid3x3,
+    HelpCircle,
+    Bell
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { motion, AnimatePresence } from "framer-motion";
 
 export default function DashboardLayout() {
     const location = useLocation();
     const navigate = useNavigate();
-    const [isExpanded, setIsExpanded] = useState(false);
     const [currentUser, setCurrentUser] = useState<{ id: number, displayName: string, role: string } | null>(null);
 
     useEffect(() => {
@@ -52,166 +47,136 @@ export default function DashboardLayout() {
         }
     };
 
-    const NavIcon = ({ href, icon: Icon, label }: { href: string, icon: any, label: string }) => {
+    const NavItem = ({ href, icon: Icon, label }: { href: string, icon: any, label: string }) => {
         const isActive = location.pathname === href;
         return (
-            <TooltipProvider>
-                <Tooltip delayDuration={0}>
-                    <TooltipTrigger asChild>
-                        <Link to={href} className="w-full px-4">
-                            <Button
-                                variant="ghost"
-                                className={cn(
-                                    "w-full rounded-xl mb-2 transition-all duration-300 flex items-center gap-3",
-                                    isExpanded ? "h-11 px-4 justify-start" : "h-11 w-11 p-0 justify-center mx-auto",
-                                    isActive
-                                        ? "bg-primary text-white shadow-lg shadow-primary/30"
-                                        : "text-slate-400 hover:text-slate-600 hover:bg-white active:scale-95"
-                                )}
-                            >
-                                <Icon className={cn("flex-shrink-0", isExpanded ? "w-5 h-5" : "w-5 h-5")} />
-                                <AnimatePresence>
-                                    {isExpanded && (
-                                        <motion.span
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: -10 }}
-                                            className="font-bold text-xs whitespace-nowrap"
-                                        >
-                                            {label}
-                                        </motion.span>
-                                    )}
-                                </AnimatePresence>
-                            </Button>
-                        </Link>
-                    </TooltipTrigger>
-                    {!isExpanded && (
-                        <TooltipContent side="right" className="font-medium text-xs">
-                            {label}
-                        </TooltipContent>
+            <Link to={href}>
+                <Button
+                    variant={isActive ? "default" : "ghost"}
+                    className={cn(
+                        "w-full justify-start gap-3 h-9 px-3 text-sm font-medium mb-1",
+                        isActive
+                            ? "bg-sidebar-active text-sidebar-active-foreground hover:bg-sidebar-active/90 shadow-sm"
+                            : "text-foreground/70 hover:bg-sidebar-accent hover:text-foreground"
                     )}
-                </Tooltip>
-            </TooltipProvider>
+                >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                </Button>
+            </Link>
         );
     };
 
-    return (
-        <div className="flex h-screen bg-[#F8F9FD] dark:bg-slate-950 font-sans selection:bg-primary/20 overflow-hidden">
-            {/* Expandable Sidebar */}
-            <motion.aside
-                initial={false}
-                animate={{ width: isExpanded ? 240 : 80 }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="h-full bg-white dark:bg-slate-900 border-r flex flex-col py-6 flex-shrink-0 z-50 relative"
-            >
-                {/* Toggle Button */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-white border shadow-sm z-[60] hover:bg-slate-50 text-slate-400 hover:text-primary transition-colors"
-                >
-                    {isExpanded ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                </Button>
+    const workspaces = [
+        { id: 1, name: "Marketing Campaign", color: "bg-blue-500" },
+        { id: 2, name: "Product Development", color: "bg-green-500" },
+        { id: 3, name: "Design System", color: "bg-purple-500" },
+        { id: 4, name: "Sales Pipeline", color: "bg-orange-500" }
+    ];
 
-                <div className={cn("mb-10 px-4", !isExpanded && "flex justify-center")}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center rotate-[-10deg] shadow-lg shadow-primary/20 flex-shrink-0">
-                            <div className="w-5 h-5 border-4 border-white rounded-full flex items-center justify-center">
-                                <div className="w-1 h-1 bg-white rounded-full"></div>
-                            </div>
+    return (
+        <div className="flex h-screen bg-background overflow-hidden">
+            {/* Fixed Sidebar - Monday.com style */}
+            <aside className="w-64 h-full bg-sidebar border-r border-sidebar-border flex flex-col flex-shrink-0">
+                {/* Logo */}
+                <div className="h-16 px-4 flex items-center border-b border-sidebar-border">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-primary rounded-md flex items-center justify-center">
+                            <div className="text-white text-xs font-bold">K</div>
                         </div>
-                        {isExpanded && (
-                            <motion.span
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="text-xl font-black tracking-tighter text-slate-900"
-                            >
-                                KanBan
-                            </motion.span>
-                        )}
+                        <span className="text-base font-semibold text-foreground">KanBan</span>
                     </div>
                 </div>
 
-                <nav className="flex-1 flex flex-col">
-                    <NavIcon href="/dashboard" icon={Grid} label="仪表盘" />
-                    <NavIcon href="/dashboard/workbench" icon={Layout} label="工作台" />
-                    <NavIcon href="/dashboard/projects" icon={Layers} label="项目管理" />
-                    <NavIcon href="/dashboard/sprints" icon={Calendar} label="迭代计划" />
-                    <NavIcon href="/dashboard/users" icon={User} label="团队成员" />
-                    <NavIcon href="/dashboard/files" icon={FileText} label="文件库" />
-                    <NavIcon href="/dashboard/shop" icon={ShoppingCart} label="插件市场" />
-                    <NavIcon href="/dashboard/feedback" icon={MessageSquare} label="反馈" />
-                </nav>
+                {/* Navigation */}
+                <div className="flex-1 overflow-y-auto py-4 px-3">
+                    <nav className="space-y-0.5 mb-6">
+                        <NavItem href="/dashboard" icon={Home} label="主页" />
+                        <NavItem href="/dashboard/workbench" icon={Briefcase} label="我的工作台" />
+                        <NavItem href="/dashboard/team" icon={Users} label="团队" />
+                        <NavItem href="/dashboard/analytics" icon={BarChart3} label="数据分析" />
+                        <NavItem href="/dashboard/settings" icon={Settings} label="设置" />
+                    </nav>
 
-                <div className="mt-auto px-4 space-y-2">
-                    <Button variant="ghost" className={cn("w-full rounded-xl justify-start text-slate-400 hover:text-slate-600 gap-3", !isExpanded && "px-0 justify-center")}>
-                        <Moon className="w-5 h-5 flex-shrink-0" />
-                        {isExpanded && <span className="font-bold text-xs uppercase tracking-widest">主题模式</span>}
-                    </Button>
-                    <Button variant="ghost" className={cn("w-full rounded-xl justify-start text-slate-400 hover:text-red-500 gap-3", !isExpanded && "px-0 justify-center")}>
-                        <Trash2 className="w-5 h-5 flex-shrink-0" />
-                        {isExpanded && <span className="font-bold text-xs uppercase tracking-widest">回收站</span>}
-                    </Button>
+                    {/* Workspaces Section */}
+                    <div className="mt-6">
+                        <div className="flex items-center justify-between px-3 mb-2">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                工作空间
+                            </span>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                                <span className="text-lg leading-none">+</span>
+                            </Button>
+                        </div>
+                        <div className="space-y-1">
+                            <NavItem href="/dashboard/projects" icon={Layers} label="项目管理" />
+                            <NavItem href="/dashboard/sprints" icon={Calendar} label="迭代计划" />
+                            <NavItem href="/dashboard/users" icon={Users} label="成员管理" />
+                        </div>
+                    </div>
                 </div>
-            </motion.aside>
+            </aside>
 
-            {/* Content Area */}
-            <main className="flex-1 overflow-hidden flex flex-col min-w-0">
-                {/* Global Top Header */}
-                <header className="h-16 px-8 flex items-center justify-between flex-shrink-0">
-                    <div className="flex-1 max-w-lg">
-                        <div className="relative group">
+            {/* Main Content Area */}
+            <main className="flex-1 flex flex-col overflow-hidden">
+                {/* Top Header - Monday.com style */}
+                <header className="h-16 bg-card border-b border-border px-6 flex items-center justify-between flex-shrink-0">
+                    {/* Left: Page Title (will be set by child components) */}
+                    <div className="flex-1">
+                        <h1 className="text-lg font-semibold text-foreground">
+                            {location.pathname === '/dashboard' && '主页'}
+                            {location.pathname === '/dashboard/workbench' && '工作台'}
+                            {location.pathname === '/dashboard/projects' && '项目管理'}
+                            {location.pathname === '/dashboard/sprints' && '迭代计划'}
+                            {location.pathname === '/dashboard/users' && '成员管理'}
+                        </h1>
+                    </div>
+
+                    {/* Center: Search Bar */}
+                    <div className="flex-1 max-w-md mx-8">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <input
                                 type="text"
-                                placeholder="全局搜索..."
-                                className="w-full h-10 pl-10 pr-4 rounded-xl bg-white border-transparent focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary/20 transition-all outline-none text-sm shadow-sm"
+                                placeholder="搜索所有内容"
+                                className="w-full h-9 pl-10 pr-4 rounded-md bg-input-background border-0 focus:bg-background focus:ring-2 focus:ring-ring/20 transition-all outline-none text-sm placeholder:text-muted-foreground"
                             />
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-                            </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" className="text-slate-500 relative">
-                            <Mail className="w-5 h-5" />
+                    {/* Right: Actions */}
+                    <div className="flex-1 flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
+                            <Grid3x3 className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-slate-500 relative">
-                            <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground">
+                            <HelpCircle className="w-4 h-4" />
                         </Button>
-                        <div className="flex items-center gap-3 pl-4 border-l ml-2">
-                            <div className="text-right hidden sm:block">
-                                <div className="text-sm font-semibold text-slate-900 leading-none mb-1">
-                                    {currentUser?.displayName || 'Loading...'}
-                                </div>
-                                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">
-                                    {currentUser?.role === 'admin' ? '管理员' : '团队成员'}
-                                </div>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground relative">
+                            <Bell className="w-4 h-4" />
+                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
+                        </Button>
+
+                        {/* User Avatar */}
+                        <div className="ml-2 flex items-center gap-2">
+                            <Avatar
+                                className="h-8 w-8 cursor-pointer ring-2 ring-background hover:ring-ring/20 transition-all"
+                                onClick={handleLogout}
+                            >
+                                <AvatarImage src={`https://i.pravatar.cc/150?u=${currentUser?.id}`} />
+                                <AvatarFallback className="text-xs font-semibold">
+                                    {currentUser?.displayName?.charAt(0) || 'U'}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="text-xs font-medium text-foreground hidden lg:block">
+                                {currentUser?.displayName?.split(' ')[0] || 'User'}
                             </div>
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Avatar
-                                            className="h-9 w-9 border-2 border-white shadow-sm ring-1 ring-slate-100 cursor-pointer hover:ring-primary/30 transition-all"
-                                            onClick={handleLogout}
-                                        >
-                                            <AvatarImage src={`https://i.pravatar.cc/150?u=${currentUser?.id}`} />
-                                            <AvatarFallback>{currentUser?.displayName?.charAt(0) || 'U'}</AvatarFallback>
-                                        </Avatar>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p className="text-xs">点击退出登录</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
                         </div>
                     </div>
                 </header>
 
-                {/* Dynamic Page Content */}
-                <div className="flex-1 overflow-auto px-8 pb-8">
+                {/* Page Content */}
+                <div className="flex-1 overflow-auto">
                     <Outlet context={{ currentUser }} />
                 </div>
             </main>
