@@ -1,0 +1,710 @@
+import { useState, useEffect } from 'react';
+import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Plus, ChevronDown, Layout, User, Settings } from 'lucide-react';
+import KanbanBoard from './components/KanbanBoard';
+import ProjectSidebar from './components/ProjectSidebar';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Sprint, Project, Member, Story, Task, Department, ProjectType } from "@/types";
+import TaskDetailsDrawer from './components/TaskDetailsDrawer';
+import StoryDetailsDrawer from './components/StoryDetailsDrawer';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+export default function Workbench() {
+    const [sprints, setSprints] = useState<Sprint[]>([]);
+    const [selectedSprintId, setSelectedSprintId] = useState<string>('');
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+    const [members, setMembers] = useState<Member[]>([]);
+    const [stories, setStories] = useState<Story[]>([]);
+
+    // Dialog States
+    const [isStoryDialogOpen, setIsStoryDialogOpen] = useState(false);
+    const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+    const [newTitle, setNewTitle] = useState('');
+    const [newDesc, setNewDesc] = useState('');
+    const [targetStoryId, setTargetStoryId] = useState<number | null>(null);
+    const [priority, setPriority] = useState('Should');
+    const [size, setSize] = useState('Medium');
+    const [assignedTo, setAssignedTo] = useState<number | null>(null);
+    const [filterMemberId, setFilterMemberId] = useState<number | null>(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
+    const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
+    const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+    const [priorityNotes, setPriorityNotes] = useState('');
+    const [projectPriority, setProjectPriority] = useState<number>(0);
+
+
+    // Edit Task Drawer State
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+    // Edit Story Drawer State
+    const [selectedStoryForEdit, setSelectedStoryForEdit] = useState<Story | null>(null);
+    const [isStoryDrawerOpen, setIsStoryDrawerOpen] = useState(false);
+
+    // Initial Fetch: Get Sprints & Members from DB
+    useEffect(() => {
+        fetch('/api/sprints')
+            .then(res => res.json())
+            .then(data => {
+                setSprints(data);
+                const active = data.find((s: Sprint) => s.status === 'active');
+                if (active) setSelectedSprintId(active.id.toString());
+                else if (data.length > 0) setSelectedSprintId(data[0].id.toString());
+            });
+
+        // Fetch Real Users
+        fetch('/api/users')
+            .then(res => res.json())
+            .then(data => {
+                setMembers(data.map((u: any) => ({
+                    id: u.id,
+                    user_name: u.user_name,
+                    display_name: u.display_name,
+                    avatar_url: `https://i.pravatar.cc/150?u=${u.id}`
+                })));
+            })
+            .catch(err => console.error('Error fetching users:', err));
+        // Fetch Departments
+        fetch('/api/departments')
+            .then(res => res.json())
+            .then(data => setDepartments(data))
+            .catch(err => console.error('Error fetching departments:', err));
+
+        // Fetch Project Types
+        fetch('/api/project-types')
+            .then(res => res.json())
+            .then(data => setProjectTypes(data))
+            .catch(err => console.error('Error fetching project types:', err));
+    }, []);
+
+    // Fetch Projects when Sprint Changes
+    useEffect(() => {
+        if (!selectedSprintId) return;
+        fetch(`/api/workbench/sprint/${selectedSprintId}/projects`)
+            .then(res => res.json())
+            .then(data => {
+                setProjects(data);
+                if (data.length > 0 && !selectedProjectId) {
+                    setSelectedProjectId(data[0].id);
+                }
+            });
+    }, [selectedSprintId]);
+
+    // Fetch Stories for the current board (for the dropdown)
+    useEffect(() => {
+        if (!selectedSprintId || !selectedProjectId) {
+            setStories([]);
+            return;
+        }
+        fetch(`/api/workbench/board?sprintId=${selectedSprintId}&projectId=${selectedProjectId}`)
+            .then(res => res.json())
+            .then(data => setStories(data.stories))
+            .catch(err => console.error(err));
+    }, [selectedSprintId, selectedProjectId, refreshTrigger]);
+
+    const handleAddStory = async () => {
+        if (!newTitle || !selectedSprintId || !selectedProjectId) return;
+        try {
+            const res = await fetch('/api/workbench/story', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId: selectedSprintId,
+                    projectId: selectedProjectId,
+                    title: newTitle,
+                    description: newDesc,
+                    assignedTo: assignedTo
+                })
+            });
+            if (res.ok) {
+                setIsStoryDialogOpen(false);
+                setNewTitle('');
+                setNewDesc('');
+                setAssignedTo(null);
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error adding story:', err);
+        }
+    };
+
+    const handleAddTask = async () => {
+        if (!newTitle || !selectedSprintId || !selectedProjectId) return;
+        try {
+            const res = await fetch('/api/workbench/task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId: selectedSprintId,
+                    projectId: selectedProjectId,
+                    storyId: targetStoryId,
+                    title: newTitle,
+                    description: newDesc,
+                    priority,
+                    size,
+                    assignedTo: assignedTo
+                })
+            });
+            if (res.ok) {
+                setIsTaskDialogOpen(false);
+                setNewTitle('');
+                setNewDesc('');
+                setTargetStoryId(null);
+                setPriority('Should');
+                setSize('Medium');
+                setAssignedTo(null);
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error adding task:', err);
+        }
+    };
+
+    const handleSaveProject = async () => {
+        if (!newTitle) return;
+        try {
+            const body = {
+                sprintId: selectedSprintId,
+                projectId: editingProjectId,
+                name: newTitle,
+                description: newDesc,
+                department_id: selectedDeptId,
+                project_type_id: selectedTypeId,
+                priority: projectPriority,
+                notes: priorityNotes
+            };
+
+            const url = isEditMode ? '/api/workbench/project/update' : '/api/projects';
+            const method = isEditMode ? 'POST' : 'POST'; // Both are POST in my new implementation for workbench updates
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (res.ok) {
+                const newProjOrMsg = await res.json();
+                setIsProjectDialogOpen(false);
+                resetProjectForm();
+
+                // Refresh project list
+                fetch(`/api/workbench/sprint/${selectedSprintId}/projects`)
+                    .then(r => r.json())
+                    .then(data => {
+                        setProjects(data);
+                        if (!isEditMode && newProjOrMsg.id) {
+                            setSelectedProjectId(newProjOrMsg.id);
+                        }
+                    });
+            }
+        } catch (err) {
+            console.error('Error saving project:', err);
+        }
+    };
+
+    const resetProjectForm = () => {
+        setNewTitle('');
+        setNewDesc('');
+        setSelectedDeptId(null);
+        setSelectedTypeId(null);
+        setPriorityNotes('');
+        setProjectPriority(0);
+        setIsEditMode(false);
+        setEditingProjectId(null);
+    };
+
+    const openAddProjectDialog = () => {
+        resetProjectForm();
+        setIsProjectDialogOpen(true);
+    };
+
+    const openEditProjectDialog = (project: Project) => {
+        setNewTitle(project.name);
+        setNewDesc(project.description);
+        setSelectedDeptId(project.department_id || null);
+        setSelectedTypeId(project.project_type_id || null);
+        setPriorityNotes(project.notes || '');
+        setProjectPriority(project.priority || 0);
+        setIsEditMode(true);
+        setEditingProjectId(project.id);
+        setIsProjectDialogOpen(true);
+    };
+
+
+    const openAddTaskDialog = (storyId: number | null = null) => {
+        setTargetStoryId(storyId);
+        setAssignedTo(null); // Reset assignee
+        setIsTaskDialogOpen(true);
+    };
+
+    const openAddStoryDialog = () => {
+        setAssignedTo(null); // Reset assignee
+        setIsStoryDialogOpen(true);
+    };
+
+    const handleUpdateTask = async (updatedTask: any) => {
+        try {
+            const res = await fetch('/api/workbench/task/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedTask)
+            });
+            if (res.ok) {
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error updating task:', err);
+        }
+    };
+
+    const openEditTask = (task: Task) => {
+        setSelectedTask(task);
+        setIsDrawerOpen(true);
+    };
+
+    const handleUpdateStory = async (updatedStory: any) => {
+        try {
+            const res = await fetch('/api/workbench/story/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedStory)
+            });
+            if (res.ok) {
+                setRefreshTrigger(prev => prev + 1);
+            }
+        } catch (err) {
+            console.error('Error updating story:', err);
+        }
+    };
+
+    const openEditStory = (story: Story) => {
+        if (story.id === 0) return; // Can't edit "Uncategorized"
+        setSelectedStoryForEdit(story);
+        setIsStoryDrawerOpen(true);
+    };
+
+    const selectedSprint = sprints.find(s => s.id.toString() === selectedSprintId);
+
+    return (
+        <div className="flex flex-col h-full overflow-hidden">
+            {/* Workbench Header */}
+            <header className="flex items-center justify-between mb-8 flex-shrink-0">
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2 group cursor-pointer">
+                        <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
+                            <SelectTrigger className="border-none shadow-none bg-transparent p-0 h-auto focus:ring-0">
+                                <span className="text-3xl font-extrabold tracking-tight text-slate-900 pr-2">
+                                    {selectedSprint?.name || "选择迭代"}
+                                </span>
+                                <ChevronDown className="w-6 h-6 text-slate-400 group-hover:text-primary transition-colors" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                {sprints.map(s => (
+                                    <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl py-3 cursor-pointer">
+                                        <div className="flex items-center justify-between w-full gap-4">
+                                            <span className="font-bold">{s.name}</span>
+                                            {s.status === 'active' && <Badge className="bg-green-500/10 text-green-600 border-none">进行中</Badge>}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                        <Button variant="ghost" size="sm" className="bg-primary/10 text-primary hover:bg-primary/20 rounded-lg px-3 font-bold text-[11px] h-7">
+                            当前迭代
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-600 rounded-lg px-2 font-bold text-[11px] h-7 gap-1">
+                            <Settings className="w-3 h-3" />
+                            管理迭代
+                        </Button>
+                    </div>
+
+                    <div className="flex items-center pl-4 border-l ml-2 gap-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFilterMemberId(null)}
+                            className={cn(
+                                "rounded-full px-3 h-7 font-black uppercase tracking-widest text-[9px] transition-all",
+                                filterMemberId === null
+                                    ? "bg-primary text-white shadow-md shadow-primary/20"
+                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                            )}
+                        >
+                            全部
+                        </Button>
+                        <div className="flex -space-x-3 items-center">
+                            {members.map(m => (
+                                <Avatar
+                                    key={m.id}
+                                    onClick={() => setFilterMemberId(m.id === filterMemberId ? null : m.id)}
+                                    className={cn(
+                                        "w-9 h-9 border-4 border-[#F8F9FD] ring-1 transition-all hover:scale-110 hover:z-10 cursor-pointer",
+                                        m.id === filterMemberId ? "ring-primary ring-2 z-10 scale-110 shadow-lg" : "ring-slate-100 shadow-sm"
+                                    )}
+                                >
+                                    <AvatarImage src={m.avatar_url} />
+                                    <AvatarFallback className="font-bold text-[10px] bg-slate-100 text-slate-600">
+                                        {m.display_name.charAt(0)}
+                                    </AvatarFallback>
+                                </Avatar>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={openAddStoryDialog}
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-primary/10 transition-all active:scale-95 text-white text-xs"
+                    >
+                        <Plus className="w-4 h-4 mr-1" /> 添加需求
+                    </Button>
+                    <Button
+                        onClick={() => openAddTaskDialog()}
+                        size="sm"
+                        className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-lg px-4 h-9 font-bold shadow-md shadow-[#8E87F1]/10 transition-all active:scale-95 text-white text-xs"
+                    >
+                        <Plus className="w-4 h-4 mr-1" /> 添加任务
+                    </Button>
+                </div>
+            </header>
+
+            <div className="flex-1 flex gap-8 min-h-0 overflow-hidden">
+                <aside className="w-80 flex flex-col min-h-0 flex-shrink-0 animate-in fade-in duration-700">
+                    <div className="flex items-center justify-between px-6 mb-8">
+                        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">项目列表</h3>
+                        <Button variant="ghost" size="icon" onClick={openAddProjectDialog} className="w-8 h-8 rounded-full text-slate-300 hover:bg-white hover:text-primary transition-all">
+                            <Plus className="w-5 h-5" />
+                        </Button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto pr-2">
+                        <ProjectSidebar
+                            projects={projects}
+                            selectedId={selectedProjectId}
+                            onSelect={setSelectedProjectId}
+                            onAddClick={openAddProjectDialog}
+                            onEditClick={openEditProjectDialog}
+                        />
+                    </div>
+                </aside>
+
+                <section className="flex-1 min-h-0 bg-white/40 backdrop-blur-sm rounded-[2rem] border-white/60 border-2 shadow-sm flex flex-col animate-in fade-in duration-700">
+                    <div className="flex-1 overflow-hidden relative">
+                        {selectedSprintId && selectedProjectId ? (
+                            <KanbanBoard
+                                key={`${selectedSprintId}-${selectedProjectId}-${filterMemberId}-${refreshTrigger}`}
+                                sprintId={selectedSprintId}
+                                projectId={selectedProjectId}
+                                filterMemberId={filterMemberId}
+                                onAddTask={openAddTaskDialog}
+                                onEditTask={openEditTask}
+                                onEditStory={openEditStory}
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
+                                <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center">
+                                    <Layout className="w-10 h-10 opacity-20" />
+                                </div>
+                                <div className="text-sm font-bold uppercase tracking-widest opacity-40 italic">
+                                    Select a Project to view Board
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </section>
+            </div>
+
+            {/* Add Story Dialog */}
+            <Dialog open={isStoryDialogOpen} onOpenChange={setIsStoryDialogOpen}>
+                <DialogContent className="rounded-[2rem] border-none shadow-2xl p-8 max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-3xl font-black tracking-tight mb-2">Create New Story</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-6 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="title" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Story Title</Label>
+                            <Input
+                                id="title"
+                                placeholder="E.g. Implement User Authentication"
+                                value={newTitle}
+                                onChange={(e) => setNewTitle(e.target.value)}
+                                className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Assignee</Label>
+                            <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
+                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <User className="w-4 h-4 text-slate-400" />
+                                        <SelectValue placeholder="Assign to user..." />
+                                    </div>
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                    <SelectItem value="0" className="rounded-xl font-bold">Unassigned</SelectItem>
+                                    {members.map(m => (
+                                        <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
+                                            <div className="flex items-center gap-2">
+                                                <Avatar className="w-5 h-5">
+                                                    <AvatarImage src={m.avatar_url} />
+                                                    <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                {m.display_name}
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">需求描述</Label>
+                            <Textarea
+                                id="desc"
+                                placeholder="提供更多上下文信息..."
+                                value={newDesc}
+                                onChange={(e) => setNewDesc(e.target.value)}
+                                className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[140px] text-sm font-medium leading-relaxed"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="ghost" onClick={() => setIsStoryDialogOpen(false)} className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-8 h-12">取消</Button>
+                        <Button onClick={handleAddStory} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20">创建需求</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Add Task Dialog */}
+            <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
+                <DialogContent className="rounded-[2rem] border-none shadow-2xl p-8 max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-3xl font-black tracking-tight mb-2">创建新任务</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-6 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="task-title" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">任务标题</Label>
+                            <Input
+                                id="task-title"
+                                placeholder="例如：设计登录表单"
+                                value={newTitle}
+                                onChange={(e) => setNewTitle(e.target.value)}
+                                className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">负责人</Label>
+                            <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
+                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <User className="w-4 h-4 text-slate-400" />
+                                        <SelectValue placeholder="指派给用户..." />
+                                    </div>
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                    <SelectItem value="0" className="rounded-xl font-bold">待指派</SelectItem>
+                                    {members.map(m => (
+                                        <SelectItem key={m.id} value={m.id.toString()} className="rounded-xl font-bold">
+                                            <div className="flex items-center gap-2">
+                                                <Avatar className="w-5 h-5">
+                                                    <AvatarImage src={m.avatar_url} />
+                                                    <AvatarFallback>{m.display_name.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                {m.display_name}
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">关联需求 (可选)</Label>
+                            <Select value={targetStoryId?.toString() || '0'} onValueChange={(v) => setTargetStoryId(v === '0' ? null : parseInt(v))}>
+                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                    <SelectValue placeholder="选择关联需求" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                    <SelectItem value="0" className="rounded-xl font-bold">无关联需求</SelectItem>
+                                    {stories.map(s => (
+                                        <SelectItem key={s.id} value={s.id.toString()} className="rounded-xl font-bold">
+                                            {s.title}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Priority</Label>
+                                <Select value={priority} onValueChange={setPriority}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-12 font-bold text-xs">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                                        <SelectItem value="Must" className="text-red-600 font-black">Must</SelectItem>
+                                        <SelectItem value="Should" className="text-blue-600 font-black">Should</SelectItem>
+                                        <SelectItem value="Could" className="text-emerald-600 font-black">Could</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">Size</Label>
+                                <Select value={size} onValueChange={setSize}>
+                                    <SelectTrigger className="rounded-2xl border-slate-100 h-12 font-bold text-xs">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                                        <SelectItem value="Tiny" className="font-black">极小 (Tiny)</SelectItem>
+                                        <SelectItem value="Medium" className="font-black">适中 (Medium)</SelectItem>
+                                        <SelectItem value="Huge" className="font-black">极大 (Huge)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="task-desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">任务描述</Label>
+                            <Textarea
+                                id="task-desc"
+                                placeholder="输入任务描述..."
+                                value={newDesc}
+                                onChange={(e) => setNewDesc(e.target.value)}
+                                className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[100px] text-sm font-medium"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="ghost" onClick={() => setIsTaskDialogOpen(false)} className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-8 h-12">取消</Button>
+                        <Button onClick={handleAddTask} className="bg-[#8E87F1] hover:bg-[#8E87F1]/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-[#8E87F1]/20">创建任务</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Add Project Dialog */}
+            <Dialog open={isProjectDialogOpen} onOpenChange={setIsProjectDialogOpen}>
+                <DialogContent className="rounded-3xl border-slate-100 shadow-2xl max-w-md p-8">
+                    <DialogHeader className="mb-6">
+                        <DialogTitle className="text-2xl font-black tracking-tight text-slate-900">
+                            {isEditMode ? '编辑项目' : '创建新项目'}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-6">
+                        <div className="grid gap-2">
+                            <Label htmlFor="project-name" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目名称</Label>
+                            <Input
+                                id="project-name"
+                                placeholder="例如：电商平台重构"
+                                value={newTitle}
+                                onChange={(e) => setNewTitle(e.target.value)}
+                                className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">所属部门</Label>
+                            <Select value={selectedDeptId?.toString() || ''} onValueChange={(v) => setSelectedDeptId(parseInt(v))}>
+                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                    <SelectValue placeholder="选择部门" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                    {departments.map(d => (
+                                        <SelectItem key={d.id} value={d.id.toString()} className="rounded-xl font-bold">
+                                            {d.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目类型</Label>
+                            <Select value={selectedTypeId?.toString() || ''} onValueChange={(v) => setSelectedTypeId(parseInt(v))}>
+                                <SelectTrigger className="rounded-2xl border-slate-100 h-14 font-bold text-sm">
+                                    <SelectValue placeholder="选择类型" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-slate-100 shadow-2xl">
+                                    {projectTypes.map(t => (
+                                        <SelectItem key={t.id} value={t.id.toString()} className="rounded-xl font-bold">
+                                            {t.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代优先级</Label>
+                                <Input
+                                    type="number"
+                                    value={projectPriority}
+                                    onChange={(e) => setProjectPriority(parseInt(e.target.value) || 0)}
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">迭代备注</Label>
+                                <Input
+                                    value={priorityNotes}
+                                    onChange={(e) => setPriorityNotes(e.target.value)}
+                                    placeholder="例如：本迭代关口"
+                                    className="rounded-2xl border-slate-100 focus:ring-primary/20 h-14 text-sm font-bold"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="project-desc" className="font-bold text-[10px] uppercase tracking-[0.2em] text-slate-400">项目描述</Label>
+                            <Textarea
+                                id="project-desc"
+                                placeholder="输入项目描述..."
+                                value={newDesc}
+                                onChange={(e) => setNewDesc(e.target.value)}
+                                className="rounded-2xl border-slate-100 focus:ring-primary/20 min-h-[100px] text-sm font-medium"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-8">
+                        <Button variant="ghost" onClick={() => setIsProjectDialogOpen(false)} className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-8 h-12">取消</Button>
+                        <Button onClick={handleSaveProject} className="bg-primary hover:bg-primary/90 rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[10px] text-white shadow-xl shadow-primary/20">
+                            {isEditMode ? '保存修改' : '创建项目'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Task Details Drawer */}
+            <TaskDetailsDrawer
+                task={selectedTask}
+                open={isDrawerOpen}
+                onClose={() => setIsDrawerOpen(false)}
+                onSave={handleUpdateTask}
+                members={members}
+            />
+            {/* Story Details Drawer */}
+            <StoryDetailsDrawer
+                story={selectedStoryForEdit}
+                open={isStoryDrawerOpen}
+                onClose={() => setIsStoryDrawerOpen(false)}
+                onSave={handleUpdateStory}
+                members={members}
+            />
+        </div>
+    );
+}
