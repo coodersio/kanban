@@ -8,6 +8,12 @@ import KanbanBoard from './components/KanbanBoard';
 import ProjectSidebar from './components/ProjectSidebar';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Sprint, Project, Member, Story, Task, Department, ProjectType } from "@/types";
 import TaskDetailsDrawer from './components/TaskDetailsDrawer';
 import StoryDetailsDrawer from './components/StoryDetailsDrawer';
@@ -21,6 +27,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 
 export default function Workbench() {
     const { currentUser } = useOutletContext<{ currentUser: { id: number, role: string, displayName: string } }>();
@@ -43,6 +57,7 @@ export default function Workbench() {
     const [priority, setPriority] = useState('Should');
     const [size, setSize] = useState('Medium');
     const [assignedTo, setAssignedTo] = useState<number | null>(null);
+    const [storyPriority, setStoryPriority] = useState('medium');
     const [filterMemberId, setFilterMemberId] = useState<number | null>(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
@@ -77,7 +92,6 @@ export default function Workbench() {
     const [activeTaskTab, setActiveTaskTab] = useState('create');
     const [activeProjectTab, setActiveProjectTab] = useState('create');
 
-    const [projectReuseSearch, setProjectReuseSearch] = useState('');
     const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
     const [selectedReuseProjectId, setSelectedReuseProjectId] = useState<number | null>(null);
 
@@ -158,7 +172,7 @@ export default function Workbench() {
                     id: u.id,
                     user_name: u.user_name,
                     display_name: u.display_name,
-                    avatar_url: `https://i.pravatar.cc/150?u=${u.id}`
+                    avatar_url: u.avatar_url || null
                 })));
             })
             .catch(err => console.error('Error fetching users:', err));
@@ -211,7 +225,8 @@ export default function Workbench() {
                     projectId: selectedProjectId,
                     title: newTitle,
                     description: newDesc,
-                    assignedTo: assignedTo
+                    assignedTo: assignedTo,
+                    priority: storyPriority
                 })
             });
             if (res.ok) {
@@ -219,6 +234,7 @@ export default function Workbench() {
                 setNewTitle('');
                 setNewDesc('');
                 setAssignedTo(null);
+                setStoryPriority('medium');
                 setRefreshTrigger(prev => prev + 1);
             }
         } catch (err) {
@@ -327,11 +343,11 @@ export default function Workbench() {
     // Fetch available projects for reuse
     useEffect(() => {
         if (isProjectDialogOpen && activeProjectTab === 'reuse' && selectedSprintId) {
-            fetch(`/api/workbench/projects/available?sprintId=${selectedSprintId}&search=${projectReuseSearch}`)
+            fetch(`/api/workbench/projects/available?sprintId=${selectedSprintId}&search=`)
                 .then(res => res.json())
                 .then(data => setAvailableProjects(data));
         }
-    }, [isProjectDialogOpen, activeProjectTab, projectReuseSearch, selectedSprintId]);
+    }, [isProjectDialogOpen, activeProjectTab, selectedSprintId]);
 
     const handleReuseProject = async () => {
         if (!selectedReuseProjectId || !selectedSprintId) return;
@@ -444,6 +460,7 @@ export default function Workbench() {
 
     const openAddStoryDialog = () => {
         setAssignedTo(null); // Reset assignee
+        setStoryPriority('medium'); // Reset priority to default
         setIsStoryDialogOpen(true);
     };
 
@@ -491,6 +508,25 @@ export default function Workbench() {
     const project = projects.find(p => p.id === selectedProjectId);
     const sprint = sprints.find(s => s.id.toString() === selectedSprintId);
 
+    // Generate avatar color based on user ID
+    const getAvatarColor = (userId: number) => {
+        const colors = [
+            'bg-blue-500 text-white',
+            'bg-green-500 text-white',
+            'bg-purple-500 text-white',
+            'bg-orange-500 text-white',
+            'bg-pink-500 text-white',
+            'bg-cyan-500 text-white',
+            'bg-amber-500 text-white',
+            'bg-indigo-500 text-white',
+            'bg-rose-500 text-white',
+            'bg-teal-500 text-white',
+            'bg-violet-500 text-white',
+            'bg-fuchsia-500 text-white',
+        ];
+        return colors[userId % colors.length];
+    };
+
     return (
         <div className="flex flex-col h-full bg-background">
             {/* Workbench Header - Original Structure Preserved, Monday Styling Applied */}
@@ -534,23 +570,35 @@ export default function Workbench() {
                         >
                             全部
                         </Button>
-                        <div className="flex gap-2 items-center">
-                            {members.map(m => (
-                                <Avatar
-                                    key={m.id}
-                                    onClick={() => setFilterMemberId(m.id === filterMemberId ? null : m.id)}
-                                    className={cn(
-                                        "w-8 h-8 cursor-pointer transition-transform hover:scale-105",
-                                        m.id === filterMemberId ? "ring-2 ring-primary" : ""
-                                    )}
-                                >
-                                    <AvatarImage src={m.avatar_url} />
-                                    <AvatarFallback className="text-[10px] bg-muted text-muted-foreground font-medium">
-                                        {m.display_name.charAt(0)}
-                                    </AvatarFallback>
-                                </Avatar>
-                            ))}
-                        </div>
+                        <TooltipProvider>
+                            <div className="flex gap-2 items-center">
+                                {members.map(m => (
+                                    <Tooltip key={m.id}>
+                                        <TooltipTrigger asChild>
+                                            <Avatar
+                                                onClick={() => setFilterMemberId(m.id === filterMemberId ? null : m.id)}
+                                                className={cn(
+                                                    "w-8 h-8 cursor-pointer transition-all duration-200",
+                                                    m.id === filterMemberId
+                                                        ? "ring-2 ring-white ring-offset-2 ring-offset-background scale-110 shadow-lg"
+                                                        : "hover:scale-105 opacity-70 hover:opacity-100"
+                                                )}
+                                            >
+                                                {m.avatar_url && !m.avatar_url.includes('pravatar.cc') && (
+                                                    <AvatarImage src={m.avatar_url} />
+                                                )}
+                                                <AvatarFallback className={cn("text-[10px] font-semibold", getAvatarColor(m.id))}>
+                                                    {m.display_name.charAt(0)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>{m.display_name}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                ))}
+                            </div>
+                        </TooltipProvider>
                     </div>
                 </div>
 
@@ -676,21 +724,36 @@ export default function Workbench() {
                                     onChange={(e) => setNewTitle(e.target.value)}
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label className="text-sm font-medium">负责人</Label>
-                                <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="选择负责人" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="0">未分配</SelectItem>
-                                        {members.map(m => (
-                                            <SelectItem key={m.id} value={m.id.toString()}>
-                                                {m.display_name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label className="text-sm font-medium">负责人</Label>
+                                    <Select value={assignedTo?.toString() || '0'} onValueChange={(v) => setAssignedTo(v === '0' ? null : parseInt(v))}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="选择负责人" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="0">未分配</SelectItem>
+                                            {members.map(m => (
+                                                <SelectItem key={m.id} value={m.id.toString()}>
+                                                    {m.display_name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label className="text-sm font-medium">优先级</Label>
+                                    <Select value={storyPriority} onValueChange={setStoryPriority}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="high">高</SelectItem>
+                                            <SelectItem value="medium">中</SelectItem>
+                                            <SelectItem value="low">低</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="desc" className="text-sm font-medium">需求描述</Label>
@@ -772,77 +835,77 @@ export default function Workbench() {
 
             {/* Sprint Manager Dialog */}
             <Dialog open={isSprintManagerOpen} onOpenChange={setIsSprintManagerOpen}>
-                <DialogContent className="rounded-[2rem] border-none shadow-2xl p-8 max-w-2xl">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle className="text-3xl font-black tracking-tight mb-6">迭代管理</DialogTitle>
+                        <DialogTitle className="text-lg font-semibold">迭代管理</DialogTitle>
                     </DialogHeader>
 
-                    <div className="space-y-4">
-                        <div className="grid gap-4">
-                            {sprints.map(s => (
-                                <div key={s.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all bg-white">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400">
-                                            {s.name.replace(/\D/g, '')}
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-slate-900">{s.name}</div>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant={s.status === 'active' ? 'default' : s.status === 'archived' ? 'secondary' : 'outline'} className="rounded-md px-2 py-0.5 text-[10px] uppercase font-bold tracking-widest">
-                                                    {s.status}
-                                                </Badge>
-                                                <span className="text-[10px] text-slate-400 font-medium">
-                                                    {new Date(s.start_date).toLocaleDateString()} - {new Date(s.end_date).toLocaleDateString()}
-                                                </span>
-                                            </div>
-                                        </div>
+                    <div className="space-y-3 py-2">
+                        {sprints.map(s => (
+                            <div key={s.id} className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center font-semibold text-muted-foreground text-sm">
+                                        {s.name.replace(/\D/g, '')}
                                     </div>
-
-                                    <div className="flex gap-2">
-                                        {isAdmin && (
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => window.open(`http://localhost:4004/api/reports/weekly?sprintId=${s.id}`, '_blank')}
-                                                className="border-slate-200 text-slate-500 hover:text-primary hover:border-primary/30 rounded-xl font-bold text-[10px] uppercase tracking-widest h-9 px-3"
-                                                title="导出周报"
+                                    <div>
+                                        <div className="font-medium text-foreground">{s.name}</div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <Badge
+                                                variant={s.status === 'active' ? 'default' : s.status === 'archived' ? 'secondary' : 'outline'}
+                                                className="text-xs px-2 py-0.5"
                                             >
-                                                <Layout className="w-3.5 h-3.5 mr-1" />
-                                                导出
-                                            </Button>
-                                        )}
-                                        {s.status === 'planning' && isAdmin && (
-                                            <Button
-                                                size="sm"
-                                                onClick={() => handleActivateSprint(s.id)}
-                                                className="bg-primary hover:bg-primary/90 text-white rounded-xl font-black text-[10px] uppercase tracking-widest h-9 px-4 shadow-md shadow-primary/10"
-                                            >
-                                                立即启动
-                                            </Button>
-                                        )}
-                                        {s.status === 'active' && isAdmin && (
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                onClick={() => handleCloseSprint(s.id)}
-                                                className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-[10px] uppercase tracking-widest h-9 px-4 shadow-md shadow-slate-200"
-                                            >
-                                                归档结算
-                                            </Button>
-                                        )}
+                                                {s.status === 'active' ? '进行中' : s.status === 'archived' ? '已归档' : '计划中'}
+                                            </Badge>
+                                            <span className="text-xs text-muted-foreground">
+                                                {new Date(s.start_date).toLocaleDateString()} - {new Date(s.end_date).toLocaleDateString()}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+
+                                <div className="flex gap-2">
+                                    {isAdmin && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => window.open(`http://localhost:4004/api/reports/weekly?sprintId=${s.id}`, '_blank')}
+                                            className="h-8 text-xs"
+                                            title="导出周报"
+                                        >
+                                            <Layout className="w-3.5 h-3.5 mr-1.5" />
+                                            导出
+                                        </Button>
+                                    )}
+                                    {s.status === 'planning' && isAdmin && (
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleActivateSprint(s.id)}
+                                            className="h-8 text-xs"
+                                        >
+                                            立即启动
+                                        </Button>
+                                    )}
+                                    {s.status === 'active' && isAdmin && (
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => handleCloseSprint(s.id)}
+                                            className="h-8 text-xs"
+                                        >
+                                            归档结算
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
-                    <DialogFooter className="mt-8">
+                    <DialogFooter className="mt-4">
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => setIsSprintManagerOpen(false)}
-                            className="rounded-2xl font-black uppercase tracking-widest text-[10px] px-10 h-14"
                         >
-                            完成管理
+                            关闭
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1143,39 +1206,33 @@ export default function Workbench() {
                     ) : (
                         <div className="space-y-4 py-2">
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">搜索已有项目</Label>
-                                <Input
-                                    placeholder="输入关键词搜索..."
-                                    value={projectReuseSearch}
-                                    onChange={(e) => setProjectReuseSearch(e.target.value)}
-                                />
-                            </div>
-                            <div className="grid gap-2">
                                 <Label className="text-sm font-medium">选择项目</Label>
-                                <div className="max-h-[300px] overflow-y-auto space-y-2">
-                                    {availableProjects.map(p => (
-                                        <div
-                                            key={p.id}
-                                            onClick={() => setSelectedReuseProjectId(p.id)}
-                                            className={cn(
-                                                "p-3 rounded border transition-all cursor-pointer text-sm",
-                                                selectedReuseProjectId === p.id
-                                                    ? "border-primary bg-primary/5"
-                                                    : "border-border hover:border-primary/30 hover:bg-muted"
-                                            )}
-                                        >
-                                            <div className="font-medium">{p.name || p.software_name}</div>
-                                            {p.description && (
-                                                <div className="text-xs text-muted-foreground mt-1">{p.description}</div>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {availableProjects.length === 0 && (
-                                        <div className="text-center py-8 text-muted-foreground text-sm">
-                                            没有可复用的项目
-                                        </div>
-                                    )}
-                                </div>
+                                <Command className="rounded-lg border">
+                                    <CommandInput placeholder="输入项目名称搜索..." />
+                                    <CommandList>
+                                        <CommandEmpty>没有找到匹配的项目</CommandEmpty>
+                                        <CommandGroup>
+                                            {availableProjects.map(p => (
+                                                <CommandItem
+                                                    key={p.id}
+                                                    value={`${p.name || p.software_name} ${p.description || ''}`}
+                                                    onSelect={() => setSelectedReuseProjectId(p.id)}
+                                                    className={cn(
+                                                        "cursor-pointer",
+                                                        selectedReuseProjectId === p.id && "bg-primary/10"
+                                                    )}
+                                                >
+                                                    <div className="flex-1">
+                                                        <div className="font-medium">{p.name || p.software_name}</div>
+                                                        {p.description && (
+                                                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</div>
+                                                        )}
+                                                    </div>
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">

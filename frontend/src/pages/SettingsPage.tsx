@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 // --- Types ---
@@ -53,7 +53,7 @@ function DepartmentsTab() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Delete this department?')) return;
+        if (!confirm('确定要删除这个部门吗？')) return;
         await fetch(`/api/departments/${id}`, { method: 'DELETE' });
         fetchData();
     };
@@ -65,59 +65,74 @@ function DepartmentsTab() {
     };
 
     return (
-        <Card className="border-0 shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between px-0">
-                <CardTitle>Departments</CardTitle>
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-lg font-semibold">部门列表</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">管理组织部门信息</p>
+                </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     <DialogTrigger asChild>
-                        <Button onClick={() => { setEditingItem(null); setName(''); }}>
-                            <Plus className="w-4 h-4 mr-2" /> Add Department
+                        <Button onClick={() => { setEditingItem(null); setName(''); }} className="gap-2">
+                            <Plus className="w-4 h-4" />
+                            添加部门
                         </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
-                            <DialogTitle>{editingItem ? 'Edit Department' : 'Add Department'}</DialogTitle>
+                            <DialogTitle>{editingItem ? '编辑部门' : '添加新部门'}</DialogTitle>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="dept-name">Name</Label>
-                                <Input id="dept-name" value={name} onChange={e => setName(e.target.value)} required />
+                        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="dept-name">部门名称 *</Label>
+                                <Input id="dept-name" value={name} onChange={e => setName(e.target.value)} placeholder="请输入部门名称" required />
                             </div>
-                            <DialogFooter>
-                                <Button type="submit">Save</Button>
+                            <DialogFooter className="gap-2">
+                                <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>取消</Button>
+                                <Button type="submit">{editingItem ? '保存' : '创建'}</Button>
                             </DialogFooter>
                         </form>
                     </DialogContent>
                 </Dialog>
-            </CardHeader>
-            <CardContent className="px-0">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {departments.map((dept) => (
-                            <TableRow key={dept.id}>
-                                <TableCell>{dept.id}</TableCell>
-                                <TableCell className="font-medium">{dept.name}</TableCell>
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" onClick={() => openEdit(dept)}>
-                                        <Pencil className="w-4 h-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="text-red-500" onClick={() => handleDelete(dept.id)}>
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                </TableCell>
+            </div>
+
+            <Card className="shadow-sm">
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead>名称</TableHead>
+                                <TableHead className="text-right w-[120px]">操作</TableHead>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
+                        </TableHeader>
+                        <TableBody>
+                            {departments.map((dept) => (
+                                <TableRow key={dept.id} className="hover:bg-muted/50">
+                                    <TableCell className="font-medium">{dept.name}</TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEdit(dept)}>
+                                                <Pencil className="w-4 h-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(dept.id)}>
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {departments.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={2} className="h-32 text-center">
+                                        <p className="text-sm text-muted-foreground">暂无部门数据</p>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
 
@@ -152,7 +167,7 @@ function ProjectTypesTab() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Delete this project type?')) return;
+        if (!confirm('确定要删除这个项目类型吗？')) return;
         await fetch(`/api/project-types/${id}`, { method: 'DELETE' });
         fetchData();
     };
@@ -164,80 +179,95 @@ function ProjectTypesTab() {
     };
 
     return (
-        <Card className="border-0 shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between px-0">
-                <CardTitle>Project Types</CardTitle>
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-lg font-semibold">项目类型列表</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">管理项目分类类型</p>
+                </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     <DialogTrigger asChild>
-                        <Button onClick={() => { setEditingItem(null); setFormData({ name: '', description: '' }); }}>
-                            <Plus className="w-4 h-4 mr-2" /> Add Type
+                        <Button onClick={() => { setEditingItem(null); setFormData({ name: '', description: '' }); }} className="gap-2">
+                            <Plus className="w-4 h-4" />
+                            添加类型
                         </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
-                            <DialogTitle>{editingItem ? 'Edit Project Type' : 'Add Project Type'}</DialogTitle>
+                            <DialogTitle>{editingItem ? '编辑项目类型' : '添加新项目类型'}</DialogTitle>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="type-name">Name</Label>
-                                <Input id="type-name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+                        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="type-name">类型名称 *</Label>
+                                <Input id="type-name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="请输入类型名称" required />
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="type-desc">Description</Label>
-                                <Input id="type-desc" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                            <div className="space-y-2">
+                                <Label htmlFor="type-desc">描述</Label>
+                                <Input id="type-desc" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="请输入描述" />
                             </div>
-                            <DialogFooter>
-                                <Button type="submit">Save</Button>
+                            <DialogFooter className="gap-2">
+                                <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>取消</Button>
+                                <Button type="submit">{editingItem ? '保存' : '创建'}</Button>
                             </DialogFooter>
                         </form>
                     </DialogContent>
                 </Dialog>
-            </CardHeader>
-            <CardContent className="px-0">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {types.map((type) => (
-                            <TableRow key={type.id}>
-                                <TableCell>{type.id}</TableCell>
-                                <TableCell className="font-medium">{type.name}</TableCell>
-                                <TableCell>{type.description}</TableCell>
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" onClick={() => openEdit(type)}>
-                                        <Pencil className="w-4 h-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="text-red-500" onClick={() => handleDelete(type.id)}>
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                </TableCell>
+            </div>
+
+            <Card className="shadow-sm">
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead>名称</TableHead>
+                                <TableHead>描述</TableHead>
+                                <TableHead className="text-right w-[120px]">操作</TableHead>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
+                        </TableHeader>
+                        <TableBody>
+                            {types.map((type) => (
+                                <TableRow key={type.id} className="hover:bg-muted/50">
+                                    <TableCell className="font-medium">{type.name}</TableCell>
+                                    <TableCell className="text-muted-foreground">{type.description}</TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEdit(type)}>
+                                                <Pencil className="w-4 h-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(type.id)}>
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {types.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={3} className="h-32 text-center">
+                                        <p className="text-sm text-muted-foreground">暂无项目类型数据</p>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
 
 export default function SettingsPage() {
     return (
-        <div className="space-y-6">
+        <div className="p-6 space-y-6">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">System Settings</h2>
-                <p className="text-muted-foreground">Manage global configurations.</p>
+                <h2 className="text-2xl font-semibold text-foreground">系统设置</h2>
+                <p className="text-sm text-muted-foreground mt-1">管理全局配置</p>
             </div>
 
             <Tabs defaultValue="departments" className="w-full">
-                <TabsList>
-                    <TabsTrigger value="departments">Departments</TabsTrigger>
-                    <TabsTrigger value="project-types">Project Types</TabsTrigger>
+                <TabsList className="bg-muted/50">
+                    <TabsTrigger value="departments" className="text-sm">部门管理</TabsTrigger>
+                    <TabsTrigger value="project-types" className="text-sm">项目类型</TabsTrigger>
                 </TabsList>
                 <TabsContent value="departments" className="mt-6">
                     <DepartmentsTab />

@@ -118,13 +118,6 @@ export default function StoryCard({
         }
     };
 
-    const getProgressColor = () => {
-        if (!story.progress) return 'bg-slate-200';
-        if (story.progress >= 80) return 'bg-status-completed';
-        if (story.progress >= 40) return 'bg-status-in-progress';
-        return 'bg-status-review';
-    };
-
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'completed':
@@ -136,16 +129,37 @@ export default function StoryCard({
         }
     };
 
-    const getPriorityBadge = (priority?: string) => {
+    const getPriorityBadge = (priority?: string, isStory: boolean = false) => {
         if (!priority) return null;
-        const config = {
-            Must: 'bg-red-100 text-red-700 border-red-200',
-            Should: 'bg-blue-100 text-blue-700 border-blue-200',
-            Could: 'bg-green-100 text-green-700 border-green-200'
+
+        // Story priorities (low, medium, high)
+        const storyConfig = {
+            high: { label: '高', className: 'bg-red-100 text-red-700 border-red-200' },
+            medium: { label: '中', className: 'bg-orange-100 text-orange-700 border-orange-200' },
+            low: { label: '低', className: 'bg-blue-100 text-blue-700 border-blue-200' }
         };
+
+        // Task priorities (Must, Should, Could)
+        const taskConfig = {
+            Must: { label: 'Must', className: 'bg-red-100 text-red-700 border-red-200' },
+            Should: { label: 'Should', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+            Could: { label: 'Could', className: 'bg-green-100 text-green-700 border-green-200' }
+        };
+
+        const config = isStory ? storyConfig : taskConfig;
+        const priorityConfig = config[priority as keyof typeof config];
+
+        if (!priorityConfig) return null;
+
         return (
-            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', config[priority as keyof typeof config])}>
-                {priority}
+            <Badge
+                variant="outline"
+                className={cn(
+                    isStory ? 'text-xs px-2 py-0.5 font-medium' : 'text-[10px] px-1.5 py-0',
+                    priorityConfig.className
+                )}
+            >
+                {priorityConfig.label}
             </Badge>
         );
     };
@@ -168,9 +182,17 @@ export default function StoryCard({
             >
                 {/* Story Title */}
                 <div className="flex items-start justify-between gap-2 mb-3">
-                    <h4 className="text-sm font-semibold text-foreground line-clamp-2 flex-1">
-                        {story.title}
-                    </h4>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-semibold text-foreground line-clamp-2">
+                            {story.title}
+                        </h4>
+                        {/* Priority Badge */}
+                        {story.priority && (
+                            <div className="mt-2">
+                                {getPriorityBadge(story.priority, true)}
+                            </div>
+                        )}
+                    </div>
                     {story.assigned_to_user && (
                         <Avatar className="w-6 h-6 flex-shrink-0">
                             <AvatarImage src={story.assigned_to_user.avatar_url} />
@@ -180,22 +202,6 @@ export default function StoryCard({
                         </Avatar>
                     )}
                 </div>
-
-                {/* Progress Bar */}
-                {story.progress !== undefined && (
-                    <div className="mb-3">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                            <span>进度</span>
-                            <span className="font-semibold">{story.progress}%</span>
-                        </div>
-                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                                className={cn("h-full transition-all", getProgressColor())}
-                                style={{ width: `${story.progress}%` }}
-                            />
-                        </div>
-                    </div>
-                )}
 
                 {/* Task Count with Expand Icon */}
                 <div className="flex items-center justify-between">

@@ -331,9 +331,43 @@ router.post('/task/status', async (req, res) => {
     }
 });
 
+// Update Story (including priority)
+router.put('/story', async (req, res) => {
+    const { sprintId, projectId, storyId, title, assignedTo, priority } = req.body;
+    if (!storyId || !sprintId || !projectId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Update Reference Story
+        await client.query(
+            'UPDATE stories SET title = $1, priority = $2, updated_at = NOW() WHERE id = $3',
+            [title, priority || 'medium', storyId]
+        );
+
+        // 2. Update Snapshot
+        await client.query(
+            'UPDATE sprint_stories SET assigned_to = $1, priority = $2, updated_at = NOW() WHERE sprint_id = $3 AND story_id = $4',
+            [assignedTo || null, priority || 'medium', sprintId, storyId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error updating story:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
+
 // Create Story and Add to Sprint
 router.post('/story', async (req, res) => {
-    const { sprintId, projectId, title, description, assignedTo } = req.body;
+    const { sprintId, projectId, title, description, assignedTo, priority } = req.body;
     if (!sprintId || !projectId || !title) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
@@ -345,19 +379,19 @@ router.post('/story', async (req, res) => {
         // 1. Create Reference Story
         const userId = (req.session as any).user?.id || null;
         const storyRes = await client.query(
-            'INSERT INTO stories (project_id, title, description, created_by) VALUES ($1, $2, $3, $4) RETURNING id',
-            [projectId, title, description, userId]
+            'INSERT INTO stories (project_id, title, description, created_by, priority) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+            [projectId, title, description, userId, priority || 'medium']
         );
         const storyId = storyRes.rows[0].id;
 
         // 2. Create Snapshot (Add to Sprint)
         await client.query(
-            'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, assigned_to) VALUES ($1, $2, $3, $4, $5)',
-            [sprintId, projectId, storyId, 'not_started', assignedTo || null]
+            'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, assigned_to, priority) VALUES ($1, $2, $3, $4, $5, $6)',
+            [sprintId, projectId, storyId, 'not_started', assignedTo || null, priority || 'medium']
         );
 
         await client.query('COMMIT');
-        res.status(201).json({ id: storyId, title, status: 'not_started', assigned_to: assignedTo });
+        res.status(201).json({ id: storyId, title, status: 'not_started', assigned_to: assignedTo, priority: priority || 'medium' });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error creating story:', err);

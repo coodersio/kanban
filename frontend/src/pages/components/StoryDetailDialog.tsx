@@ -50,6 +50,7 @@ export default function StoryDetailDialog({
     // Story Edit State
     const [editedTitle, setEditedTitle] = useState('');
     const [editedAssignee, setEditedAssignee] = useState<number | null>(null);
+    const [editedPriority, setEditedPriority] = useState<string>('medium');
 
     // New Task Form
     const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -63,6 +64,7 @@ export default function StoryDetailDialog({
         if (story && open) {
             setEditedTitle(story.title);
             setEditedAssignee(story.assigned_to_user?.id || null);
+            setEditedPriority(story.priority || 'medium');
         }
     }, [story, open]);
 
@@ -232,7 +234,8 @@ export default function StoryDetailDialog({
                     projectId,
                     storyId: story.id,
                     title: story.title,
-                    assignedTo: userId
+                    assignedTo: userId,
+                    priority: story.priority || 'medium'
                 })
             });
 
@@ -242,6 +245,32 @@ export default function StoryDetailDialog({
             }
         } catch (err) {
             console.error('Error updating story assignee:', err);
+        }
+    };
+
+    const handleUpdateStoryPriority = async (priority: string) => {
+        if (!story) return;
+
+        try {
+            const res = await fetch('/api/workbench/story', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId,
+                    projectId,
+                    storyId: story.id,
+                    title: story.title,
+                    assignedTo: story.assigned_to_user?.id || null,
+                    priority: priority
+                })
+            });
+
+            if (res.ok) {
+                setEditedPriority(priority);
+                onUpdate();
+            }
+        } catch (err) {
+            console.error('Error updating story priority:', err);
         }
     };
 
@@ -300,14 +329,14 @@ export default function StoryDetailDialog({
                                 placeholder="需求标题"
                             />
                         </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2 text-sm flex-1">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex items-center gap-2 text-sm">
                                 <span className="text-muted-foreground">负责人:</span>
                                 <Select
                                     value={editedAssignee?.toString() || '0'}
                                     onValueChange={(v) => handleUpdateStoryAssignee(v === '0' ? null : parseInt(v))}
                                 >
-                                    <SelectTrigger className="h-8 w-[180px] text-xs border-dashed">
+                                    <SelectTrigger className="h-8 w-[140px] text-xs border-dashed">
                                         <SelectValue placeholder="选择负责人" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -321,9 +350,25 @@ export default function StoryDetailDialog({
                                 </Select>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
-                                <span className="text-muted-foreground">进度:</span>
-                                <span className="font-semibold">{story.progress || 0}%</span>
+                                <span className="text-muted-foreground">优先级:</span>
+                                <Select
+                                    value={editedPriority}
+                                    onValueChange={handleUpdateStoryPriority}
+                                >
+                                    <SelectTrigger className="h-8 w-[100px] text-xs border-dashed">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="high">高</SelectItem>
+                                        <SelectItem value="medium">中</SelectItem>
+                                        <SelectItem value="low">低</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">进度:</span>
+                            <span className="font-semibold">{story.progress || 0}%</span>
                         </div>
                     </div>
 
