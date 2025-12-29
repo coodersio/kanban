@@ -106,7 +106,7 @@ export default function DashboardLayout() {
                         <NavItem href="/dashboard/projects" icon={Layers} label="项目管理" />
                         <NavItem href="/dashboard/sprints" icon={Calendar} label="迭代管理" />
                         <NavItem href="/dashboard/users" icon={Users} label="成员管理" />
-                        <NavItem href="/dashboard/settings" icon={Settings} label="设置" />
+                        <NavItem href="/dashboard/settings" icon={Settings} label="系统设置" />
                     </nav>
                 </div>
             </aside>
