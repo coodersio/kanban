@@ -835,14 +835,47 @@ router.post('/task/reuse', async (req, res) => {
     }
 });
 
-export default router;
+// Delete Story from Sprint
+router.post('/story/delete', async (req, res) => {
+    const { sprintId, projectId, storyId } = req.body;
+
+    if (!sprintId || !projectId || !storyId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Delete the story from sprint_stories
+        await client.query(
+            'DELETE FROM sprint_stories WHERE sprint_id = $1 AND project_id = $2 AND story_id = $3',
+            [sprintId, projectId, storyId]
+        );
+
+        // Delete all associated tasks from sprint_tasks
+        await client.query(
+            'DELETE FROM sprint_tasks WHERE sprint_id = $1 AND project_id = $2 AND story_id = $3',
+            [sprintId, projectId, storyId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error deleting story from sprint:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
 
 // Get Story History
 router.get('/story/:id/history', async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query(`
-            SELECT 
+            SELECT
                 sp.sprint_number,
                 sp.start_date,
                 sp.end_date,
@@ -860,3 +893,5 @@ router.get('/story/:id/history', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+export default router;

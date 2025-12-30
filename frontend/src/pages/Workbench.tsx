@@ -679,8 +679,8 @@ export default function Workbench() {
                                                 className={cn(
                                                     "w-8 h-8 cursor-pointer transition-all duration-200",
                                                     m.id === filterMemberId
-                                                        ? "ring-2 ring-white ring-offset-2 ring-offset-background scale-110 shadow-lg"
-                                                        : "hover:scale-105 opacity-70 hover:opacity-100"
+                                                        ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-white scale-110 shadow-lg"
+                                                        : "hover:scale-105 opacity-75 hover:opacity-100"
                                                 )}
                                             >
                                                 {m.avatar_url && !m.avatar_url.includes('pravatar.cc') && (

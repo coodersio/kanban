@@ -25,7 +25,8 @@ import {
     User,
     ChevronDown,
     ChevronUp,
-    History
+    History,
+    Trash
 } from 'lucide-react';
 
 interface StoryDetailDialogProps {
@@ -342,6 +343,37 @@ export default function StoryDetailDialog({
         }
     };
 
+    const handleDeleteStory = async () => {
+        if (!story) return;
+
+        if (!confirm(`确定要从当前迭代中删除关键节点"${story.title}"吗？\n\n注意：这将同时删除该节点下的所有任务。`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/workbench/story/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId,
+                    projectId,
+                    storyId: story.id
+                })
+            });
+
+            if (res.ok) {
+                alert('删除成功');
+                onClose();
+                onUpdate();
+            } else {
+                alert('删除失败，请重试');
+            }
+        } catch (err) {
+            console.error('Error deleting story:', err);
+            alert('删除失败，请重试');
+        }
+    };
+
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'completed':
@@ -648,6 +680,22 @@ export default function StoryDetailDialog({
                                 )}
                             </div>
                         )}
+                    </div>
+                </div>
+
+                {/* Footer with Delete Button */}
+                <div className="border-t px-6 py-4 flex items-center justify-between bg-muted/30">
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteStory}
+                        className="gap-2"
+                    >
+                        <Trash className="w-4 h-4" />
+                        删除关键节点
+                    </Button>
+                    <div className="text-xs text-muted-foreground">
+                        {story.id && `节点 ID: ${story.id}`}
                     </div>
                 </div>
             </SheetContent>
