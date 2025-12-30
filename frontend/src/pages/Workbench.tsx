@@ -226,10 +226,10 @@ export default function Workbench() {
             .then(res => res.json())
             .then(data => {
                 setProjects(data);
-                // Auto-select first project if no project in URL
-                const hasProjectInUrl = location.pathname.match(/\/PROJECT-(\d+)$/);
-                if (data.length > 0 && !selectedProjectId && !hasProjectInUrl && data[0].snapshot_id) {
-                    navigate(`/dashboard/workbench/PROJECT-${data[0].snapshot_id}`, { replace: true });
+                // Auto-select first project if no entity in URL
+                const hasEntityInUrl = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)(-\d+)?$/);
+                if (data.length > 0 && !selectedProjectId && !hasEntityInUrl && data[0].snapshot_id) {
+                    navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}`, { replace: true });
                 }
             });
     }, [selectedSprintId, navigate, location.pathname, selectedProjectId]);
@@ -248,11 +248,13 @@ export default function Workbench() {
 
     // URL synchronization - Open drawers based on URL and auto-switch sprint
     useEffect(() => {
-        const pathMatch = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)$/);
+        // Match new format: TYPE-{id}-{snapshot_id} or old format: TYPE-{id}
+        const pathMatch = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)(?:-(\d+))?$/);
 
         if (pathMatch) {
-            const [, type, snapshotId] = pathMatch;
-            const id = parseInt(snapshotId);
+            const [, type, refId, snapshotId] = pathMatch;
+            // Use snapshot_id if available (new format), otherwise use refId (old format for backward compatibility)
+            const id = snapshotId ? parseInt(snapshotId) : parseInt(refId);
 
             if (type === 'PROJECT') {
                 // Fetch project snapshot and auto-switch sprint
@@ -281,6 +283,10 @@ export default function Workbench() {
                         if (story.sprint_id && story.sprint_id.toString() !== selectedSprintId) {
                             setSelectedSprintId(story.sprint_id.toString());
                         }
+                        // Auto-select the project this story belongs to
+                        if (story.project_id && selectedProjectId !== story.project_id) {
+                            setSelectedProjectId(story.project_id);
+                        }
                         setSelectedStoryForEdit(story);
                         setIsStoryDrawerOpen(true);
                     })
@@ -297,6 +303,10 @@ export default function Workbench() {
                         // Auto-switch to the sprint this task belongs to
                         if (task.sprint_id && task.sprint_id.toString() !== selectedSprintId) {
                             setSelectedSprintId(task.sprint_id.toString());
+                        }
+                        // Auto-select the project this task belongs to
+                        if (task.project_id && selectedProjectId !== task.project_id) {
+                            setSelectedProjectId(task.project_id);
                         }
                         setSelectedTask(task);
                         setIsDrawerOpen(true);
@@ -503,7 +513,12 @@ export default function Workbench() {
                         setProjects(data);
                         // 导航到第一个添加的项目
                         if (selectedReuseProjectIds.length > 0) {
-                            navigate(`/dashboard/workbench/PROJECT-${selectedReuseProjectIds[0]}`);
+                            const project = data.find((p: Project) => p.id === selectedReuseProjectIds[0]);
+                            if (project?.snapshot_id) {
+                                navigate(`/dashboard/workbench/PROJECT-${project.id}-${project.snapshot_id}`);
+                            } else {
+                                navigate(`/dashboard/workbench/PROJECT-${selectedReuseProjectIds[0]}`);
+                            }
                         }
                     });
             } else {
@@ -549,10 +564,10 @@ export default function Workbench() {
                     .then(data => {
                         setProjects(data);
                         if (!isEditMode && newProjOrMsg.id) {
-                            // Find the newly created project in the refreshed list to get its snapshot_id
+                            // Find the newly created project in the refreshed list
                             const newProject = data.find((p: Project) => p.id === newProjOrMsg.id);
                             if (newProject?.snapshot_id) {
-                                navigate(`/dashboard/workbench/PROJECT-${newProject.snapshot_id}`);
+                                navigate(`/dashboard/workbench/PROJECT-${newProject.id}-${newProject.snapshot_id}`);
                             }
                         }
                     });
@@ -590,7 +605,7 @@ export default function Workbench() {
                         // If the deleted project was selected, navigate to first project or workbench home
                         if (selectedProjectId === editingProjectId) {
                             if (data.length > 0 && data[0].snapshot_id) {
-                                navigate(`/dashboard/workbench/PROJECT-${data[0].snapshot_id}`);
+                                navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}`);
                             } else {
                                 navigate('/dashboard/workbench');
                             }
@@ -667,8 +682,12 @@ export default function Workbench() {
     };
 
     const openEditTask = (task: Task) => {
-        // Navigate to task URL instead of directly opening drawer (using snapshot_id)
-        navigate(`/dashboard/workbench/TASK-${task.snapshot_id}`);
+        // Navigate to task URL with new format: TASK-{id}-{snapshot_id}
+        if (task.snapshot_id) {
+            navigate(`/dashboard/workbench/TASK-${task.id}-${task.snapshot_id}`);
+        } else {
+            navigate(`/dashboard/workbench/TASK-${task.id}`);
+        }
     };
 
     const handleUpdateStory = async (updatedStory: any) => {
@@ -688,8 +707,21 @@ export default function Workbench() {
 
     const openEditStory = (story: Story) => {
         if (story.id === 0) return; // Can't edit "Uncategorized"
-        // Navigate to story URL instead of directly opening drawer (using snapshot_id)
-        navigate(`/dashboard/workbench/STORY-${story.snapshot_id}`);
+        // Navigate to story URL with new format: STORY-{id}-{snapshot_id}
+        if (story.snapshot_id) {
+            navigate(`/dashboard/workbench/STORY-${story.id}-${story.snapshot_id}`);
+        } else {
+            navigate(`/dashboard/workbench/STORY-${story.id}`);
+        }
+    };
+
+    const handleSprintChange = (newSprintId: string) => {
+        setSelectedSprintId(newSprintId);
+        // Clear URL when switching sprints - go back to base workbench view
+        navigate('/dashboard/workbench', { replace: true });
+        // Close any open drawers
+        setIsStoryDrawerOpen(false);
+        setIsDrawerOpen(false);
     };
 
     const project = projects.find(p => p.id === selectedProjectId);
@@ -721,7 +753,7 @@ export default function Workbench() {
                 <div className="flex items-center gap-6">
                     {/* Sprint Selector */}
                     <div className="flex items-center gap-4">
-                        <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
+                        <Select value={selectedSprintId} onValueChange={handleSprintChange}>
                             <SelectTrigger className="w-[180px] h-9 bg-secondary/30 border-secondary-foreground/10 text-sm font-medium focus:ring-primary/20">
                                 <SelectValue placeholder="选择迭代..." />
                             </SelectTrigger>
@@ -835,10 +867,10 @@ export default function Workbench() {
                             projects={projects}
                             selectedId={selectedProjectId}
                             onSelect={(projectId) => {
-                                // Find the project and use its snapshot_id for URL
+                                // Find the project and use new format: PROJECT-{id}-{snapshot_id}
                                 const project = projects.find(p => p.id === projectId);
                                 if (project?.snapshot_id) {
-                                    navigate(`/dashboard/workbench/PROJECT-${project.snapshot_id}`);
+                                    navigate(`/dashboard/workbench/PROJECT-${project.id}-${project.snapshot_id}`);
                                 } else {
                                     console.warn('Project snapshot_id not found, using project id as fallback', project);
                                     navigate(`/dashboard/workbench/PROJECT-${projectId}`);

@@ -13,13 +13,17 @@ export default function EntityHandler({ type, id, snapshotId, className }: Entit
 
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        // 优先使用 snapshotId 进行导航，如果没有则使用 id（向后兼容）
-        const navigationId = snapshotId ?? id;
-        navigate(`/dashboard/workbench/${type}-${navigationId}`);
+        // 使用新格式: TYPE-{id}-{snapshot_id}
+        if (snapshotId) {
+            navigate(`/dashboard/workbench/${type}-${id}-${snapshotId}`);
+        } else {
+            // 向后兼容: 如果没有 snapshot_id，只使用 id
+            navigate(`/dashboard/workbench/${type}-${id}`);
+        }
     };
 
-    // 优先显示 snapshotId，如果没有则显示 id
-    const displayId = snapshotId ?? id;
+    // 显示格式: [TYPE-{id}-{snapshot_id}] 或 [TYPE-{id}]
+    const displayText = snapshotId ? `${type}-${id}-${snapshotId}` : `${type}-${id}`;
 
     return (
         <button
@@ -29,7 +33,7 @@ export default function EntityHandler({ type, id, snapshotId, className }: Entit
                 className
             )}
         >
-            [{type}-{displayId}]
+            [{displayText}]
         </button>
     );
 }
