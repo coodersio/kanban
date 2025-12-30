@@ -3,12 +3,13 @@ import { useOutletContext } from 'react-router-dom';
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, Layout, User, Settings, LayoutGrid, ArrowUpDown, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, ChevronDown, Layout, User, Settings, LayoutGrid, List, ArrowUpDown, Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import KanbanBoard from './components/KanbanBoard';
+import ListView from './components/ListView';
 import ProjectSidebar from './components/ProjectSidebar';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +64,7 @@ export default function Workbench() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
+    const [viewMode, setViewMode] = useState<'kanban' | 'list'>('list');
     const [stories, setStories] = useState<Story[]>([]);
 
     // Dialog States
@@ -764,27 +766,55 @@ export default function Workbench() {
                             <h2 className="text-lg font-bold text-foreground tracking-tight">
                                 {project?.name}
                             </h2>
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                                <Layout className="w-4 h-4" />
-                                <span className="text-xs font-medium">看板视图</span>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setViewMode('kanban')}
+                                    className="h-8 px-3 text-xs"
+                                >
+                                    <LayoutGrid className="w-4 h-4 mr-2" />
+                                    看板视图
+                                </Button>
+                                <Button
+                                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setViewMode('list')}
+                                    className="h-8 px-3 text-xs"
+                                >
+                                    <List className="w-4 h-4 mr-2" />
+                                    列表视图
+                                </Button>
                             </div>
                         </div>
                     )}
 
                     <div className="flex-1 overflow-hidden relative">
                         {selectedSprintId && selectedProjectId ? (
-                            <KanbanBoard
-                                key={`${selectedSprintId}-${selectedProjectId}-${filterMemberId}-${refreshTrigger}`}
-                                sprintId={selectedSprintId}
-                                projectId={selectedProjectId}
-                                filterMemberId={filterMemberId}
-                                members={members}
-                                onAddTask={openAddTaskDialog}
-                                onEditTask={openEditTask}
-                                onEditStory={openEditStory}
-                                sprints={sprints}
-                                onStoryMove={() => setRefreshTrigger(prev => prev + 1)}
-                            />
+                            viewMode === 'kanban' ? (
+                                <KanbanBoard
+                                    key={`${selectedSprintId}-${selectedProjectId}-${filterMemberId}-${refreshTrigger}`}
+                                    sprintId={selectedSprintId}
+                                    projectId={selectedProjectId}
+                                    filterMemberId={filterMemberId}
+                                    members={members}
+                                    onAddTask={openAddTaskDialog}
+                                    onEditTask={openEditTask}
+                                    onEditStory={openEditStory}
+                                    sprints={sprints}
+                                    onStoryMove={() => setRefreshTrigger(prev => prev + 1)}
+                                />
+                            ) : (
+                                <ListView
+                                    key={`${selectedSprintId}-${selectedProjectId}-${filterMemberId}-${refreshTrigger}`}
+                                    sprintId={selectedSprintId}
+                                    projectId={selectedProjectId}
+                                    filterMemberId={filterMemberId}
+                                    members={members}
+                                    onEditTask={openEditTask}
+                                    onEditStory={openEditStory}
+                                />
+                            )
                         ) : (
                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
                                 <Layout className="w-12 h-12 opacity-10" />

@@ -64,7 +64,7 @@ export default function TaskCard({ task, isOverlay, onClick }: { task: Task, isO
                     <div className="flex items-start gap-3">
                         <div className="flex-1 min-w-0 space-y-1">
                             <h5 className="text-sm font-medium text-foreground leading-snug group-hover:text-primary transition-colors truncate">
-                                {task.title}
+                                <span className="text-muted-foreground font-normal">[TASK-{task.id}]</span> {task.title}
                             </h5>
                             {task.description && (
                                 <p className="text-xs text-muted-foreground line-clamp-1">

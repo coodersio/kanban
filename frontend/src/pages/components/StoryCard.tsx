@@ -246,7 +246,7 @@ export default function StoryCard({
                 <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold text-foreground line-clamp-2">
-                            {story.title}
+                            <span className="text-muted-foreground font-normal">[STORY-{story.id}]</span> {story.title}
                         </h4>
                         {/* Priority Badge */}
                         {story.priority && (
@@ -351,7 +351,7 @@ export default function StoryCard({
                                         task.status === 'completed' && "line-through text-muted-foreground"
                                     )}
                                 >
-                                    {task.title}
+                                    <span className="text-muted-foreground font-normal">[TASK-{task.id}]</span> {task.title}
                                 </button>
 
                                 {/* Priority Badge */}
