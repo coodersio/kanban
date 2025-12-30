@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
     Plus,
@@ -22,7 +24,8 @@ import {
     Clock,
     User,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    History
 } from 'lucide-react';
 
 interface StoryDetailDialogProps {
@@ -60,7 +63,13 @@ export default function StoryDetailDialog({
     const [newTaskDesc, setNewTaskDesc] = useState('');
     const [newTaskAssignee, setNewTaskAssignee] = useState<number | null>(null);
     const [newTaskPriority, setNewTaskPriority] = useState('中');
-    const [newTaskSize, setNewTaskSize] = useState('Medium');
+    const [newTaskSize, setNewTaskSize] = useState('');
+
+    // Batch Add Tasks State
+    const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
+    const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
+    const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
+    const [taskSearch, setTaskSearch] = useState('');
 
     // Initialize story edit state when dialog opens
     useEffect(() => {
@@ -87,6 +96,19 @@ export default function StoryDetailDialog({
             .catch(err => console.error('Error fetching tasks:', err));
     }, [story, sprintId, projectId, open]);
 
+    // Fetch available tasks when batch add dialog opens
+    useEffect(() => {
+        if (!isAddTaskDialogOpen || !story) {
+            setAvailableTasks([]);
+            return;
+        }
+
+        fetch(`/api/workbench/tasks/available?projectId=${projectId}&sprintId=${sprintId}&storyId=${story.id}&search=${taskSearch}`)
+            .then(res => res.json())
+            .then(data => setAvailableTasks(data))
+            .catch(err => console.error('Error fetching available tasks:', err));
+    }, [isAddTaskDialogOpen, projectId, sprintId, story, taskSearch]);
+
     const handleAddTask = async () => {
         if (!newTaskTitle || !story) return;
 
@@ -112,7 +134,7 @@ export default function StoryDetailDialog({
                 setNewTaskDesc('');
                 setNewTaskAssignee(null);
                 setNewTaskPriority('中');
-                setNewTaskSize('Medium');
+                setNewTaskSize('');
                 setIsAddingTask(false);
 
                 // Refresh tasks
@@ -277,6 +299,49 @@ export default function StoryDetailDialog({
         }
     };
 
+    const handleBatchAddTasks = async () => {
+        if (selectedTaskIds.length === 0 || !story) return;
+
+        try {
+            const promises = selectedTaskIds.map(taskId =>
+                fetch('/api/workbench/task/reuse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sprintId,
+                        projectId,
+                        storyId: story.id,
+                        taskId,
+                        assignedTo: null
+                    })
+                })
+            );
+
+            const results = await Promise.all(promises);
+            const allSuccess = results.every(res => res.ok);
+
+            if (allSuccess) {
+                setIsAddTaskDialogOpen(false);
+                setSelectedTaskIds([]);
+                setTaskSearch('');
+
+                // Refresh tasks
+                const boardRes = await fetch(`/api/workbench/board?sprintId=${sprintId}&projectId=${projectId}`);
+                const boardData = await boardRes.json();
+                const storyTasks = boardData.tasks.filter((t: Task) => t.story_id === story.id);
+                setTasks(storyTasks);
+
+                onUpdate();
+                alert(`成功添加 ${selectedTaskIds.length} 个任务！`);
+            } else {
+                alert('部分任务添加失败，请重试');
+            }
+        } catch (err) {
+            console.error('Error batch adding tasks:', err);
+            alert('添加任务失败，请重试');
+        }
+    };
+
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'completed':
@@ -385,14 +450,25 @@ export default function StoryDetailDialog({
                                 {isTaskListExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                                 任务列表 ({tasks.length})
                             </button>
-                            <Button
-                                onClick={() => setIsAddingTask(true)}
-                                size="sm"
-                                className="h-8 gap-1.5 text-xs"
-                            >
-                                <Plus className="w-3.5 h-3.5" />
-                                添加任务
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={() => setIsAddTaskDialogOpen(true)}
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 gap-1.5 text-xs"
+                                >
+                                    <History className="w-3.5 h-3.5" />
+                                    从历史任务中添加
+                                </Button>
+                                <Button
+                                    onClick={() => setIsAddingTask(true)}
+                                    size="sm"
+                                    className="h-8 gap-1.5 text-xs"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    添加任务
+                                </Button>
+                            </div>
                         </div>
 
                         {isTaskListExpanded && (
@@ -440,17 +516,16 @@ export default function StoryDetailDialog({
                                                 </Select>
                                             </div>
                                             <div className="grid gap-2">
-                                                <Label className="text-xs">工时</Label>
-                                                <Select value={newTaskSize} onValueChange={setNewTaskSize}>
-                                                    <SelectTrigger className="h-9 text-xs">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="Tiny">Tiny</SelectItem>
-                                                        <SelectItem value="Medium">Medium</SelectItem>
-                                                        <SelectItem value="Huge">Huge</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                <Label className="text-xs">工时（小时）</Label>
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    placeholder="例如：8"
+                                                    value={newTaskSize}
+                                                    onChange={(e) => setNewTaskSize(e.target.value)}
+                                                    className="h-9 text-xs"
+                                                />
                                             </div>
                                         </div>
                                         <div className="grid gap-2">
@@ -576,6 +651,102 @@ export default function StoryDetailDialog({
                     </div>
                 </div>
             </SheetContent>
+
+            {/* Batch Add Tasks Dialog */}
+            <Dialog open={isAddTaskDialogOpen} onOpenChange={setIsAddTaskDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-semibold">从历史任务中添加</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="grid gap-2">
+                            <Label className="text-sm font-medium">搜索任务</Label>
+                            <Input
+                                placeholder="输入关键词搜索..."
+                                value={taskSearch}
+                                onChange={(e) => setTaskSearch(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-sm font-medium">选择任务（可多选）</Label>
+                                {selectedTaskIds.length > 0 && (
+                                    <span className="text-xs text-muted-foreground">
+                                        已选 {selectedTaskIds.length} 项
+                                    </span>
+                                )}
+                            </div>
+                            <div className="border rounded-lg max-h-[400px] overflow-y-auto">
+                                {availableTasks.map(task => (
+                                    <div
+                                        key={task.id}
+                                        className={cn(
+                                            "flex items-start gap-3 p-3 rounded-md cursor-pointer hover:bg-muted/50 border-b last:border-b-0",
+                                            selectedTaskIds.includes(task.id) && "bg-primary/10"
+                                        )}
+                                        onClick={() => {
+                                            setSelectedTaskIds(prev =>
+                                                prev.includes(task.id)
+                                                    ? prev.filter(id => id !== task.id)
+                                                    : [...prev, task.id]
+                                            );
+                                        }}
+                                    >
+                                        <Checkbox
+                                            checked={selectedTaskIds.includes(task.id)}
+                                            onCheckedChange={(checked) => {
+                                                setSelectedTaskIds(prev =>
+                                                    checked ? [...prev, task.id] : prev.filter(id => id !== task.id)
+                                                );
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="font-medium text-sm">{task.title}</span>
+                                                {task.priority && getPriorityBadge(task.priority)}
+                                            </div>
+                                            {task.description && (
+                                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                                    {task.description}
+                                                </p>
+                                            )}
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {task.size && (
+                                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                        {task.size}
+                                                    </Badge>
+                                                )}
+                                                {task.assigned_to_user && (
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {task.assigned_to_user.display_name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {availableTasks.length === 0 && (
+                                    <div className="text-center py-8 text-muted-foreground text-sm">
+                                        没有可用的任务
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAddTaskDialogOpen(false)}>
+                            取消
+                        </Button>
+                        <Button onClick={handleBatchAddTasks} disabled={selectedTaskIds.length === 0}>
+                            添加任务 {selectedTaskIds.length > 0 && `(${selectedTaskIds.length})`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Sheet>
     );
 }

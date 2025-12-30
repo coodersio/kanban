@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Command,
     CommandEmpty,
@@ -100,18 +101,18 @@ export default function Workbench() {
     // Reuse Flow State
     const [storyReuseSearch, setStoryReuseSearch] = useState('');
     const [availableStories, setAvailableStories] = useState<Story[]>([]);
-    const [selectedReuseStoryId, setSelectedReuseStoryId] = useState<number | null>(null);
+    const [selectedReuseStoryIds, setSelectedReuseStoryIds] = useState<number[]>([]);
 
     const [taskReuseSearch, setTaskReuseSearch] = useState('');
     const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
-    const [selectedReuseTaskId, setSelectedReuseTaskId] = useState<number | null>(null);
+    const [selectedReuseTaskIds, setSelectedReuseTaskIds] = useState<number[]>([]);
 
     const [activeStoryTab, setActiveStoryTab] = useState('create');
     const [activeTaskTab, setActiveTaskTab] = useState('create');
     const [activeProjectTab, setActiveProjectTab] = useState('create');
 
     const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
-    const [selectedReuseProjectId, setSelectedReuseProjectId] = useState<number | null>(null);
+    const [selectedReuseProjectIds, setSelectedReuseProjectIds] = useState<number[]>([]);
 
     // Sprint Manager State
     const [isSprintManagerOpen, setIsSprintManagerOpen] = useState(false);
@@ -266,26 +267,36 @@ export default function Workbench() {
     };
 
     const handleReuseStory = async () => {
-        if (!selectedReuseStoryId || !selectedSprintId || !selectedProjectId) return;
+        if (selectedReuseStoryIds.length === 0 || !selectedSprintId || !selectedProjectId) return;
         try {
-            const res = await fetch('/api/workbench/story/reuse', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sprintId: selectedSprintId,
-                    projectId: selectedProjectId,
-                    storyId: selectedReuseStoryId,
-                    assignedTo: assignedTo
+            // 批量添加关键节点到迭代
+            const promises = selectedReuseStoryIds.map(storyId =>
+                fetch('/api/workbench/story/reuse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sprintId: selectedSprintId,
+                        projectId: selectedProjectId,
+                        storyId: storyId,
+                        assignedTo: assignedTo
+                    })
                 })
-            });
-            if (res.ok) {
+            );
+
+            const results = await Promise.all(promises);
+            const allSuccess = results.every(res => res.ok);
+
+            if (allSuccess) {
                 setIsStoryDialogOpen(false);
-                setSelectedReuseStoryId(null);
+                setSelectedReuseStoryIds([]);
                 setAssignedTo(null);
                 setRefreshTrigger(prev => prev + 1);
+            } else {
+                alert('部分节点添加失败，请重试');
             }
         } catch (err) {
-            console.error('Error reusing story:', err);
+            console.error('Error reusing stories:', err);
+            alert('添加节点失败，请重试');
         }
     };
 
@@ -330,28 +341,38 @@ export default function Workbench() {
     };
 
     const handleReuseTask = async () => {
-        if (!selectedReuseTaskId || !selectedSprintId || !selectedProjectId) return;
+        if (selectedReuseTaskIds.length === 0 || !selectedSprintId || !selectedProjectId) return;
         try {
-            const res = await fetch('/api/workbench/task/reuse', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sprintId: selectedSprintId,
-                    projectId: selectedProjectId,
-                    storyId: targetStoryId,
-                    taskId: selectedReuseTaskId,
-                    assignedTo: assignedTo
+            // 批量添加任务到迭代
+            const promises = selectedReuseTaskIds.map(taskId =>
+                fetch('/api/workbench/task/reuse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sprintId: selectedSprintId,
+                        projectId: selectedProjectId,
+                        storyId: targetStoryId,
+                        taskId: taskId,
+                        assignedTo: assignedTo
+                    })
                 })
-            });
-            if (res.ok) {
+            );
+
+            const results = await Promise.all(promises);
+            const allSuccess = results.every(res => res.ok);
+
+            if (allSuccess) {
                 setIsTaskDialogOpen(false);
-                setSelectedReuseTaskId(null);
+                setSelectedReuseTaskIds([]);
                 setTargetStoryId(null);
                 setAssignedTo(null);
                 setRefreshTrigger(prev => prev + 1);
+            } else {
+                alert('部分任务添加失败，请重试');
             }
         } catch (err) {
-            console.error('Error reusing task:', err);
+            console.error('Error reusing tasks:', err);
+            alert('添加任务失败，请重试');
         }
     };
 
@@ -373,20 +394,26 @@ export default function Workbench() {
     }, [isProjectDialogOpen, activeProjectTab, selectedSprintId]);
 
     const handleReuseProject = async () => {
-        if (!selectedReuseProjectId || !selectedSprintId) return;
+        if (selectedReuseProjectIds.length === 0 || !selectedSprintId) return;
         try {
-            const res = await fetch('/api/workbench/sprint/projects', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sprintId: selectedSprintId,
-                    projectId: selectedReuseProjectId,
-                    priority: projectPriority,
-                    notes: priorityNotes
+            // 批量添加项目到迭代
+            const promises = selectedReuseProjectIds.map(projectId =>
+                fetch('/api/workbench/sprint/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sprintId: selectedSprintId,
+                        projectId: projectId,
+                        priority: projectPriority,
+                        notes: priorityNotes
+                    })
                 })
-            });
+            );
 
-            if (res.ok) {
+            const results = await Promise.all(promises);
+            const allSuccess = results.every(res => res.ok);
+
+            if (allSuccess) {
                 setIsProjectDialogOpen(false);
                 resetProjectForm();
                 // Refresh project list
@@ -394,11 +421,17 @@ export default function Workbench() {
                     .then(r => r.json())
                     .then(data => {
                         setProjects(data);
-                        setSelectedProjectId(selectedReuseProjectId);
+                        // 选中第一个添加的项目
+                        if (selectedReuseProjectIds.length > 0) {
+                            setSelectedProjectId(selectedReuseProjectIds[0]);
+                        }
                     });
+            } else {
+                alert('部分项目添加失败，请重试');
             }
         } catch (err) {
-            console.error('Error reusing project:', err);
+            console.error('Error reusing projects:', err);
+            alert('添加项目失败，请重试');
         }
     };
 
@@ -495,7 +528,7 @@ export default function Workbench() {
         setIsEditMode(false);
         setEditingProjectId(null);
         setActiveProjectTab('create');
-        setSelectedReuseProjectId(null);
+        setSelectedReuseProjectIds([]);
     };
 
     const openAddProjectDialog = () => {
@@ -872,23 +905,49 @@ export default function Workbench() {
                                 />
                             </div>
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">选择节点</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-sm font-medium">选择节点（可多选）</Label>
+                                    {selectedReuseStoryIds.length > 0 && (
+                                        <span className="text-xs text-muted-foreground">
+                                            已选 {selectedReuseStoryIds.length} 项
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="max-h-[300px] overflow-y-auto space-y-2">
                                     {availableStories.map(s => (
                                         <div
                                             key={s.id}
-                                            onClick={() => setSelectedReuseStoryId(s.id)}
+                                            onClick={() => {
+                                                setSelectedReuseStoryIds(prev =>
+                                                    prev.includes(s.id)
+                                                        ? prev.filter(id => id !== s.id)
+                                                        : [...prev, s.id]
+                                                );
+                                            }}
                                             className={cn(
-                                                "p-3 rounded border transition-all cursor-pointer text-sm",
-                                                selectedReuseStoryId === s.id
+                                                "flex items-start gap-3 p-3 rounded border transition-all cursor-pointer text-sm",
+                                                selectedReuseStoryIds.includes(s.id)
                                                     ? "border-primary bg-primary/5"
                                                     : "border-border hover:border-primary/30 hover:bg-muted"
                                             )}
                                         >
-                                            <div className="font-bold text-sm text-slate-900">{s.title}</div>
-                                            {s.description && (
-                                                <div className="text-xs text-slate-400 mt-1 line-clamp-1">{s.description}</div>
-                                            )}
+                                            <Checkbox
+                                                checked={selectedReuseStoryIds.includes(s.id)}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedReuseStoryIds(prev =>
+                                                        checked
+                                                            ? [...prev, s.id]
+                                                            : prev.filter(id => id !== s.id)
+                                                    );
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                            <div className="flex-1">
+                                                <div className="font-bold text-sm text-slate-900">{s.title}</div>
+                                                {s.description && (
+                                                    <div className="text-xs text-slate-400 mt-1 line-clamp-1">{s.description}</div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                     {availableStories.length === 0 && (
@@ -922,7 +981,9 @@ export default function Workbench() {
                         {activeStoryTab === 'create' ? (
                             <Button onClick={handleAddStory}>创建节点</Button>
                         ) : (
-                            <Button onClick={handleReuseStory} disabled={!selectedReuseStoryId}>选用节点</Button>
+                            <Button onClick={handleReuseStory} disabled={selectedReuseStoryIds.length === 0}>
+                                选用节点 {selectedReuseStoryIds.length > 0 && `(${selectedReuseStoryIds.length})`}
+                            </Button>
                         )}
                     </DialogFooter>
                 </DialogContent>
@@ -1147,23 +1208,49 @@ export default function Workbench() {
                                 </Select>
                             </div>
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">选择任务</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-sm font-medium">选择任务（可多选）</Label>
+                                    {selectedReuseTaskIds.length > 0 && (
+                                        <span className="text-xs text-muted-foreground">
+                                            已选 {selectedReuseTaskIds.length} 项
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="max-h-[300px] overflow-y-auto space-y-2">
                                     {availableTasks.map(t => (
                                         <div
                                             key={t.id}
-                                            onClick={() => setSelectedReuseTaskId(t.id)}
+                                            onClick={() => {
+                                                setSelectedReuseTaskIds(prev =>
+                                                    prev.includes(t.id)
+                                                        ? prev.filter(id => id !== t.id)
+                                                        : [...prev, t.id]
+                                                );
+                                            }}
                                             className={cn(
-                                                "p-3 rounded border transition-all cursor-pointer text-sm",
-                                                selectedReuseTaskId === t.id
+                                                "flex items-start gap-3 p-3 rounded border transition-all cursor-pointer text-sm",
+                                                selectedReuseTaskIds.includes(t.id)
                                                     ? "border-primary bg-primary/5"
                                                     : "border-border hover:border-primary/30 hover:bg-muted"
                                             )}
                                         >
-                                            <div className="font-medium">{t.title || '无标题任务'}</div>
-                                            {t.description && (
-                                                <div className="text-xs text-muted-foreground mt-1 line-clamp-1">{t.description}</div>
-                                            )}
+                                            <Checkbox
+                                                checked={selectedReuseTaskIds.includes(t.id)}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedReuseTaskIds(prev =>
+                                                        checked
+                                                            ? [...prev, t.id]
+                                                            : prev.filter(id => id !== t.id)
+                                                    );
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                            <div className="flex-1">
+                                                <div className="font-medium">{t.title || '无标题任务'}</div>
+                                                {t.description && (
+                                                    <div className="text-xs text-muted-foreground mt-1 line-clamp-1">{t.description}</div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                     {availableTasks.length === 0 && (
@@ -1197,7 +1284,9 @@ export default function Workbench() {
                         {activeTaskTab === 'create' ? (
                             <Button onClick={handleAddTask}>创建任务</Button>
                         ) : (
-                            <Button onClick={handleReuseTask} disabled={!selectedReuseTaskId}>选用任务</Button>
+                            <Button onClick={handleReuseTask} disabled={selectedReuseTaskIds.length === 0}>
+                                选用任务 {selectedReuseTaskIds.length > 0 && `(${selectedReuseTaskIds.length})`}
+                            </Button>
                         )}
                     </DialogFooter>
                 </DialogContent>
@@ -1326,33 +1415,60 @@ export default function Workbench() {
                     ) : (
                         <div className="space-y-4 py-2">
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">选择项目</Label>
-                                <Command className="rounded-lg border">
-                                    <CommandInput placeholder="输入项目名称搜索..." />
-                                    <CommandList>
-                                        <CommandEmpty>没有找到匹配的项目</CommandEmpty>
-                                        <CommandGroup>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-sm font-medium">选择项目（可多选）</Label>
+                                    {selectedReuseProjectIds.length > 0 && (
+                                        <span className="text-xs text-muted-foreground">
+                                            已选 {selectedReuseProjectIds.length} 项
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="border rounded-lg max-h-[300px] overflow-y-auto">
+                                    {availableProjects.length === 0 ? (
+                                        <div className="p-4 text-sm text-muted-foreground text-center">
+                                            没有可用的项目
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1 p-2">
                                             {availableProjects.map(p => (
-                                                <CommandItem
+                                                <div
                                                     key={p.id}
-                                                    value={`${p.name || p.software_name} ${p.description || ''}`}
-                                                    onSelect={() => setSelectedReuseProjectId(p.id)}
                                                     className={cn(
-                                                        "cursor-pointer",
-                                                        selectedReuseProjectId === p.id && "bg-primary/10"
+                                                        "flex items-start gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50",
+                                                        selectedReuseProjectIds.includes(p.id) && "bg-primary/10"
                                                     )}
+                                                    onClick={() => {
+                                                        setSelectedReuseProjectIds(prev =>
+                                                            prev.includes(p.id)
+                                                                ? prev.filter(id => id !== p.id)
+                                                                : [...prev, p.id]
+                                                        );
+                                                    }}
                                                 >
+                                                    <Checkbox
+                                                        checked={selectedReuseProjectIds.includes(p.id)}
+                                                        onCheckedChange={(checked) => {
+                                                            setSelectedReuseProjectIds(prev =>
+                                                                checked
+                                                                    ? [...prev, p.id]
+                                                                    : prev.filter(id => id !== p.id)
+                                                            );
+                                                        }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
                                                     <div className="flex-1">
-                                                        <div className="font-medium">{p.name || p.software_name}</div>
+                                                        <div className="font-medium text-sm">{p.name || p.software_name}</div>
                                                         {p.description && (
-                                                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</div>
+                                                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                                                {p.description}
+                                                            </div>
                                                         )}
                                                     </div>
-                                                </CommandItem>
+                                                </div>
                                             ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
@@ -1401,8 +1517,8 @@ export default function Workbench() {
                                         {isEditMode ? '保存修改' : '创建项目'}
                                     </Button>
                                 ) : (
-                                    <Button onClick={handleReuseProject} disabled={!selectedReuseProjectId}>
-                                        选用项目
+                                    <Button onClick={handleReuseProject} disabled={selectedReuseProjectIds.length === 0}>
+                                        选用项目 {selectedReuseProjectIds.length > 0 && `(${selectedReuseProjectIds.length})`}
                                     </Button>
                                 )}
                             </div>
@@ -1418,7 +1534,7 @@ export default function Workbench() {
                 onSave={handleUpdateTask}
                 members={members}
                 currentUser={currentUser}
-                sprintId={selectedSprintId || undefined}
+                sprintId={selectedSprintId ? parseInt(selectedSprintId) : undefined}
                 projectId={selectedProjectId || undefined}
             />
 
@@ -1430,7 +1546,7 @@ export default function Workbench() {
                 onSave={handleUpdateStory}
                 members={members}
                 currentUser={currentUser}
-                sprintId={selectedSprintId || undefined}
+                sprintId={selectedSprintId ? parseInt(selectedSprintId) : undefined}
                 projectId={selectedProjectId || undefined}
             />
         </div >
