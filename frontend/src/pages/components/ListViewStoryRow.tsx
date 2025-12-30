@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChevronRight, ChevronDown, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TaskRow from './TaskRow';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 interface ListViewStoryRowProps {
     story: Story;
@@ -15,6 +17,9 @@ interface ListViewStoryRowProps {
     members: Member[];
     onEditStory: (story: Story) => void;
     onEditTask: (task: Task) => void;
+    sprintId: string;
+    projectId: number;
+    onDataChange?: () => void;
 }
 
 // Generate avatar color based on user ID
@@ -67,9 +72,72 @@ export default function ListViewStoryRow({
     tasks,
     members,
     onEditStory,
-    onEditTask
+    onEditTask,
+    sprintId,
+    projectId,
+    onDataChange
 }: ListViewStoryRowProps) {
+    const { toast } = useToast();
     const statusConfig = getStatusBadge(story.status);
+
+    const getNextStatus = (current: string): 'not_started' | 'in_progress' | 'completed' => {
+        if (current === 'not_started') return 'in_progress';
+        if (current === 'in_progress') return 'completed';
+        return 'not_started';
+    };
+
+    const handleStatusClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const nextStatus = getNextStatus(story.status);
+
+        try {
+            const res = await fetch('/api/workbench/story/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId,
+                    storyId: story.id,
+                    status: nextStatus,
+                    projectId
+                })
+            });
+
+            if (res.ok) {
+                onDataChange?.();
+            } else {
+                toast({ title: "更新失败", variant: "destructive" });
+            }
+        } catch (err) {
+            console.error('Error updating story status:', err);
+            toast({ title: "更新失败", variant: "destructive" });
+        }
+    };
+
+    const handleAssigneeChange = async (userId: string) => {
+        const assignedTo = userId === '0' ? null : parseInt(userId);
+
+        try {
+            const res = await fetch('/api/workbench/story/assign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId,
+                    storyId: story.id,
+                    assignedTo,
+                    projectId
+                })
+            });
+
+            if (res.ok) {
+                onDataChange?.();
+            } else {
+                toast({ title: "分配失败", variant: "destructive" });
+            }
+        } catch (err) {
+            console.error('Error assigning story:', err);
+            toast({ title: "分配失败", variant: "destructive" });
+        }
+    };
 
     return (
         <Fragment>
@@ -109,9 +177,14 @@ export default function ListViewStoryRow({
 
                 {/* Status */}
                 <TableCell>
-                    <Badge variant="outline" className={cn('text-xs', statusConfig.className)}>
-                        {statusConfig.label}
-                    </Badge>
+                    <button
+                        onClick={handleStatusClick}
+                        className="inline-flex transition-all hover:scale-105 hover:shadow-sm"
+                    >
+                        <Badge variant="outline" className={cn('text-xs cursor-pointer', statusConfig.className)}>
+                            {statusConfig.label}
+                        </Badge>
+                    </button>
                 </TableCell>
 
                 {/* Priority */}
@@ -120,19 +193,36 @@ export default function ListViewStoryRow({
                 </TableCell>
 
                 {/* Assignee */}
-                <TableCell>
-                    {story.assigned_to_user ? (
-                        <div className="flex items-center gap-2">
-                            <Avatar className="w-6 h-6">
-                                <AvatarFallback className={cn("text-[9px] font-semibold", getAvatarColor(story.assigned_to_user.id))}>
-                                    {story.assigned_to_user.display_name.charAt(0)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs">{story.assigned_to_user.display_name}</span>
-                        </div>
-                    ) : (
-                        <span className="text-xs text-muted-foreground">未分配</span>
-                    )}
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Select
+                        value={story.assigned_to_user?.id.toString() || '0'}
+                        onValueChange={handleAssigneeChange}
+                    >
+                        <SelectTrigger className="h-6 w-[120px] text-xs border-0 bg-transparent hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center gap-2">
+                                {story.assigned_to_user ? (
+                                    <>
+                                        <Avatar className="w-4 h-4">
+                                            <AvatarFallback className={cn("text-[8px] font-semibold", getAvatarColor(story.assigned_to_user.id))}>
+                                                {story.assigned_to_user.display_name.charAt(0)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <span className="text-xs">{story.assigned_to_user.display_name}</span>
+                                    </>
+                                ) : (
+                                    <span className="text-xs text-muted-foreground">未分配</span>
+                                )}
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent onClick={(e) => e.stopPropagation()}>
+                            <SelectItem value="0" className="text-xs">未分配</SelectItem>
+                            {members.map(m => (
+                                <SelectItem key={m.id} value={m.id.toString()} className="text-xs">
+                                    {m.display_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </TableCell>
 
                 {/* Progress */}
@@ -170,6 +260,9 @@ export default function ListViewStoryRow({
                     task={task}
                     members={members}
                     onEditTask={onEditTask}
+                    sprintId={sprintId}
+                    projectId={projectId}
+                    onDataChange={onDataChange}
                 />
             ))}
         </Fragment>

@@ -46,6 +46,10 @@ export default function ListView({
         fetchData();
     }, [sprintId, projectId, filterMemberId]);
 
+    const handleDataChange = () => {
+        fetchData(); // Re-fetch data after inline edit
+    };
+
     // Auto-expand all stories when data loads
     useEffect(() => {
         if (data.stories.length > 0) {
@@ -146,6 +150,9 @@ export default function ListView({
                                     members={members || data.members}
                                     onEditStory={onEditStory || (() => {})}
                                     onEditTask={onEditTask || (() => {})}
+                                    sprintId={sprintId}
+                                    projectId={projectId}
+                                    onDataChange={handleDataChange}
                                 />
                             );
                         })}

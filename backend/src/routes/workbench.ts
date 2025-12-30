@@ -367,6 +367,48 @@ router.post('/task/status', async (req, res) => {
     }
 });
 
+// Assign Task to User
+router.post('/task/assign', async (req, res) => {
+    const { sprintId, taskId, assignedTo, projectId } = req.body;
+    if (!sprintId || !taskId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const user = (req.session as any).user;
+    const role = user?.role;
+
+    if (role === 'external') {
+        return res.status(403).json({ message: 'External users cannot assign tasks' });
+    }
+
+    try {
+        // Check if sprint_tasks record exists
+        const check = await pool.query(
+            'SELECT id FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
+            [sprintId, taskId]
+        );
+
+        if (check.rows.length > 0) {
+            // Update existing snapshot
+            await pool.query(
+                'UPDATE sprint_tasks SET assigned_to = $1, updated_at = NOW() WHERE sprint_id = $2 AND task_id = $3',
+                [assignedTo || null, sprintId, taskId]
+            );
+        } else {
+            // Insert new snapshot (shouldn't normally happen, but handle it)
+            await pool.query(
+                'INSERT INTO sprint_tasks (sprint_id, task_id, project_id, assigned_to, status) VALUES ($1, $2, $3, $4, $5)',
+                [sprintId, taskId, projectId, assignedTo || null, 'not_started']
+            );
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error assigning task:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 // Update Story Status (drag and drop)
 router.post('/story/status', async (req, res) => {
     const { sprintId, storyId, status, projectId } = req.body;
@@ -425,6 +467,48 @@ router.post('/story/status', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error('Error updating story status:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Assign Story to User
+router.post('/story/assign', async (req, res) => {
+    const { sprintId, storyId, assignedTo, projectId } = req.body;
+    if (!sprintId || !storyId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const user = (req.session as any).user;
+    const role = user?.role;
+
+    if (role === 'external') {
+        return res.status(403).json({ message: 'External users cannot assign stories' });
+    }
+
+    try {
+        // Check if sprint_stories record exists
+        const check = await pool.query(
+            'SELECT id FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
+            [sprintId, storyId]
+        );
+
+        if (check.rows.length > 0) {
+            // Update existing snapshot
+            await pool.query(
+                'UPDATE sprint_stories SET assigned_to = $1, updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3',
+                [assignedTo || null, sprintId, storyId]
+            );
+        } else {
+            // Insert new snapshot (shouldn't normally happen, but handle it)
+            await pool.query(
+                'INSERT INTO sprint_stories (sprint_id, story_id, project_id, assigned_to, status) VALUES ($1, $2, $3, $4, $5)',
+                [sprintId, storyId, projectId, assignedTo || null, 'not_started']
+            );
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error assigning story:', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 });
