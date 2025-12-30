@@ -10,6 +10,8 @@ import { Plus, Pencil, Trash2, UserCircle, Shield, User as UserIcon } from 'luci
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from '@/lib/utils';
+import { format } from "date-fns";
+import { zhCN } from "date-fns/locale";
 
 interface UserData {
     id: number;
@@ -216,7 +218,7 @@ export default function UsersPage() {
                                         {getRoleBadge(user.role)}
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
-                                        {user.created_at ? new Date(user.created_at).toLocaleDateString('zh-CN') : '-'}
+                                        {user.created_at ? format(new Date(user.created_at), 'PPP', { locale: zhCN }) : '-'}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">

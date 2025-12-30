@@ -29,7 +29,7 @@ export interface Task {
     size?: string;     // e.g. 'Tiny', 'Medium', 'Huge'
     assigned_to_user?: Member;
     tags?: string[];
-    due_date?: string;
+    planned_completion_date?: string; // 计划完成日期 (与sprint_stories表命名一致)
     progress?: number;
     risk_and_countermeasure?: string;
     estimated_hours?: number; // NEW: 预估工时（小时）

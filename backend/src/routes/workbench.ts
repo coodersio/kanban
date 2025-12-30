@@ -208,6 +208,8 @@ router.get('/board', async (req, res) => {
                 ss.sprint_id,
                 ss.status,
                 ss.progress,
+                ss.planned_completion_date,
+                ss.actual_completion_date,
                 u.id as assignee_id,
                 u.display_name as assignee_name,
                 (SELECT COUNT(*) FROM sprint_tasks st WHERE st.story_id = s.id AND st.sprint_id = $1) as task_count
@@ -254,6 +256,8 @@ router.get('/board', async (req, res) => {
                 st.sprint_id,
                 st.status,
                 st.progress,
+                st.planned_completion_date,
+                st.actual_completion_date,
                 u.id as assignee_id,
                 u.display_name as assignee_name
             FROM tasks t
@@ -632,7 +636,7 @@ router.post('/task', async (req, res) => {
 
 // Update Task Details
 router.post('/task/update', async (req, res) => {
-    const { id, taskId, sprintId, title, description, status, priority, estimatedHours, assignedTo, progress, risk_and_countermeasure, due_date } = req.body;
+    const { id, taskId, sprintId, title, description, status, priority, estimatedHours, assignedTo, progress, risk_and_countermeasure, planned_completion_date } = req.body;
     const finalTaskId = id || taskId;
     if (!finalTaskId || !sprintId) return res.status(400).json({ message: 'Missing taskId or sprintId' });
 
@@ -666,17 +670,17 @@ router.post('/task/update', async (req, res) => {
         }
 
         await client.query(
-            'UPDATE tasks SET title = $1, description = $2, priority = $3, estimated_hours = $4, due_date = $5 WHERE id = $6',
-            [title, description, priority, estimatedHours || null, due_date || null, finalTaskId]
+            'UPDATE tasks SET title = $1, description = $2, priority = $3, estimated_hours = $4 WHERE id = $5',
+            [title, description, priority, estimatedHours || null, finalTaskId]
         );
 
         // 2. Update Snapshot (sprint_tasks) - now filtering by sprint_id to avoid affecting other sprints
         const updateResult = await client.query(
             `UPDATE sprint_tasks
-             SET status = $1, assigned_to = $2, progress = $3, risk_and_countermeasure = $4, updated_at = NOW()
-             WHERE task_id = $5 AND sprint_id = $6
+             SET status = $1, assigned_to = $2, progress = $3, risk_and_countermeasure = $4, planned_completion_date = $5, updated_at = NOW()
+             WHERE task_id = $6 AND sprint_id = $7
              RETURNING sprint_id, story_id`,
-            [status, assignedTo || null, progress || 0, risk_and_countermeasure || '', finalTaskId, sprintId]
+            [status, assignedTo || null, progress || 0, risk_and_countermeasure || '', planned_completion_date || null, finalTaskId, sprintId]
         );
 
         // 3. Auto-calculate Story Progress

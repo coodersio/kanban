@@ -374,7 +374,7 @@ export default function SprintsPage() {
                                         <div className="flex items-center gap-2">
                                             <CalendarIcon className="w-3 h-3" />
                                             {sprint.start_date && sprint.end_date ? (
-                                                `${format(new Date(sprint.start_date), 'yyyy-MM-dd')} 至 ${format(new Date(sprint.end_date), 'yyyy-MM-dd')}`
+                                                `${format(new Date(sprint.start_date), 'yyyy-MM-dd', { locale: zhCN })} 至 ${format(new Date(sprint.end_date), 'yyyy-MM-dd', { locale: zhCN })}`
                                             ) : (
                                                 '未设置日期'
                                             )}

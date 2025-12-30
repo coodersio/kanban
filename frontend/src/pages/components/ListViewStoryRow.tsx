@@ -15,6 +15,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { format } from "date-fns";
+import { zhCN } from "date-fns/locale";
 
 interface ListViewStoryRowProps {
     story: Story;
@@ -27,6 +29,8 @@ interface ListViewStoryRowProps {
     sprintId: string;
     projectId: number;
     onDataChange?: () => void;
+    lastSelectedTaskId?: number | null;
+    lastSelectedStoryId?: number | null;
 }
 
 // Generate avatar color based on user ID
@@ -88,7 +92,9 @@ export default function ListViewStoryRow({
     onEditTask,
     sprintId,
     projectId,
-    onDataChange
+    onDataChange,
+    lastSelectedTaskId,
+    lastSelectedStoryId
 }: ListViewStoryRowProps) {
     const { toast } = useToast();
     const statusConfig = getStatusBadge(story.status);
@@ -163,16 +169,7 @@ export default function ListViewStoryRow({
         }
     };
 
-    const getNextStatus = (current: string): 'not_started' | 'in_progress' | 'completed' => {
-        if (current === 'not_started') return 'in_progress';
-        if (current === 'in_progress') return 'completed';
-        return 'not_started';
-    };
-
-    const handleStatusClick = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const nextStatus = getNextStatus(story.status);
-
+    const handleStatusChange = async (newStatus: string) => {
         try {
             const res = await fetch('/api/workbench/story/status', {
                 method: 'POST',
@@ -180,7 +177,7 @@ export default function ListViewStoryRow({
                 body: JSON.stringify({
                     sprintId,
                     storyId: story.id,
-                    status: nextStatus,
+                    status: newStatus,
                     projectId
                 })
             });
@@ -276,13 +273,18 @@ export default function ListViewStoryRow({
         }
     };
 
+    const isStorySelected = story.id === lastSelectedStoryId;
+
     return (
         <Fragment>
             {/* Story Row */}
             <TableRow
                 ref={setNodeRef}
                 style={style}
-                className="border-b-2 hover:bg-muted/30 transition-colors"
+                className={cn(
+                    "border-b-2 hover:bg-muted/30 transition-colors",
+                    isStorySelected && "bg-blue-50/80"
+                )}
             >
                 {/* Drag Handle */}
                 <TableCell className="w-10">
@@ -326,15 +328,32 @@ export default function ListViewStoryRow({
                 </TableCell>
 
                 {/* Status */}
-                <TableCell>
-                    <button
-                        onClick={handleStatusClick}
-                        className="inline-flex transition-all hover:scale-105 hover:shadow-sm"
-                    >
-                        <Badge variant="outline" className={cn('text-xs cursor-pointer', statusConfig.className)}>
-                            {statusConfig.label}
-                        </Badge>
-                    </button>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Select value={story.status} onValueChange={handleStatusChange}>
+                        <SelectTrigger className={cn("h-7 w-[100px] text-xs border-0 bg-transparent hover:bg-muted/50 transition-colors", statusConfig.className)}>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent onClick={(e) => e.stopPropagation()}>
+                            <SelectItem value="not_started" className="text-xs">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-slate-400" />
+                                    <span>未开始</span>
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="in_progress" className="text-xs">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-orange-400" />
+                                    <span>进行中</span>
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="completed" className="text-xs">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                                    <span>已完成</span>
+                                </div>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
                 </TableCell>
 
                 {/* Priority */}
@@ -377,7 +396,7 @@ export default function ListViewStoryRow({
 
                 {/* Planned Date */}
                 <TableCell className="text-xs text-muted-foreground">
-                    {story.planned_completion_date ? new Date(story.planned_completion_date).toLocaleDateString('zh-CN') : '-'}
+                    {story.planned_completion_date ? format(new Date(story.planned_completion_date), 'M/d EEE', { locale: zhCN }) : '-'}
                 </TableCell>
             </TableRow>
 
@@ -401,6 +420,7 @@ export default function ListViewStoryRow({
                                     sprintId={sprintId}
                                     projectId={projectId}
                                     onDataChange={onDataChange}
+                                    isSelected={task.id === lastSelectedTaskId}
                                 />
                             ))}
                         </SortableContext>

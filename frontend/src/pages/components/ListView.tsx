@@ -15,6 +15,8 @@ interface ListViewProps {
     onEditStory?: (story: Story) => void;
     sprints?: Sprint[];
     onStoryMove?: () => void;
+    lastSelectedTaskId?: number | null;
+    lastSelectedStoryId?: number | null;
 }
 
 interface SortConfig {
@@ -29,6 +31,8 @@ export default function ListView({
     members,
     onEditTask,
     onEditStory,
+    lastSelectedTaskId,
+    lastSelectedStoryId,
 }: ListViewProps) {
     const [data, setData] = useState<BoardData>({ stories: [], tasks: [], members: [] });
     const [expandedStories, setExpandedStories] = useState<Set<number>>(new Set());
@@ -189,6 +193,8 @@ export default function ListView({
                                                 sprintId={sprintId}
                                                 projectId={projectId}
                                                 onDataChange={handleDataChange}
+                                                lastSelectedTaskId={lastSelectedTaskId}
+                                                lastSelectedStoryId={lastSelectedStoryId}
                                             />
                                         );
                                     })}

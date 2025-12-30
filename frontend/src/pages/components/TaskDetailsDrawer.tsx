@@ -34,7 +34,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
     const [priority, setPriority] = useState('');
     const [size, setSize] = useState('');
     const [assignedTo, setAssignedTo] = useState<number | null>(null);
-    const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
+    const [plannedEndDate, setPlannedEndDate] = useState<Date | undefined>(undefined);
     const [progress, setProgress] = useState(0);
     const [risk, setRisk] = useState('');
     const [estimatedHours, setEstimatedHours] = useState<number | undefined>(undefined);
@@ -58,7 +58,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
             setPriority(task.priority || '中');
             setSize(task.size || 'Medium');
             setAssignedTo(task.assigned_to_user?.id || null);
-            setDueDate(task.due_date ? new Date(task.due_date) : undefined);
+            setPlannedEndDate(task.planned_completion_date ? new Date(task.planned_completion_date) : undefined);
             setProgress(task.progress || 0);
             setRisk(task.risk_and_countermeasure || '');
             setEstimatedHours(task.estimated_hours || undefined);
@@ -112,7 +112,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
             priority,
             size,
             assignedTo,
-            due_date: dueDate?.toISOString() || null,
+            planned_completion_date: plannedEndDate?.toISOString() || null,
             progress,
             risk_and_countermeasure: risk,
             estimated_hours: estimatedHours || null
@@ -237,17 +237,17 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                                         variant={"ghost"}
                                         className={cn(
                                             "w-full justify-start text-left font-medium h-9 px-2 -ml-2 hover:bg-secondary/50",
-                                            !dueDate && "text-muted-foreground"
+                                            !plannedEndDate && "text-muted-foreground"
                                         )}
                                     >
-                                        {dueDate ? format(dueDate, "PPP", { locale: zhCN }) : <span>设置日期</span>}
+                                        {plannedEndDate ? format(plannedEndDate, "PPP", { locale: zhCN }) : <span>设置日期</span>}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
                                     <Calendar
                                         mode="single"
-                                        selected={dueDate}
-                                        onSelect={setDueDate}
+                                        selected={plannedEndDate}
+                                        onSelect={setPlannedEndDate}
                                         initialFocus
                                         locale={zhCN}
                                     />

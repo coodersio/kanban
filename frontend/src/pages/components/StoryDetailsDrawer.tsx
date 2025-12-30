@@ -925,7 +925,7 @@ export default function StoryDetailsDrawer({
                                                 <div className="flex-1 space-y-1">
                                                     <div className="flex justify-between">
                                                         <span className="text-sm font-medium">Sprint {h.sprint_number} 更新</span>
-                                                        <span className="text-xs text-muted-foreground">{new Date(h.start_date).toLocaleDateString()}</span>
+                                                        <span className="text-xs text-muted-foreground">{format(new Date(h.start_date), 'M/d', { locale: zhCN })}</span>
                                                     </div>
                                                     <div className="bg-secondary/30 p-3 rounded-md text-sm">
                                                         <div className="flex justify-between text-xs text-muted-foreground mb-1">

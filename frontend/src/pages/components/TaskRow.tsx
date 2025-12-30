@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import EntityHandler from './EntityHandler';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { format } from "date-fns";
+import { zhCN } from "date-fns/locale";
 
 interface TaskRowProps {
     task: Task;
@@ -17,6 +19,7 @@ interface TaskRowProps {
     sprintId: string;
     projectId: number;
     onDataChange?: () => void;
+    isSelected?: boolean;
 }
 
 // Generate avatar color based on user ID
@@ -74,7 +77,8 @@ export default function TaskRow({
     onEditTask,
     sprintId,
     projectId,
-    onDataChange
+    onDataChange,
+    isSelected = false
 }: TaskRowProps) {
     const { toast } = useToast();
     const statusConfig = getStatusBadge(task.status);
@@ -95,16 +99,7 @@ export default function TaskRow({
         opacity: isDragging ? 0.5 : 1
     };
 
-    const getNextStatus = (current: string): 'not_started' | 'in_progress' | 'completed' => {
-        if (current === 'not_started') return 'in_progress';
-        if (current === 'in_progress') return 'completed';
-        return 'not_started';
-    };
-
-    const handleStatusClick = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const nextStatus = getNextStatus(task.status);
-
+    const handleStatusChange = async (newStatus: string) => {
         try {
             const res = await fetch('/api/workbench/task/status', {
                 method: 'POST',
@@ -112,7 +107,7 @@ export default function TaskRow({
                 body: JSON.stringify({
                     sprintId,
                     taskId: task.id,
-                    status: nextStatus,
+                    status: newStatus,
                     projectId,
                     storyId: task.story_id
                 })
@@ -159,7 +154,10 @@ export default function TaskRow({
         <TableRow
             ref={setNodeRef}
             style={style}
-            className="group bg-muted/30 hover:bg-muted/50 transition-colors"
+            className={cn(
+                "group bg-muted/30 hover:bg-muted/50 transition-colors",
+                isSelected && "!bg-blue-50/80"
+            )}
         >
             {/* Empty cell for drag handle column (Story uses this) */}
             <TableCell className="w-10" />
@@ -186,15 +184,32 @@ export default function TaskRow({
             </TableCell>
 
             {/* Status */}
-            <TableCell>
-                <button
-                    onClick={handleStatusClick}
-                    className="inline-flex transition-all hover:scale-105 hover:shadow-sm"
-                >
-                    <Badge variant="outline" className={cn('text-xs cursor-pointer', statusConfig.className)}>
-                        {statusConfig.label}
-                    </Badge>
-                </button>
+            <TableCell onClick={(e) => e.stopPropagation()}>
+                <Select value={task.status} onValueChange={handleStatusChange}>
+                    <SelectTrigger className={cn("h-6 w-[90px] text-xs border-0 bg-transparent hover:bg-muted/50 transition-colors", statusConfig.className)}>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent onClick={(e) => e.stopPropagation()}>
+                        <SelectItem value="not_started" className="text-xs">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-slate-400" />
+                                <span>未开始</span>
+                            </div>
+                        </SelectItem>
+                        <SelectItem value="in_progress" className="text-xs">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-orange-400" />
+                                <span>进行中</span>
+                            </div>
+                        </SelectItem>
+                        <SelectItem value="completed" className="text-xs">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                                <span>已完成</span>
+                            </div>
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
             </TableCell>
 
             {/* Priority */}
@@ -237,7 +252,7 @@ export default function TaskRow({
 
             {/* Planned Date */}
             <TableCell className="text-xs text-muted-foreground">
-                {task.due_date ? new Date(task.due_date).toLocaleDateString('zh-CN') : '-'}
+                {task.planned_completion_date ? format(new Date(task.planned_completion_date), 'M/d EEE', { locale: zhCN }) : '-'}
             </TableCell>
         </TableRow>
     );

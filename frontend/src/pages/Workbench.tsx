@@ -101,10 +101,12 @@ export default function Workbench() {
     // Edit Task Drawer State
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [lastSelectedTaskId, setLastSelectedTaskId] = useState<number | null>(null);
 
     // Edit Story Drawer State
     const [selectedStoryForEdit, setSelectedStoryForEdit] = useState<Story | null>(null);
     const [isStoryDrawerOpen, setIsStoryDrawerOpen] = useState(false);
+    const [lastSelectedStoryId, setLastSelectedStoryId] = useState<number | null>(null);
 
     // Reuse Flow State
     const [storyReuseSearch, setStoryReuseSearch] = useState('');
@@ -288,6 +290,8 @@ export default function Workbench() {
                             setSelectedProjectId(story.project_id);
                         }
                         setSelectedStoryForEdit(story);
+                        setLastSelectedStoryId(story.id);
+                        setLastSelectedTaskId(null); // Clear task selection when selecting story
                         setIsStoryDrawerOpen(true);
                     })
                     .catch(err => {
@@ -309,6 +313,8 @@ export default function Workbench() {
                             setSelectedProjectId(task.project_id);
                         }
                         setSelectedTask(task);
+                        setLastSelectedTaskId(task.id);
+                        setLastSelectedStoryId(null); // Clear story selection when selecting task
                         setIsDrawerOpen(true);
                     })
                     .catch(err => {
@@ -942,6 +948,8 @@ export default function Workbench() {
                                     members={members}
                                     onEditTask={openEditTask}
                                     onEditStory={openEditStory}
+                                    lastSelectedTaskId={lastSelectedTaskId}
+                                    lastSelectedStoryId={lastSelectedStoryId}
                                 />
                             )
                         ) : (
@@ -1200,7 +1208,7 @@ export default function Workbench() {
                                             </Badge>
                                             <span className="text-xs text-muted-foreground">
                                                 {s.start_date && s.end_date ? (
-                                                    `${new Date(s.start_date).toLocaleDateString()} - ${new Date(s.end_date).toLocaleDateString()}`
+                                                    `${format(new Date(s.start_date), 'M/d', { locale: zhCN })} - ${format(new Date(s.end_date), 'M/d', { locale: zhCN })}`
                                                 ) : (
                                                     '未设置日期'
                                                 )}
