@@ -90,4 +90,64 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// Get stories for a specific project with statistics
+router.get('/:id/stories', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`
+            SELECT
+                s.id,
+                s.title,
+                s.description,
+                s.project_id,
+                COUNT(DISTINCT t.id) as task_count,
+                COUNT(DISTINCT ss.sprint_id) as sprint_count,
+                ARRAY_AGG(DISTINCT sp.sprint_number ORDER BY sp.sprint_number DESC) FILTER (WHERE sp.sprint_number IS NOT NULL) as sprints
+            FROM stories s
+            LEFT JOIN tasks t ON t.story_id = s.id
+            LEFT JOIN sprint_stories ss ON ss.story_id = s.id
+            LEFT JOIN sprints sp ON sp.id = ss.sprint_id
+            WHERE s.project_id = $1
+            GROUP BY s.id, s.title, s.description, s.project_id
+            ORDER BY s.id DESC
+        `, [id]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching project stories:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get project delete impact analysis
+router.get('/:id/delete-impact', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [storiesResult, tasksResult, sprintsResult] = await Promise.all([
+            // Count stories
+            pool.query('SELECT COUNT(*) as count FROM stories WHERE project_id = $1', [id]),
+            // Count tasks
+            pool.query('SELECT COUNT(*) as count FROM tasks WHERE project_id = $1', [id]),
+            // Get affected sprints
+            pool.query(`
+                SELECT DISTINCT sp.sprint_number
+                FROM sprint_projects spp
+                JOIN sprints sp ON sp.id = spp.sprint_id
+                WHERE spp.project_id = $1
+                ORDER BY sp.sprint_number DESC
+            `, [id])
+        ]);
+
+        res.json({
+            story_count: parseInt(storiesResult.rows[0].count),
+            task_count: parseInt(tasksResult.rows[0].count),
+            sprint_count: sprintsResult.rows.length,
+            sprints: sprintsResult.rows.map(r => r.sprint_number)
+        });
+    } catch (err) {
+        console.error('Error fetching project delete impact:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 export default router;

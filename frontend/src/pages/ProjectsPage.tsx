@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Briefcase, Filter, Search as SearchIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Briefcase, Search as SearchIcon, AlertTriangle } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import StoriesManager from "./components/StoriesManager";
 
 interface Project {
     id: number;
@@ -33,12 +33,19 @@ export default function ProjectsPage() {
     const [types, setTypes] = useState<Option[]>([]);
     const [users, setUsers] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
     const [isOpen, setIsOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Project | null>(null);
     const [formData, setFormData] = useState({
         name: '', description: '', department_id: '', project_type_id: '', owner_id: '0'
     });
+
+    // Delete confirmation dialog
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+    const [deleteImpact, setDeleteImpact] = useState<any>(null);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
     const fetchProjects = async () => {
         const res = await fetch('/api/projects');
@@ -55,7 +62,6 @@ export default function ProjectsPage() {
         if (tRes.ok) setTypes(await tRes.json());
         if (uRes.ok) {
             const userData = await uRes.json();
-            // Filter out external users
             setUsers(userData.filter((u: any) => u.role !== 'external'));
         }
     };
@@ -82,10 +88,46 @@ export default function ProjectsPage() {
         fetchProjects();
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm('确定要删除该项目吗？')) return;
-        await fetch(`/api/projects/${id}`, { method: 'DELETE' });
-        fetchProjects();
+    const handleDeleteClick = async (project: Project) => {
+        try {
+            const res = await fetch(`/api/projects/${project.id}/delete-impact`);
+            if (res.ok) {
+                const impact = await res.json();
+                setProjectToDelete(project);
+                setDeleteImpact(impact);
+                setDeleteConfirmText('');
+                setDeleteDialogOpen(true);
+            } else {
+                alert('获取删除影响信息失败');
+            }
+        } catch (err) {
+            console.error('Error fetching delete impact:', err);
+            alert('获取删除影响信息失败');
+        }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!projectToDelete || deleteConfirmText !== 'DELETE') return;
+
+        try {
+            const res = await fetch(`/api/projects/${projectToDelete.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                alert('删除成功');
+                setDeleteDialogOpen(false);
+                setProjectToDelete(null);
+                setDeleteImpact(null);
+                setDeleteConfirmText('');
+                if (selectedProject?.id === projectToDelete.id) {
+                    setSelectedProject(null);
+                }
+                fetchProjects();
+            } else {
+                alert('删除失败，请重试');
+            }
+        } catch (err) {
+            console.error('Error deleting project:', err);
+            alert('删除失败，请重试');
+        }
     };
 
     const openEdit = (item: Project) => {
@@ -95,7 +137,7 @@ export default function ProjectsPage() {
             description: item.description || '',
             department_id: item.department_id?.toString() || '',
             project_type_id: item.project_type_id?.toString() || '',
-            owner_id: item.owner_id?.toString() || ''
+            owner_id: item.owner_id?.toString() || '0'
         });
         setIsOpen(true);
     };
@@ -106,207 +148,323 @@ export default function ProjectsPage() {
     );
 
     return (
-        <div className="p-6 space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-semibold text-foreground">项目列表</h2>
-                    <p className="text-sm text-muted-foreground mt-1">管理所有项目及其基本信息</p>
+        <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+            {/* Left Panel: Projects List */}
+            <div className="w-[400px] border-r flex flex-col bg-muted/30">
+                <div className="p-6 border-b bg-background">
+                    <h2 className="text-xl font-semibold">项目与关键节点</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        选择项目管理关键节点
+                    </p>
                 </div>
-                <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                    <DialogTrigger asChild>
-                        <Button
-                            onClick={() => {
-                                setEditingItem(null);
-                                setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0' });
-                            }}
-                            className="gap-2"
+
+                <div className="p-4 border-b">
+                    <Button
+                        onClick={() => {
+                            setEditingItem(null);
+                            setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0' });
+                            setIsOpen(true);
+                        }}
+                        className="w-full gap-2"
+                        size="sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        新建项目
+                    </Button>
+                </div>
+
+                <div className="p-4">
+                    <div className="relative">
+                        <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="搜索项目..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {filteredProjects.map((proj) => (
+                        <div
+                            key={proj.id}
+                            onClick={() => setSelectedProject(proj)}
+                            className={cn(
+                                "p-4 rounded-lg border cursor-pointer transition-all",
+                                selectedProject?.id === proj.id
+                                    ? "bg-primary/10 border-primary shadow-sm"
+                                    : "bg-background hover:bg-muted/50 border-border"
+                            )}
                         >
-                            <Plus className="w-4 h-4" />
-                            新建项目
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
-                        <DialogHeader>
-                            <DialogTitle>{editingItem ? '编辑项目' : '新建项目'}</DialogTitle>
-                        </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="name">项目名称 *</Label>
-                                <Input
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="例如：通用标检上位机"
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="description">项目描述</Label>
-                                <Textarea
-                                    id="description"
-                                    value={formData.description}
-                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="请输入项目描述（可选）"
-                                    rows={3}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="dept">所属部门</Label>
-                                    <Select value={formData.department_id} onValueChange={(val) => setFormData({ ...formData, department_id: val })}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="选择部门" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {departments.map(d => (
-                                                <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                            <div className="flex items-start gap-3">
+                                <div className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                                    selectedProject?.id === proj.id ? "bg-primary/20" : "bg-muted"
+                                )}>
+                                    <Briefcase className={cn(
+                                        "w-5 h-5",
+                                        selectedProject?.id === proj.id ? "text-primary" : "text-muted-foreground"
+                                    )} />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="type">项目类型</Label>
-                                    <Select value={formData.project_type_id} onValueChange={(val) => setFormData({ ...formData, project_type_id: val })}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="选择类型" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {types.map(t => (
-                                                <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <h3 className="font-semibold text-sm line-clamp-1">{proj.name}</h3>
+                                        <div className="flex gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openEdit(proj);
+                                                }}
+                                            >
+                                                <Pencil className="w-3 h-3" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteClick(proj);
+                                                }}
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {proj.description && (
+                                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                            {proj.description}
+                                        </p>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                        {proj.department_name && (
+                                            <Badge variant="outline" className="text-[10px]">
+                                                {proj.department_name}
+                                            </Badge>
+                                        )}
+                                        {proj.project_type_name && (
+                                            <Badge variant="secondary" className="text-[10px]">
+                                                {proj.project_type_name}
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    ))}
+                    {filteredProjects.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <Briefcase className="w-12 h-12 text-muted-foreground/20 mb-3" />
+                            <p className="text-sm text-muted-foreground">
+                                {searchQuery ? '没有找到匹配的项目' : '暂无项目'}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Right Panel: Stories Manager */}
+            <div className="flex-1 flex flex-col bg-background">
+                {selectedProject ? (
+                    <StoriesManager
+                        project={selectedProject}
+                        onUpdate={fetchProjects}
+                    />
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                        <Briefcase className="w-16 h-16 text-muted-foreground/20 mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">选择一个项目</h3>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                            在左侧选择一个项目来管理其关键节点和任务
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Project Dialog */}
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? '编辑项目' : '新建项目'}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">项目名称 *</Label>
+                            <Input
+                                id="name"
+                                value={formData.name}
+                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                placeholder="例如：通用标检上位机"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="description">项目描述</Label>
+                            <Textarea
+                                id="description"
+                                value={formData.description}
+                                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                placeholder="简要描述项目内容..."
+                                rows={3}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="owner">项目负责人</Label>
-                                <Select value={formData.owner_id} onValueChange={(val) => setFormData({ ...formData, owner_id: val })}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="选择负责人" />
+                                <Label htmlFor="department">所属部门</Label>
+                                <Select
+                                    value={formData.department_id}
+                                    onValueChange={(v) => setFormData({ ...formData, department_id: v })}
+                                >
+                                    <SelectTrigger id="department">
+                                        <SelectValue placeholder="选择部门" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="0">未分配</SelectItem>
-                                        {users.map(u => (
-                                            <SelectItem key={u.id} value={u.id.toString()}>{u.display_name}</SelectItem>
+                                        {departments.map(d => (
+                                            <SelectItem key={d.id} value={d.id.toString()}>
+                                                {d.name}
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <DialogFooter className="gap-2">
-                                <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
-                                    取消
-                                </Button>
-                                <Button type="submit">
-                                    {editingItem ? '保存' : '创建'}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            {/* Toolbar */}
-            <Card className="shadow-sm">
-                <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="relative flex-1 max-w-sm">
-                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                                placeholder="搜索项目..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
-                            />
+                            <div className="space-y-2">
+                                <Label htmlFor="type">项目类型</Label>
+                                <Select
+                                    value={formData.project_type_id}
+                                    onValueChange={(v) => setFormData({ ...formData, project_type_id: v })}
+                                >
+                                    <SelectTrigger id="type">
+                                        <SelectValue placeholder="选择类型" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {types.map(t => (
+                                            <SelectItem key={t.id} value={t.id.toString()}>
+                                                {t.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                        <Button variant="outline" size="sm" className="gap-2">
-                            <Filter className="w-4 h-4" />
-                            筛选
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+                        <div className="space-y-2">
+                            <Label htmlFor="owner">项目负责人</Label>
+                            <Select
+                                value={formData.owner_id}
+                                onValueChange={(v) => setFormData({ ...formData, owner_id: v })}
+                            >
+                                <SelectTrigger id="owner">
+                                    <SelectValue placeholder="选择负责人" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="0">未分配</SelectItem>
+                                    {users.map(u => (
+                                        <SelectItem key={u.id} value={u.id.toString()}>
+                                            {u.display_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+                                取消
+                            </Button>
+                            <Button type="submit">
+                                {editingItem ? '保存' : '创建'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
-            {/* Projects Table */}
-            <Card className="shadow-sm">
-                <CardContent className="p-0">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                                <TableHead className="w-[80px]">ID</TableHead>
-                                <TableHead>项目名称</TableHead>
-                                <TableHead>所属部门</TableHead>
-                                <TableHead>项目类型</TableHead>
-                                <TableHead className="text-right w-[120px]">操作</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredProjects.map((proj) => (
-                                <TableRow key={proj.id} className="hover:bg-muted/50">
-                                    <TableCell className="font-mono text-xs text-muted-foreground">
-                                        #{proj.id}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-start gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
-                                                <Briefcase className="w-4 h-4 text-primary" />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium text-sm">{proj.name}</span>
-                                                {proj.description && (
-                                                    <span className="text-xs text-muted-foreground line-clamp-2 mt-0.5 max-w-md">
-                                                        {proj.description}
-                                                    </span>
-                                                )}
-                                            </div>
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="w-5 h-5" />
+                            警告：即将彻底删除项目
+                        </DialogTitle>
+                        <DialogDescription className="text-left space-y-3 pt-4">
+                            {projectToDelete && deleteImpact && (
+                                <>
+                                    <div className="p-3 bg-muted rounded-lg">
+                                        <div className="font-medium">项目：{projectToDelete.name}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            ID: #{projectToDelete.id}
                                         </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="text-sm">{proj.department_name || '-'}</span>
-                                    </TableCell>
-                                    <TableCell>
-                                        {proj.project_type_name && (
-                                            <Badge variant="secondary" className="font-normal">
-                                                {proj.project_type_name}
-                                            </Badge>
+                                        {projectToDelete.description && (
+                                            <div className="text-xs text-muted-foreground mt-1">
+                                                {projectToDelete.description}
+                                            </div>
                                         )}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                                onClick={() => openEdit(proj)}
-                                            >
-                                                <Pencil className="w-4 h-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                onClick={() => handleDelete(proj.id)}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {filteredProjects.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-32 text-center">
-                                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                                            <Briefcase className="w-8 h-8 opacity-20" />
-                                            <p className="text-sm">暂无项目数据</p>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="font-semibold">将会删除：</p>
+                                        <ul className="list-disc list-inside space-y-1 text-sm">
+                                            <li>该项目本身</li>
+                                            <li>{deleteImpact.story_count || 0} 个关键节点</li>
+                                            <li>{deleteImpact.task_count || 0} 个关联的任务</li>
+                                            {deleteImpact.sprint_count > 0 && (
+                                                <li>从 {deleteImpact.sprint_count} 个迭代中移除：
+                                                    <div className="ml-6 mt-1 text-xs text-muted-foreground">
+                                                        {deleteImpact.sprints?.join(', ')}
+                                                    </div>
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
+
+                                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                                        <p className="text-sm font-semibold text-destructive">
+                                            ⚠️ 此操作不可恢复！
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="confirm-text-project" className="text-sm font-medium">
+                                            请输入 <code className="px-1 py-0.5 bg-muted rounded">DELETE</code> 确认删除：
+                                        </Label>
+                                        <Input
+                                            id="confirm-text-project"
+                                            value={deleteConfirmText}
+                                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                            placeholder="输入 DELETE"
+                                            className="font-mono"
+                                        />
+                                    </div>
+                                </>
                             )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setDeleteDialogOpen(false);
+                                setProjectToDelete(null);
+                                setDeleteImpact(null);
+                                setDeleteConfirmText('');
+                            }}
+                        >
+                            取消
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleConfirmDelete}
+                            disabled={deleteConfirmText !== 'DELETE'}
+                        >
+                            确认删除
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -835,35 +835,61 @@ router.post('/task/reuse', async (req, res) => {
     }
 });
 
-// Delete Story from Sprint
+// Delete Story (from sprint or permanently)
 router.post('/story/delete', async (req, res) => {
     const { sprintId, projectId, storyId } = req.body;
 
-    if (!sprintId || !projectId || !storyId) {
-        return res.status(400).json({ message: 'Missing required fields' });
+    // Validate required fields
+    if (!projectId || !storyId) {
+        return res.status(400).json({ message: 'Missing required fields: projectId and storyId' });
     }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Delete the story from sprint_stories
-        await client.query(
-            'DELETE FROM sprint_stories WHERE sprint_id = $1 AND project_id = $2 AND story_id = $3',
-            [sprintId, projectId, storyId]
-        );
+        if (sprintId) {
+            // Mode 1: Delete from specific sprint only
+            await client.query(
+                'DELETE FROM sprint_stories WHERE sprint_id = $1 AND project_id = $2 AND story_id = $3',
+                [sprintId, projectId, storyId]
+            );
+            await client.query(
+                'DELETE FROM sprint_tasks WHERE sprint_id = $1 AND project_id = $2 AND story_id = $3',
+                [sprintId, projectId, storyId]
+            );
+        } else {
+            // Mode 2: Permanent delete from all sprints and reference tables
+            // 1. Delete all sprint_tasks for this story (across all sprints)
+            await client.query(
+                'DELETE FROM sprint_tasks WHERE story_id = $1',
+                [storyId]
+            );
 
-        // Delete all associated tasks from sprint_tasks
-        await client.query(
-            'DELETE FROM sprint_tasks WHERE sprint_id = $1 AND project_id = $2 AND story_id = $3',
-            [sprintId, projectId, storyId]
-        );
+            // 2. Delete all tasks in reference table for this story
+            await client.query(
+                'DELETE FROM tasks WHERE story_id = $1',
+                [storyId]
+            );
+
+            // 3. Delete all sprint_stories for this story (across all sprints)
+            await client.query(
+                'DELETE FROM sprint_stories WHERE story_id = $1',
+                [storyId]
+            );
+
+            // 4. Delete the story from reference table
+            await client.query(
+                'DELETE FROM stories WHERE id = $1',
+                [storyId]
+            );
+        }
 
         await client.query('COMMIT');
-        res.json({ success: true });
+        res.json({ success: true, mode: sprintId ? 'sprint' : 'permanent' });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Error deleting story from sprint:', err);
+        console.error('Error deleting story:', err);
         res.status(500).json({ message: 'Internal server error' });
     } finally {
         client.release();

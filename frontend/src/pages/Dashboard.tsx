@@ -248,7 +248,7 @@ export default function Dashboard() {
                                     </AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm">
+                                    <div className="text-sm">
                                         <span className="font-semibold">{activity.user}</span>
                                         {' '}
                                         <Badge
@@ -263,12 +263,12 @@ export default function Dashboard() {
                                         >
                                             {activity.action}
                                         </Badge>
-                                    </p>
+                                    </div>
                                     <p className="text-xs text-muted-foreground truncate">{activity.task}</p>
-                                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                                         <Clock className="w-3 h-3" />
                                         {activity.time}
-                                    </p>
+                                    </div>
                                 </div>
                             </div>
                         ))}
