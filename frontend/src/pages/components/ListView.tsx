@@ -146,7 +146,7 @@ export default function ListView({
     );
 
     return (
-        <div className="h-full overflow-auto px-6 py-4">
+        <div className="h-full overflow-y-auto overflow-x-hidden px-6 py-4">
             {data.stories.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
                     <span className="text-sm">暂无关键节点</span>
@@ -156,44 +156,46 @@ export default function ListView({
                     collisionDetection={closestCenter}
                     onDragEnd={handleStoryDragEnd}
                 >
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-10"></TableHead>
-                                <TableHead className="w-10"></TableHead>
-                                <SortableHeader label="标题" sortKey="title" />
-                                <SortableHeader label="状态" sortKey="status" />
-                                <SortableHeader label="优先级" sortKey="priority" />
-                                <SortableHeader label="负责人" sortKey="assigned_to_user" />
-                                <SortableHeader label="计划日期" sortKey="planned_completion_date" />
-                            </TableRow>
-                        </TableHeader>
-                        <SortableContext
-                            items={sortedStories.map(s => s.id)}
-                            strategy={verticalListSortingStrategy}
-                        >
-                            <TableBody>
-                                {sortedStories.map(story => {
-                                    const storyTasks = data.tasks.filter(t => t.story_id === story.id);
-                                    return (
-                                        <ListViewStoryRow
-                                            key={story.id}
-                                            story={story}
-                                            isExpanded={expandedStories.has(story.id)}
-                                            onToggleExpand={() => handleToggleExpand(story.id)}
-                                            tasks={storyTasks}
-                                            members={members || data.members}
-                                            onEditStory={onEditStory || (() => {})}
-                                            onEditTask={onEditTask || (() => {})}
-                                            sprintId={sprintId}
-                                            projectId={projectId}
-                                            onDataChange={handleDataChange}
-                                        />
-                                    );
-                                })}
-                            </TableBody>
-                        </SortableContext>
-                    </Table>
+                    <div className="overflow-x-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-10"></TableHead>
+                                    <TableHead className="w-10"></TableHead>
+                                    <SortableHeader label="标题" sortKey="title" />
+                                    <SortableHeader label="状态" sortKey="status" />
+                                    <SortableHeader label="优先级" sortKey="priority" />
+                                    <SortableHeader label="负责人" sortKey="assigned_to_user" />
+                                    <SortableHeader label="计划日期" sortKey="planned_completion_date" />
+                                </TableRow>
+                            </TableHeader>
+                            <SortableContext
+                                items={sortedStories.map(s => s.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                <TableBody>
+                                    {sortedStories.map(story => {
+                                        const storyTasks = data.tasks.filter(t => t.story_id === story.id);
+                                        return (
+                                            <ListViewStoryRow
+                                                key={story.id}
+                                                story={story}
+                                                isExpanded={expandedStories.has(story.id)}
+                                                onToggleExpand={() => handleToggleExpand(story.id)}
+                                                tasks={storyTasks}
+                                                members={members || data.members}
+                                                onEditStory={onEditStory || (() => {})}
+                                                onEditTask={onEditTask || (() => {})}
+                                                sprintId={sprintId}
+                                                projectId={projectId}
+                                                onDataChange={handleDataChange}
+                                            />
+                                        );
+                                    })}
+                                </TableBody>
+                            </SortableContext>
+                        </Table>
+                    </div>
                 </DndContext>
             )}
         </div>

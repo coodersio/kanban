@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import type { Story, Task, Member } from "@/types";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import EntityHandler from './EntityHandler';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
 interface ListViewStoryRowProps {
     story: Story;
@@ -89,7 +91,15 @@ export default function ListViewStoryRow({
     const { toast } = useToast();
     const statusConfig = getStatusBadge(story.status);
 
-    // Sortable hook
+    // Local state for task ordering
+    const [sortedTasks, setSortedTasks] = useState<Task[]>(tasks);
+
+    // Update sorted tasks when tasks prop changes
+    useEffect(() => {
+        setSortedTasks(tasks);
+    }, [tasks]);
+
+    // Sortable hook for story
     const {
         attributes,
         listeners,
@@ -103,6 +113,33 @@ export default function ListViewStoryRow({
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1
+    };
+
+    // Handle task drag end
+    const handleTaskDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        const oldIndex = sortedTasks.findIndex(t => t.id === active.id);
+        const newIndex = sortedTasks.findIndex(t => t.id === over.id);
+
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        // Optimistically update UI
+        const reordered = arrayMove(sortedTasks, oldIndex, newIndex);
+        setSortedTasks(reordered);
+
+        // Update backend
+        const orders = reordered.map((t, idx) => ({ id: t.id, order: idx + 1 }));
+        fetch('/api/workbench/tasks/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sprintId, storyId: story.id, orders })
+        }).catch(err => {
+            console.error('Error reordering tasks:', err);
+            // Revert on error
+            setSortedTasks(tasks);
+        });
     };
 
     const getNextStatus = (current: string): 'not_started' | 'in_progress' | 'completed' => {
@@ -270,17 +307,29 @@ export default function ListViewStoryRow({
             </TableRow>
 
             {/* Task Rows (when expanded) */}
-            {isExpanded && tasks.map(task => (
-                <TaskRow
-                    key={task.id}
-                    task={task}
-                    members={members}
-                    onEditTask={onEditTask}
-                    sprintId={sprintId}
-                    projectId={projectId}
-                    onDataChange={onDataChange}
-                />
-            ))}
+            {isExpanded && (
+                <DndContext
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleTaskDragEnd}
+                >
+                    <SortableContext
+                        items={sortedTasks.map(t => t.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        {sortedTasks.map(task => (
+                            <TaskRow
+                                key={task.id}
+                                task={task}
+                                members={members}
+                                onEditTask={onEditTask}
+                                sprintId={sprintId}
+                                projectId={projectId}
+                                onDataChange={onDataChange}
+                            />
+                        ))}
+                    </SortableContext>
+                </DndContext>
+            )}
         </Fragment>
     );
 }

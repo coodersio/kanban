@@ -2,11 +2,13 @@ import type { Task, Member } from "@/types";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { AlertTriangle } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import EntityHandler from './EntityHandler';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface TaskRowProps {
     task: Task;
@@ -77,6 +79,22 @@ export default function TaskRow({
     const { toast } = useToast();
     const statusConfig = getStatusBadge(task.status);
 
+    // Sortable hook for drag and drop
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: task.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    };
+
     const getNextStatus = (current: string): 'not_started' | 'in_progress' | 'completed' => {
         if (current === 'not_started') return 'in_progress';
         if (current === 'in_progress') return 'completed';
@@ -139,20 +157,29 @@ export default function TaskRow({
 
     return (
         <TableRow
-            className="bg-muted/30 hover:bg-muted/50 transition-colors"
+            ref={setNodeRef}
+            style={style}
+            className="group bg-muted/30 hover:bg-muted/50 transition-colors"
         >
-            {/* Empty cell for drag handle column */}
+            {/* Empty cell for drag handle column (Story uses this) */}
             <TableCell className="w-10" />
 
             {/* Empty cell for expand column */}
             <TableCell className="w-10" />
 
-            {/* Title - indented */}
-            <TableCell className="pl-12">
+            {/* Title with drag handle - minimal indent */}
+            <TableCell className="pl-2">
                 <span className={cn(
-                    "text-sm flex items-center gap-2",
+                    "text-sm flex items-center gap-1.5",
                     task.status === 'completed' && "line-through text-muted-foreground"
                 )}>
+                    <button
+                        {...attributes}
+                        {...listeners}
+                        className="p-0.5 hover:bg-muted rounded transition-colors cursor-grab active:cursor-grabbing group-hover:opacity-100 opacity-30 flex-shrink-0"
+                    >
+                        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
                     <EntityHandler type="TASK" id={task.id} />
                     {task.title}
                 </span>
