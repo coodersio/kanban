@@ -632,7 +632,7 @@ router.post('/task', async (req, res) => {
 
 // Update Task Details
 router.post('/task/update', async (req, res) => {
-    const { id, taskId, sprintId, title, description, status, priority, estimatedHours, assignedTo, progress, risk_and_countermeasure } = req.body;
+    const { id, taskId, sprintId, title, description, status, priority, estimatedHours, assignedTo, progress, risk_and_countermeasure, due_date } = req.body;
     const finalTaskId = id || taskId;
     if (!finalTaskId || !sprintId) return res.status(400).json({ message: 'Missing taskId or sprintId' });
 
@@ -666,8 +666,8 @@ router.post('/task/update', async (req, res) => {
         }
 
         await client.query(
-            'UPDATE tasks SET title = $1, description = $2, priority = $3, estimated_hours = $4 WHERE id = $5',
-            [title, description, priority, estimatedHours || null, finalTaskId]
+            'UPDATE tasks SET title = $1, description = $2, priority = $3, estimated_hours = $4, due_date = $5 WHERE id = $6',
+            [title, description, priority, estimatedHours || null, due_date || null, finalTaskId]
         );
 
         // 2. Update Snapshot (sprint_tasks) - now filtering by sprint_id to avoid affecting other sprints

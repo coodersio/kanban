@@ -124,7 +124,7 @@ export default function ListViewStoryRow({
     };
 
     // Handle task drag end
-    const handleTaskDragEnd = (event: DragEndEvent) => {
+    const handleTaskDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
 
@@ -139,15 +139,28 @@ export default function ListViewStoryRow({
 
         // Update backend
         const orders = reordered.map((t, idx) => ({ id: t.id, order: idx + 1 }));
-        fetch('/api/workbench/tasks/reorder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sprintId, storyId: story.id, orders })
-        }).catch(err => {
+        try {
+            const res = await fetch('/api/workbench/tasks/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sprintId, storyId: story.id, orders })
+            });
+
+            if (res.ok) {
+                // Trigger data refresh to get updated order from backend
+                onDataChange?.();
+            } else {
+                console.error('Error reordering tasks: Server returned', res.status);
+                // Revert on error
+                setSortedTasks(tasks);
+                toast({ title: "任务排序失败", variant: "destructive" });
+            }
+        } catch (err) {
             console.error('Error reordering tasks:', err);
             // Revert on error
             setSortedTasks(tasks);
-        });
+            toast({ title: "任务排序失败", variant: "destructive" });
+        }
     };
 
     const getNextStatus = (current: string): 'not_started' | 'in_progress' | 'completed' => {

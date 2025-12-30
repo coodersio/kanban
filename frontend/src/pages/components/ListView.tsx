@@ -166,7 +166,7 @@ export default function ListView({
                                     <SortableHeader label="状态" sortKey="status" />
                                     <SortableHeader label="优先级" sortKey="priority" />
                                     <SortableHeader label="负责人" sortKey="assigned_to_user" />
-                                    <SortableHeader label="计划日期" sortKey="planned_completion_date" />
+                                    <SortableHeader label="计划完成日期" sortKey="planned_completion_date" />
                                 </TableRow>
                             </TableHeader>
                             <SortableContext

@@ -124,7 +124,10 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
 
     return (
         <Sheet open={open} onOpenChange={onClose}>
-            <SheetContent className="sm:max-w-[600px] w-full border-l shadow-xl p-0 flex flex-col bg-white">
+            <SheetContent
+                className="sm:max-w-[600px] w-full border-l shadow-xl p-0 flex flex-col bg-white"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+            >
                 <SheetHeader className="px-6 py-4 border-b">
                     <h2 className="text-lg font-semibold">任务详情</h2>
                 </SheetHeader>
@@ -226,7 +229,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                         </div>
                         <div className="space-y-1.5">
                             <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                                <CalendarIcon className="w-3.5 h-3.5" /> 截止日期
+                                <CalendarIcon className="w-3.5 h-3.5" /> 计划完成日期
                             </Label>
                             <Popover>
                                 <PopoverTrigger asChild>
