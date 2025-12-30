@@ -505,4 +505,337 @@ async function fetchWeeklyReportData(sprintId: string, userId?: number | string)
     return { sprint, projects, next_sprint };
 }
 
+// ============================================================
+// GET /api/reports/weekly
+// Generate Excel weekly report for a sprint
+// ============================================================
+router.get('/weekly', async (req: Request, res: Response) => {
+    const { sprintId, reportType } = req.query;
+
+    if (!sprintId) {
+        return res.status(400).json({ message: 'sprintId is required' });
+    }
+
+    try {
+        // 1. Get current sprint info
+        const currentSprintResult = await pool.query(
+            'SELECT id, sprint_number, start_date, end_date FROM sprints WHERE id = $1',
+            [sprintId]
+        );
+
+        if (currentSprintResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Sprint not found' });
+        }
+
+        const currentSprint = currentSprintResult.rows[0];
+        const currentSprintNum = parseInt(sprintId as string);
+
+        // 2. Get previous and next sprint info (only if id > 0 for previous)
+        let previousSprint = null;
+        let nextSprint = null;
+
+        if (currentSprintNum > 0) {
+            const prevResult = await pool.query(
+                'SELECT id, sprint_number FROM sprints WHERE id = $1',
+                [currentSprintNum - 1]
+            );
+            if (prevResult.rows.length > 0) {
+                previousSprint = prevResult.rows[0];
+            }
+        }
+
+        const nextResult = await pool.query(
+            'SELECT id, sprint_number FROM sprints WHERE id = $1',
+            [currentSprintNum + 1]
+        );
+        if (nextResult.rows.length > 0) {
+            nextSprint = nextResult.rows[0];
+        }
+
+        // 3. Get projects with stories in current sprint
+        const projectsQuery = `
+            SELECT DISTINCT
+                p.id,
+                p.software_name AS name,
+                p.source,
+                p.description,
+                pt.name AS project_type,
+                d.name AS department,
+                u.display_name AS owner_name
+            FROM projects p
+            LEFT JOIN project_types pt ON p.project_type_id = pt.id
+            LEFT JOIN departments d ON p.department_id = d.id
+            LEFT JOIN users u ON p.owner_id = u.id
+            WHERE p.id IN (
+                SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = $1
+            )
+            ORDER BY p.id
+        `;
+
+        const projectsResult = await pool.query(projectsQuery, [sprintId]);
+        const projects = [];
+
+        // 4. For each project, get stories with multi-sprint data
+        for (const project of projectsResult.rows) {
+            // Get stories in current sprint
+            const storiesQuery = `
+                SELECT
+                    s.id,
+                    s.title,
+                    s.description,
+                    ss.status,
+                    ss.progress,
+                    ss.priority,
+                    ss.planned_completion_date,
+                    ss.actual_completion_date,
+                    ss.risk_and_countermeasure,
+                    u.display_name AS assigned_user_name
+                FROM stories s
+                JOIN sprint_stories ss ON s.id = ss.story_id
+                LEFT JOIN users u ON ss.assigned_to = u.id
+                WHERE ss.sprint_id = $1 AND ss.project_id = $2
+                ORDER BY s.id
+            `;
+
+            const storiesResult = await pool.query(storiesQuery, [sprintId, project.id]);
+            const stories = [];
+
+            for (const story of storiesResult.rows) {
+                // Get story data from previous sprint if exists
+                let prevStoryData = null;
+                if (previousSprint) {
+                    const prevQuery = await pool.query(`
+                        SELECT status, progress, notes
+                        FROM sprint_stories
+                        WHERE sprint_id = $1 AND story_id = $2
+                    `, [previousSprint.id, story.id]);
+
+                    if (prevQuery.rows.length > 0) {
+                        prevStoryData = prevQuery.rows[0];
+                    }
+                }
+
+                // Get story data from next sprint if exists
+                let nextStoryData = null;
+                if (nextSprint) {
+                    const nextQuery = await pool.query(`
+                        SELECT status, planned_completion_date, notes
+                        FROM sprint_stories
+                        WHERE sprint_id = $1 AND story_id = $2
+                    `, [nextSprint.id, story.id]);
+
+                    if (nextQuery.rows.length > 0) {
+                        nextStoryData = nextQuery.rows[0];
+                    }
+                }
+
+                stories.push({
+                    ...story,
+                    prev_sprint_data: prevStoryData,
+                    next_sprint_data: nextStoryData
+                });
+            }
+
+            // Calculate completion rate
+            const completedStories = stories.filter(s => s.status === 'completed').length;
+            const completionRate = stories.length > 0
+                ? Math.round((completedStories / stories.length) * 100)
+                : 0;
+
+            projects.push({
+                ...project,
+                stories,
+                completion_rate: completionRate
+            });
+        }
+
+        // 5. Generate Excel
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('周报');
+
+        // Set column widths
+        worksheet.columns = [
+            { width: 6 },   // A: 序号
+            { width: 25 },  // B: 项目名称
+            { width: 12 },  // C: 类型
+            { width: 12 },  // D: 需求来源
+            { width: 10 },  // E: 负责人
+            { width: 30 },  // F: 关键节点计划
+            { width: 40 },  // G: 本周总结
+            { width: 8 },   // H: 完成率
+            { width: 30 },  // I: 下周计划
+            { width: 30 },  // J: 风险及应对
+        ];
+
+        // Add header row
+        const headerRow = worksheet.addRow([
+            '序号',
+            '项目名称',
+            '类型',
+            '需求来源',
+            '负责人',
+            '关键节点计划',
+            `${currentSprint.sprint_number}周总结`,
+            '完成率',
+            nextSprint ? `${nextSprint.sprint_number}周计划` : '下周计划',
+            '风险及应对'
+        ]);
+
+        // Style header row
+        headerRow.eachCell((cell, colNumber) => {
+            cell.font = { bold: true, size: 11 };
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+
+            // Yellow background for summary columns
+            if (colNumber === 7) {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFFFC000' }
+                };
+            } else {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFD9E1F2' }
+                };
+            }
+        });
+        headerRow.height = 25;
+
+        // Add data rows
+        let rowNum = 1;
+        let currentRow = 2;
+
+        for (let projIdx = 0; projIdx < projects.length; projIdx++) {
+            const project = projects[projIdx];
+
+            if (project.stories.length === 0) continue;
+
+            const startRow = currentRow;
+            const rowCount = project.stories.length;
+
+            // Alternating background colors
+            const bgColor = projIdx % 2 === 0 ? 'FFE7F3FF' : 'FFE2EFDA';
+
+            // Merge cells for project info
+            worksheet.mergeCells(`A${startRow}:A${startRow + rowCount - 1}`);
+            worksheet.mergeCells(`B${startRow}:B${startRow + rowCount - 1}`);
+            worksheet.mergeCells(`C${startRow}:C${startRow + rowCount - 1}`);
+            worksheet.mergeCells(`D${startRow}:D${startRow + rowCount - 1}`);
+            worksheet.mergeCells(`H${startRow}:H${startRow + rowCount - 1}`);
+
+            // Fill project info
+            const seqCell = worksheet.getCell(`A${startRow}`);
+            seqCell.value = rowNum++;
+            seqCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            const nameCell = worksheet.getCell(`B${startRow}`);
+            nameCell.value = project.name || '';
+            nameCell.font = { color: { argb: 'FFFF0000' }, bold: true }; // Red
+            nameCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            const typeCell = worksheet.getCell(`C${startRow}`);
+            typeCell.value = project.project_type || '';
+            typeCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            const sourceCell = worksheet.getCell(`D${startRow}`);
+            sourceCell.value = project.source || '';
+            sourceCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            const rateCell = worksheet.getCell(`H${startRow}`);
+            rateCell.value = `${project.completion_rate}%`;
+            rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            rateCell.font = {
+                bold: true,
+                color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
+            };
+
+            // Fill story rows
+            for (let i = 0; i < project.stories.length; i++) {
+                const story = project.stories[i];
+                const row = startRow + i;
+
+                // E: 负责人
+                const assigneeCell = worksheet.getCell(`E${row}`);
+                assigneeCell.value = story.assigned_user_name || '';
+                assigneeCell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+
+                // F: 关键节点计划
+                const planCell = worksheet.getCell(`F${row}`);
+                let planText = story.title;
+                if (story.planned_completion_date) {
+                    const date = new Date(story.planned_completion_date);
+                    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+                    planText += `\n计划: ${dateStr}`;
+                }
+                planCell.value = planText;
+                planCell.alignment = { vertical: 'top', wrapText: true };
+
+                // G: 本周总结
+                const summaryCell = worksheet.getCell(`G${row}`);
+                let summaryText = `【${story.title}】\n`;
+                summaryText += `状态: ${story.status === 'completed' ? '已完成' : story.status === 'in_progress' ? '进行中' : '未开始'}\n`;
+                summaryText += `进度: ${story.progress || 0}%`;
+                if (story.description) {
+                    summaryText += `\n说明: ${story.description}`;
+                }
+                summaryCell.value = summaryText;
+                summaryCell.alignment = { vertical: 'top', wrapText: true };
+
+                // I: 下周计划
+                const nextPlanCell = worksheet.getCell(`I${row}`);
+                if (story.next_sprint_data) {
+                    nextPlanCell.value = `继续推进\n${story.title}`;
+                } else {
+                    nextPlanCell.value = '';
+                }
+                nextPlanCell.alignment = { vertical: 'top', wrapText: true };
+
+                // J: 风险及应对
+                const riskCell = worksheet.getCell(`J${row}`);
+                riskCell.value = story.risk_and_countermeasure || '';
+                riskCell.alignment = { vertical: 'top', wrapText: true };
+
+                // Apply background color and borders to all cells in row
+                for (let col = 1; col <= 10; col++) {
+                    const cell = worksheet.getCell(row, col);
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: bgColor }
+                    };
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                }
+            }
+
+            currentRow += rowCount;
+        }
+
+        // Set response headers
+        const filename = `weekly-report-${currentSprint.sprint_number}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+        // Write to response
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (error) {
+        console.error('Error generating weekly report:', error);
+        res.status(500).json({ message: 'Failed to generate report' });
+    }
+});
+
 export default router;

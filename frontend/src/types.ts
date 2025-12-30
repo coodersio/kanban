@@ -75,6 +75,7 @@ export interface Project {
     owner_id?: number;
     owner_name?: string;
     software_name?: string; // Backend compatibility
+    source?: string;         // 需求来源/项目对接人
 }
 
 export interface BoardData {

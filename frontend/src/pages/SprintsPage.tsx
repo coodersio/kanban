@@ -123,11 +123,8 @@ export default function SprintsPage() {
 
     const handleExportSummary = async (sprintId: number) => {
         try {
-            const res = await fetch(`/api/reports/sprint/${sprintId}/export`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reportType: 'summary' })
-            });
+            // Use new weekly report API
+            const res = await fetch(`/api/reports/weekly?sprintId=${sprintId}&reportType=summary`);
 
             if (res.ok) {
                 const blob = await res.blob();
@@ -153,14 +150,8 @@ export default function SprintsPage() {
             const userRes = await fetch('/api/auth/me');
             const userData = await userRes.json();
 
-            const res = await fetch(`/api/reports/sprint/${sprintId}/export`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reportType: 'personal',
-                    userId: userData.id
-                })
-            });
+            // Use new weekly report API
+            const res = await fetch(`/api/reports/weekly?sprintId=${sprintId}&reportType=personal&userId=${userData.id}`);
 
             if (res.ok) {
                 const blob = await res.blob();

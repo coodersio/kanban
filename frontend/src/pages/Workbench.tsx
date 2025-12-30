@@ -1222,7 +1222,7 @@ export default function Workbench() {
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            onClick={() => window.open(`http://localhost:4004/api/reports/weekly?sprintId=${s.id}`, '_blank')}
+                                            onClick={() => window.open(`/api/reports/weekly?sprintId=${s.id}`, '_blank')}
                                             className="h-8 text-xs"
                                             title="导出周报"
                                         >
