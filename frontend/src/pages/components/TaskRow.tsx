@@ -6,6 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import EntityHandler from './EntityHandler';
 
 interface TaskRowProps {
     task: Task;
@@ -25,6 +26,12 @@ const getAvatarColor = (userId: number) => {
         'bg-orange-500 text-white',
         'bg-pink-500 text-white',
         'bg-cyan-500 text-white',
+        'bg-amber-500 text-white',
+        'bg-indigo-500 text-white',
+        'bg-rose-500 text-white',
+        'bg-teal-500 text-white',
+        'bg-violet-500 text-white',
+        'bg-fuchsia-500 text-white',
     ];
     return colors[userId % colors.length];
 };
@@ -132,19 +139,22 @@ export default function TaskRow({
 
     return (
         <TableRow
-            className="bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
-            onClick={() => onEditTask(task)}
+            className="bg-muted/30 hover:bg-muted/50 transition-colors"
         >
+            {/* Empty cell for drag handle column */}
+            <TableCell className="w-10" />
+
             {/* Empty cell for expand column */}
             <TableCell className="w-10" />
 
             {/* Title - indented */}
             <TableCell className="pl-12">
                 <span className={cn(
-                    "text-sm",
+                    "text-sm flex items-center gap-2",
                     task.status === 'completed' && "line-through text-muted-foreground"
                 )}>
-                    <span className="text-muted-foreground font-normal">[TASK-{task.id}]</span> {task.title}
+                    <EntityHandler type="TASK" id={task.id} />
+                    {task.title}
                 </span>
             </TableCell>
 
@@ -198,31 +208,9 @@ export default function TaskRow({
                 </Select>
             </TableCell>
 
-            {/* Progress */}
-            <TableCell>
-                <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
-                        <div
-                            className="h-full bg-primary transition-all"
-                            style={{ width: `${task.progress || 0}%` }}
-                        />
-                    </div>
-                    <span className="text-xs text-muted-foreground min-w-[3ch]">
-                        {task.progress || 0}%
-                    </span>
-                </div>
-            </TableCell>
-
             {/* Planned Date */}
             <TableCell className="text-xs text-muted-foreground">
                 {task.due_date ? new Date(task.due_date).toLocaleDateString('zh-CN') : '-'}
-            </TableCell>
-
-            {/* Risk */}
-            <TableCell className="text-center">
-                {task.risk_and_countermeasure && (
-                    <AlertTriangle className="w-4 h-4 text-orange-500 inline-block" title={task.risk_and_countermeasure} />
-                )}
             </TableCell>
         </TableRow>
     );

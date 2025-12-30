@@ -58,7 +58,11 @@ export default function DashboardLayout() {
     };
 
     const NavItem = ({ href, icon: Icon, label }: { href: string, icon: any, label: string }) => {
-        const isActive = location.pathname === href;
+        // Use prefix matching to support sub-routes like /dashboard/workbench/STORY-1
+        // But use exact match for the dashboard home page to avoid matching all sub-routes
+        const isActive = href === '/dashboard'
+            ? location.pathname === href
+            : (location.pathname === href || location.pathname.startsWith(href + '/'));
         return (
             <Link to={href}>
                 <Button
@@ -119,10 +123,10 @@ export default function DashboardLayout() {
                     <div className="flex-1">
                         <h1 className="text-lg font-semibold text-foreground">
                             {location.pathname === '/dashboard' && '主页'}
-                            {location.pathname === '/dashboard/workbench' && '工作台'}
-                            {location.pathname === '/dashboard/projects' && '项目管理'}
-                            {location.pathname === '/dashboard/sprints' && '迭代计划'}
-                            {location.pathname === '/dashboard/users' && '成员管理'}
+                            {(location.pathname === '/dashboard/workbench' || location.pathname.startsWith('/dashboard/workbench/')) && '工作台'}
+                            {(location.pathname === '/dashboard/projects' || location.pathname.startsWith('/dashboard/projects/')) && '项目管理'}
+                            {(location.pathname === '/dashboard/sprints' || location.pathname.startsWith('/dashboard/sprints/')) && '迭代计划'}
+                            {(location.pathname === '/dashboard/users' || location.pathname.startsWith('/dashboard/users/')) && '成员管理'}
                         </h1>
                     </div>
 

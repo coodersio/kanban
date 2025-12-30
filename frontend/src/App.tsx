@@ -16,7 +16,7 @@ function App() {
 
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
-          <Route path="workbench" element={<Workbench />} />
+          <Route path="workbench/*" element={<Workbench />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="projects" element={<ProjectsPage />} />

@@ -3,6 +3,8 @@ import type { BoardData, Story, Task, Member, Sprint } from "@/types";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import ListViewStoryRow from './ListViewStoryRow';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
 interface ListViewProps {
     sprintId: string;
@@ -99,6 +101,32 @@ export default function ListView({
         });
     }, [data.stories, sortConfig]);
 
+    const handleStoryDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        const oldIndex = sortedStories.findIndex(s => s.id === active.id);
+        const newIndex = sortedStories.findIndex(s => s.id === over.id);
+
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        // Optimistically update UI
+        const reordered = arrayMove(sortedStories, oldIndex, newIndex);
+        setData(prev => ({ ...prev, stories: reordered }));
+
+        // Update backend
+        const orders = reordered.map((s, idx) => ({ id: s.id, order: idx + 1 }));
+        fetch('/api/workbench/stories/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sprintId, projectId, orders })
+        }).catch(err => {
+            console.error('Error reordering stories:', err);
+            // Revert on error
+            fetchData();
+        });
+    };
+
     const SortableHeader = ({ label, sortKey }: { label: string; sortKey: string }) => (
         <TableHead
             className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -124,40 +152,49 @@ export default function ListView({
                     <span className="text-sm">暂无关键节点</span>
                 </div>
             ) : (
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-10"></TableHead>
-                            <SortableHeader label="标题" sortKey="title" />
-                            <SortableHeader label="状态" sortKey="status" />
-                            <SortableHeader label="优先级" sortKey="priority" />
-                            <SortableHeader label="负责人" sortKey="assigned_to_user" />
-                            <SortableHeader label="进度" sortKey="progress" />
-                            <SortableHeader label="计划日期" sortKey="planned_completion_date" />
-                            <TableHead className="w-16 text-center">风险</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {sortedStories.map(story => {
-                            const storyTasks = data.tasks.filter(t => t.story_id === story.id);
-                            return (
-                                <ListViewStoryRow
-                                    key={story.id}
-                                    story={story}
-                                    isExpanded={expandedStories.has(story.id)}
-                                    onToggleExpand={() => handleToggleExpand(story.id)}
-                                    tasks={storyTasks}
-                                    members={members || data.members}
-                                    onEditStory={onEditStory || (() => {})}
-                                    onEditTask={onEditTask || (() => {})}
-                                    sprintId={sprintId}
-                                    projectId={projectId}
-                                    onDataChange={handleDataChange}
-                                />
-                            );
-                        })}
-                    </TableBody>
-                </Table>
+                <DndContext
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleStoryDragEnd}
+                >
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-10"></TableHead>
+                                <TableHead className="w-10"></TableHead>
+                                <SortableHeader label="标题" sortKey="title" />
+                                <SortableHeader label="状态" sortKey="status" />
+                                <SortableHeader label="优先级" sortKey="priority" />
+                                <SortableHeader label="负责人" sortKey="assigned_to_user" />
+                                <SortableHeader label="计划日期" sortKey="planned_completion_date" />
+                            </TableRow>
+                        </TableHeader>
+                        <SortableContext
+                            items={sortedStories.map(s => s.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <TableBody>
+                                {sortedStories.map(story => {
+                                    const storyTasks = data.tasks.filter(t => t.story_id === story.id);
+                                    return (
+                                        <ListViewStoryRow
+                                            key={story.id}
+                                            story={story}
+                                            isExpanded={expandedStories.has(story.id)}
+                                            onToggleExpand={() => handleToggleExpand(story.id)}
+                                            tasks={storyTasks}
+                                            members={members || data.members}
+                                            onEditStory={onEditStory || (() => {})}
+                                            onEditTask={onEditTask || (() => {})}
+                                            sprintId={sprintId}
+                                            projectId={projectId}
+                                            onDataChange={handleDataChange}
+                                        />
+                                    );
+                                })}
+                            </TableBody>
+                        </SortableContext>
+                    </Table>
+                </DndContext>
             )}
         </div>
     );

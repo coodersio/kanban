@@ -232,7 +232,7 @@ router.get('/board', async (req, res) => {
             storiesParams.push(filterMemberId);
         }
 
-        storiesQuery += ` ORDER BY s.id ASC`;
+        storiesQuery += ` ORDER BY ss.order_index ASC, s.id ASC`;
         const storiesResult = await pool.query(storiesQuery, storiesParams);
 
         // TASK VISIBILITY
@@ -261,7 +261,7 @@ router.get('/board', async (req, res) => {
             params.push(memberId);
         }
 
-        tasksQuery += ` ORDER BY t.id ASC`;
+        tasksQuery += ` ORDER BY st.order_index ASC, t.id ASC`;
         const tasksResult = await pool.query(tasksQuery, params);
 
         const membersResult = await pool.query('SELECT id, user_name, display_name FROM users');
@@ -1131,6 +1131,176 @@ router.post('/story/move', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     } finally {
         client.release();
+    }
+});
+
+// Reorder Stories within a Sprint
+router.post('/stories/reorder', async (req, res) => {
+    const { sprintId, projectId, orders } = req.body;
+    // orders: [{ id: 123, order: 1 }, { id: 124, order: 2 }, ...]
+    if (!sprintId || !projectId || !orders || !Array.isArray(orders)) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        for (const item of orders) {
+            await client.query(
+                'UPDATE sprint_stories SET order_index = $1, updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3',
+                [item.order, sprintId, item.id]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error reordering stories:', err);
+        res.status(500).json({ message: 'Failed to reorder stories' });
+    } finally {
+        client.release();
+    }
+});
+
+// Reorder Tasks within a Story
+router.post('/tasks/reorder', async (req, res) => {
+    const { sprintId, orders } = req.body;
+    // orders: [{ id: 456, order: 1 }, { id: 457, order: 2 }, ...]
+    if (!sprintId || !orders || !Array.isArray(orders)) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        for (const item of orders) {
+            await client.query(
+                'UPDATE sprint_tasks SET order_index = $1, updated_at = NOW() WHERE sprint_id = $2 AND task_id = $3',
+                [item.order, sprintId, item.id]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error reordering tasks:', err);
+        res.status(500).json({ message: 'Failed to reorder tasks' });
+    } finally {
+        client.release();
+    }
+});
+
+// Get Story by ID (for direct URL access)
+router.get('/story/:id', async (req, res) => {
+    const { id } = req.params;
+    const { sprintId } = req.query;
+
+    try {
+        let query = `
+            SELECT
+                s.*,
+                ss.status,
+                ss.progress,
+                ss.priority as snapshot_priority,
+                ss.planned_completion_date,
+                ss.actual_completion_date,
+                ss.estimated_hours,
+                ss.risk_and_countermeasure,
+                u.id as assignee_id,
+                u.display_name as assignee_name,
+                (SELECT COUNT(*) FROM sprint_tasks st WHERE st.story_id = s.id AND st.sprint_id = ss.sprint_id) as task_count
+            FROM stories s
+            LEFT JOIN sprint_stories ss ON s.id = ss.story_id
+            LEFT JOIN users u ON ss.assigned_to = u.id
+            WHERE s.id = $1
+        `;
+        const params: any[] = [id];
+
+        if (sprintId) {
+            query += ` AND ss.sprint_id = $2`;
+            params.push(sprintId);
+        }
+
+        query += ` LIMIT 1`;
+        const result = await pool.query(query, params);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Story not found' });
+        }
+
+        const row = result.rows[0];
+        const story = {
+            ...row,
+            status: row.status || 'not_started',
+            progress: row.progress || 0,
+            task_count: parseInt(row.task_count) || 0,
+            assigned_to_user: row.assignee_id ? {
+                id: row.assignee_id,
+                display_name: row.assignee_name,
+                avatar_url: `https://i.pravatar.cc/150?u=${row.assignee_id}`
+            } : null
+        };
+
+        res.json(story);
+    } catch (err) {
+        console.error('Error fetching story:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get Task by ID (for direct URL access)
+router.get('/task/:id', async (req, res) => {
+    const { id } = req.params;
+    const { sprintId } = req.query;
+
+    try {
+        let query = `
+            SELECT
+                t.*,
+                st.status,
+                st.progress,
+                st.risk_and_countermeasure,
+                u.id as assignee_id,
+                u.display_name as assignee_name
+            FROM tasks t
+            LEFT JOIN sprint_tasks st ON t.id = st.task_id
+            LEFT JOIN users u ON st.assigned_to = u.id
+            WHERE t.id = $1
+        `;
+        const params: any[] = [id];
+
+        if (sprintId) {
+            query += ` AND st.sprint_id = $2`;
+            params.push(sprintId);
+        }
+
+        query += ` LIMIT 1`;
+        const result = await pool.query(query, params);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        const row = result.rows[0];
+        const task = {
+            ...row,
+            status: row.status || 'not_started',
+            progress: row.progress || 0,
+            assigned_to_user: row.assignee_id ? {
+                id: row.assignee_id,
+                display_name: row.assignee_name,
+                avatar_url: `https://i.pravatar.cc/150?u=${row.assignee_id}`
+            } : null
+        };
+
+        res.json(task);
+    } catch (err) {
+        console.error('Error fetching task:', err);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 

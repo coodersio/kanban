@@ -125,27 +125,22 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
     return (
         <Sheet open={open} onOpenChange={onClose}>
             <SheetContent className="sm:max-w-md w-full border-l shadow-xl p-0 flex flex-col bg-white">
-                <SheetHeader className="px-6 py-4 border-b flex flex-row items-center justify-between space-y-0">
-                    <SheetTitle className="flex-1">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* Task Title */}
+                    <div className="space-y-2">
                         <Input
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             disabled={!canEdit}
                             className="text-xl font-semibold border-none shadow-none focus-visible:ring-0 p-0 h-auto placeholder:text-muted-foreground/50"
-                            placeholder="Task Name"
+                            placeholder="任务名称"
                         />
-                    </SheetTitle>
-                    <div className="flex items-center gap-2">
-                        {/* Actions could go here */}
                     </div>
-                </SheetHeader>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     {/* Status & Priority */}
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-1.5">
                             <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                                <Flag className="w-3.5 h-3.5" /> Status
+                                <Flag className="w-3.5 h-3.5" /> 状态
                             </Label>
                             <Select value={status} onValueChange={(val: any) => setStatus(val)} disabled={!canEdit}>
                                 <SelectTrigger className="h-9 border-transparent hover:bg-secondary/50 transition-colors focus:ring-0 px-2 -ml-2 font-medium">
@@ -155,19 +150,19 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                                     <SelectItem value="not_started">
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-slate-400" />
-                                            <span>Not Started</span>
+                                            <span>未开始</span>
                                         </div>
                                     </SelectItem>
                                     <SelectItem value="in_progress">
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-orange-400" />
-                                            <span>Working on it</span>
+                                            <span>进行中</span>
                                         </div>
                                     </SelectItem>
                                     <SelectItem value="completed">
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                                            <span>Done</span>
+                                            <span>已完成</span>
                                         </div>
                                     </SelectItem>
                                 </SelectContent>
@@ -175,7 +170,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                         </div>
                         <div className="space-y-1.5">
                             <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                                <Tag className="w-3.5 h-3.5" /> Priority
+                                <Tag className="w-3.5 h-3.5" /> 优先级
                             </Label>
                             <Select value={priority} onValueChange={setPriority} disabled={!canEdit}>
                                 <SelectTrigger className="h-9 border-transparent hover:bg-secondary/50 transition-colors focus:ring-0 px-2 -ml-2 font-medium">
@@ -194,7 +189,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-1.5">
                             <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                                <User className="w-3.5 h-3.5" /> Person
+                                <User className="w-3.5 h-3.5" /> 负责人
                             </Label>
                             <Select value={assignedTo?.toString() || "none"} onValueChange={(val) => setAssignedTo(val === "none" ? null : parseInt(val))} disabled={!canEdit}>
                                 <SelectTrigger className="h-9 border-transparent hover:bg-secondary/50 transition-colors focus:ring-0 px-2 -ml-2">
@@ -205,11 +200,11 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                                                 <AvatarFallback className="text-[9px]">{members.find(m => m.id === assignedTo)?.display_name.charAt(0)}</AvatarFallback>
                                             </Avatar>
                                         ) : <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center"><User className="w-3 h-3 text-slate-400" /></div>}
-                                        <span className="text-sm font-medium">{assignedTo ? members.find(m => m.id === assignedTo)?.display_name : "Unassigned"}</span>
+                                        <span className="text-sm font-medium">{assignedTo ? members.find(m => m.id === assignedTo)?.display_name : "未分配"}</span>
                                     </div>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="none">Unassigned</SelectItem>
+                                    <SelectItem value="none">未分配</SelectItem>
                                     {members.map(m => (
                                         <SelectItem key={m.id} value={m.id.toString()}>
                                             <div className="flex items-center gap-2">
@@ -226,7 +221,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                         </div>
                         <div className="space-y-1.5">
                             <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                                <CalendarIcon className="w-3.5 h-3.5" /> Due Date
+                                <CalendarIcon className="w-3.5 h-3.5" /> 截止日期
                             </Label>
                             <Popover>
                                 <PopoverTrigger asChild>
@@ -237,7 +232,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                                             !dueDate && "text-muted-foreground"
                                         )}
                                     >
-                                        {dueDate ? format(dueDate, "PPP", { locale: zhCN }) : <span>Set Date</span>}
+                                        {dueDate ? format(dueDate, "PPP", { locale: zhCN }) : <span>设置日期</span>}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
@@ -284,7 +279,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
-                                <Percent className="w-3.5 h-3.5" /> Progress
+                                <Percent className="w-3.5 h-3.5" /> 进度
                             </Label>
                             <span className="text-xs text-muted-foreground">{progress}%</span>
                         </div>
@@ -318,12 +313,12 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
 
                     {/* Description */}
                     <div className="space-y-2 pt-2 border-t">
-                        <Label className="text-sm font-semibold text-foreground">Valid info</Label>
+                        <Label className="text-sm font-semibold text-foreground">详细信息</Label>
                         <Textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             disabled={!canEdit}
-                            placeholder="Add a description..."
+                            placeholder="添加描述..."
                             className="min-h-[120px] border-none bg-secondary/20 focus:bg-secondary/40 focus:ring-0 resize-none p-4 text-sm"
                         />
                     </div>
@@ -332,11 +327,11 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                 <div className="p-4 border-t bg-slate-50 flex justify-end gap-2">
                     {canEdit ? (
                         <>
-                            <Button variant="outline" onClick={onClose} size="sm">Cancel</Button>
-                            <Button onClick={handleSave} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">Save Changes</Button>
+                            <Button variant="outline" onClick={onClose} size="sm">取消</Button>
+                            <Button onClick={handleSave} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">保存修改</Button>
                         </>
                     ) : (
-                        <span className="text-xs text-muted-foreground self-center">View Only</span>
+                        <span className="text-xs text-muted-foreground self-center">仅查看</span>
                     )}
                 </div>
             </SheetContent>

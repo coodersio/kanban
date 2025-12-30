@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,11 @@ export default function Workbench() {
     const { currentUser } = useOutletContext<{ currentUser: { id: number, role: string, displayName: string } }>();
     const isAdmin = currentUser?.role === 'admin';
     const isExternal = currentUser?.role === 'external';
+
+    // URL routing hooks
+    const params = useParams();
+    const location = useLocation();
+    const navigate = useNavigate();
 
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [selectedSprintId, setSelectedSprintId] = useState<string>('');
@@ -238,6 +243,48 @@ export default function Workbench() {
             .then(data => setStories(data.stories))
             .catch(err => console.error(err));
     }, [selectedSprintId, selectedProjectId, refreshTrigger]);
+
+    // URL synchronization - Open drawers based on URL
+    useEffect(() => {
+        const pathMatch = location.pathname.match(/\/(STORY|TASK)-(\d+)$/);
+
+        if (pathMatch) {
+            const [, type, id] = pathMatch;
+            const entityId = parseInt(id);
+
+            if (type === 'STORY') {
+                // Fetch and open story
+                fetch(`/api/workbench/story/${entityId}?sprintId=${selectedSprintId}`)
+                    .then(res => res.json())
+                    .then(story => {
+                        setSelectedStoryForEdit(story);
+                        setIsStoryDrawerOpen(true);
+                    })
+                    .catch(err => {
+                        console.error('Error fetching story:', err);
+                        // Navigate back if story not found
+                        navigate('/dashboard/workbench');
+                    });
+            } else if (type === 'TASK') {
+                // Fetch and open task
+                fetch(`/api/workbench/task/${entityId}?sprintId=${selectedSprintId}`)
+                    .then(res => res.json())
+                    .then(task => {
+                        setSelectedTask(task);
+                        setIsDrawerOpen(true);
+                    })
+                    .catch(err => {
+                        console.error('Error fetching task:', err);
+                        // Navigate back if task not found
+                        navigate('/dashboard/workbench');
+                    });
+            }
+        } else {
+            // No entity in URL, close drawers
+            setIsStoryDrawerOpen(false);
+            setIsDrawerOpen(false);
+        }
+    }, [location.pathname, selectedSprintId, navigate]);
 
     const handleAddStory = async () => {
         const targetSprintId = createSprintId || selectedSprintId;
@@ -584,8 +631,8 @@ export default function Workbench() {
     };
 
     const openEditTask = (task: Task) => {
-        setSelectedTask(task);
-        setIsDrawerOpen(true);
+        // Navigate to task URL instead of directly opening drawer
+        navigate(`/dashboard/workbench/TASK-${task.id}`);
     };
 
     const handleUpdateStory = async (updatedStory: any) => {
@@ -605,8 +652,8 @@ export default function Workbench() {
 
     const openEditStory = (story: Story) => {
         if (story.id === 0) return; // Can't edit "Uncategorized"
-        setSelectedStoryForEdit(story);
-        setIsStoryDrawerOpen(true);
+        // Navigate to story URL instead of directly opening drawer
+        navigate(`/dashboard/workbench/STORY-${story.id}`);
     };
 
     const project = projects.find(p => p.id === selectedProjectId);
@@ -1603,7 +1650,7 @@ export default function Workbench() {
             <TaskDetailsDrawer
                 task={selectedTask}
                 open={isDrawerOpen}
-                onClose={() => setIsDrawerOpen(false)}
+                onClose={() => navigate('/dashboard/workbench')}
                 onSave={handleUpdateTask}
                 members={members}
                 currentUser={currentUser}
@@ -1616,7 +1663,7 @@ export default function Workbench() {
             <StoryDetailsDrawer
                 story={selectedStoryForEdit}
                 open={isStoryDrawerOpen}
-                onClose={() => setIsStoryDrawerOpen(false)}
+                onClose={() => navigate('/dashboard/workbench')}
                 onSave={handleUpdateStory}
                 members={members}
                 currentUser={currentUser}

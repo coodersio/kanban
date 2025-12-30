@@ -3,11 +3,14 @@ import type { Story, Task, Member } from "@/types";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronRight, ChevronDown, AlertTriangle } from "lucide-react";
+import { ChevronRight, ChevronDown, AlertTriangle, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TaskRow from './TaskRow';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import EntityHandler from './EntityHandler';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ListViewStoryRowProps {
     story: Story;
@@ -31,6 +34,12 @@ const getAvatarColor = (userId: number) => {
         'bg-orange-500 text-white',
         'bg-pink-500 text-white',
         'bg-cyan-500 text-white',
+        'bg-amber-500 text-white',
+        'bg-indigo-500 text-white',
+        'bg-rose-500 text-white',
+        'bg-teal-500 text-white',
+        'bg-violet-500 text-white',
+        'bg-fuchsia-500 text-white',
     ];
     return colors[userId % colors.length];
 };
@@ -79,6 +88,22 @@ export default function ListViewStoryRow({
 }: ListViewStoryRowProps) {
     const { toast } = useToast();
     const statusConfig = getStatusBadge(story.status);
+
+    // Sortable hook
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: story.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    };
 
     const getNextStatus = (current: string): 'not_started' | 'in_progress' | 'completed' => {
         if (current === 'not_started') return 'in_progress';
@@ -142,7 +167,22 @@ export default function ListViewStoryRow({
     return (
         <Fragment>
             {/* Story Row */}
-            <TableRow className="border-b-2 hover:bg-muted/30 transition-colors">
+            <TableRow
+                ref={setNodeRef}
+                style={style}
+                className="border-b-2 hover:bg-muted/30 transition-colors"
+            >
+                {/* Drag Handle */}
+                <TableCell className="w-10">
+                    <button
+                        {...attributes}
+                        {...listeners}
+                        className="p-1 hover:bg-muted rounded transition-colors cursor-grab active:cursor-grabbing"
+                    >
+                        <GripVertical className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                </TableCell>
+
                 {/* Expand Button */}
                 <TableCell className="w-10">
                     <button
@@ -161,13 +201,11 @@ export default function ListViewStoryRow({
                 </TableCell>
 
                 {/* Title */}
-                <TableCell
-                    className="cursor-pointer"
-                    onClick={() => onEditStory(story)}
-                >
+                <TableCell>
                     <div className="flex items-center gap-2">
-                        <span className="font-semibold">
-                            <span className="text-muted-foreground font-normal">[STORY-{story.id}]</span> {story.title}
+                        <span className="font-semibold flex items-center gap-2">
+                            <EntityHandler type="STORY" id={story.id} />
+                            {story.title}
                         </span>
                         <span className="text-xs text-muted-foreground">
                             ({story.task_count || 0} 个任务)
@@ -225,31 +263,9 @@ export default function ListViewStoryRow({
                     </Select>
                 </TableCell>
 
-                {/* Progress */}
-                <TableCell>
-                    <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden max-w-[100px]">
-                            <div
-                                className="h-full bg-primary transition-all"
-                                style={{ width: `${story.progress || 0}%` }}
-                            />
-                        </div>
-                        <span className="text-xs text-muted-foreground min-w-[3ch]">
-                            {story.progress || 0}%
-                        </span>
-                    </div>
-                </TableCell>
-
                 {/* Planned Date */}
                 <TableCell className="text-xs text-muted-foreground">
                     {story.planned_completion_date ? new Date(story.planned_completion_date).toLocaleDateString('zh-CN') : '-'}
-                </TableCell>
-
-                {/* Risk */}
-                <TableCell className="text-center">
-                    {story.risk_and_countermeasure && (
-                        <AlertTriangle className="w-4 h-4 text-orange-500 inline-block" title={story.risk_and_countermeasure} />
-                    )}
                 </TableCell>
             </TableRow>
 
