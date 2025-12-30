@@ -1,6 +1,8 @@
 async function testLogin() {
     try {
-        const res = await fetch('http://localhost:4004/api/auth/login', {
+        const baseUrl = process.env.API_BASE_URL || 'http://localhost:3003';
+        const url = new URL('/api/auth/login', baseUrl).toString();
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: 'admin', password: 'admin123' })

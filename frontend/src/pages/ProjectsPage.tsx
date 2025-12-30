@@ -20,6 +20,7 @@ interface Project {
     project_type_name?: string;
     owner_id?: number;
     owner_name?: string;
+    source?: string;
 }
 
 interface Option {
@@ -38,7 +39,7 @@ export default function ProjectsPage() {
     const [isOpen, setIsOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Project | null>(null);
     const [formData, setFormData] = useState({
-        name: '', description: '', department_id: '', project_type_id: '', owner_id: '0'
+        name: '', description: '', department_id: '', project_type_id: '', owner_id: '0', source: ''
     });
 
     // Delete confirmation dialog
@@ -84,7 +85,7 @@ export default function ProjectsPage() {
 
         setIsOpen(false);
         setEditingItem(null);
-        setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0' });
+        setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0', source: '' });
         fetchProjects();
     };
 
@@ -137,7 +138,8 @@ export default function ProjectsPage() {
             description: item.description || '',
             department_id: item.department_id?.toString() || '',
             project_type_id: item.project_type_id?.toString() || '',
-            owner_id: item.owner_id?.toString() || '0'
+            owner_id: item.owner_id?.toString() || '0',
+            source: item.source || ''
         });
         setIsOpen(true);
     };
@@ -162,7 +164,7 @@ export default function ProjectsPage() {
                     <Button
                         onClick={() => {
                             setEditingItem(null);
-                            setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0' });
+                            setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0', source: '' });
                             setIsOpen(true);
                         }}
                         className="w-full gap-2"
@@ -250,6 +252,11 @@ export default function ProjectsPage() {
                                         {proj.project_type_name && (
                                             <Badge variant="secondary" className="text-[10px]">
                                                 {proj.project_type_name}
+                                            </Badge>
+                                        )}
+                                        {proj.source && (
+                                            <Badge variant="default" className="text-[10px]">
+                                                {proj.source}
                                             </Badge>
                                         )}
                                     </div>
@@ -369,6 +376,15 @@ export default function ProjectsPage() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="source">需求来源/项目对接人</Label>
+                            <Input
+                                id="source"
+                                value={formData.source}
+                                onChange={e => setFormData({ ...formData, source: e.target.value })}
+                                placeholder="例如：张三 / XX部门"
+                            />
                         </div>
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>

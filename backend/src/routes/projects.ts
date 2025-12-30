@@ -16,7 +16,8 @@ router.get('/', async (req, res) => {
     `);
         const projects = result.rows.map(row => ({
             ...row,
-            name: row.software_name // Map DB software_name to UI name
+            name: row.software_name, // Map DB software_name to UI name
+            source: row.source // Include source field
         }));
         res.json(projects);
     } catch (err) {
@@ -26,15 +27,15 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { name, description, department_id, project_type_id, owner_id, sprintId, priority, notes } = req.body;
+    const { name, description, department_id, project_type_id, owner_id, source, sprintId, priority, notes } = req.body;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Create project in projects table
         const result = await client.query(
-            'INSERT INTO projects (software_name, description, department_id, project_type_id, owner_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null]
+            'INSERT INTO projects (software_name, description, department_id, project_type_id, owner_id, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null, source || null]
         );
         const row = result.rows[0];
 
@@ -49,7 +50,8 @@ router.post('/', async (req, res) => {
         await client.query('COMMIT');
         res.status(201).json({
             ...row,
-            name: row.software_name
+            name: row.software_name,
+            source: row.source
         });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -62,16 +64,17 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { name, description, department_id, project_type_id, owner_id } = req.body;
+    const { name, description, department_id, project_type_id, owner_id, source } = req.body;
     try {
         const result = await pool.query(
-            'UPDATE projects SET software_name = $1, description = $2, department_id = $3, project_type_id = $4, owner_id = $5 WHERE id = $6 RETURNING *',
-            [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null, id]
+            'UPDATE projects SET software_name = $1, description = $2, department_id = $3, project_type_id = $4, owner_id = $5, source = $6 WHERE id = $7 RETURNING *',
+            [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null, source || null, id]
         );
         const row = result.rows[0];
         res.json({
             ...row,
-            name: row.software_name
+            name: row.software_name,
+            source: row.source
         });
     } catch (err) {
         console.error('Error updating project:', err);
