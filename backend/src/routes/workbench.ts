@@ -1,11 +1,12 @@
 import express from 'express';
 import pool from '../db/connection';
+import { requireAuth, blockExternal } from '../middleware/permissions';
 
 const router = express.Router();
 
 // Get all projects associated with a specific sprint
 // Only return projects that have been added to this sprint (exist in sprint_projects)
-router.get('/sprint/:sprintId/projects', async (req, res) => {
+router.get('/sprint/:sprintId/projects', requireAuth, async (req, res) => {
     try {
         const { sprintId } = req.params;
         // INNER JOIN to only get projects that are actually in this sprint
@@ -37,7 +38,7 @@ router.get('/sprint/:sprintId/projects', async (req, res) => {
 });
 
 // List available projects (not in current sprint)
-router.get('/projects/available', async (req, res) => {
+router.get('/projects/available', requireAuth, async (req, res) => {
     const { sprintId, search } = req.query;
     if (!sprintId) return res.status(400).json({ message: 'Missing sprintId' });
 
@@ -65,8 +66,8 @@ router.get('/projects/available', async (req, res) => {
     }
 });
 
-// Add existing project to sprint
-router.post('/sprint/projects', async (req, res) => {
+// Add existing project to sprint - Block external users
+router.post('/sprint/projects', blockExternal, async (req, res) => {
     const { sprintId, projectId, priority, notes } = req.body;
     if (!sprintId || !projectId) return res.status(400).json({ message: 'Missing fields' });
 
@@ -82,8 +83,8 @@ router.post('/sprint/projects', async (req, res) => {
     }
 });
 
-// Delete project from sprint (remove snapshot)
-router.post('/sprint/project/delete', async (req, res) => {
+// Delete project from sprint (remove snapshot) - Block external users
+router.post('/sprint/project/delete', blockExternal, async (req, res) => {
     const { sprintId, projectId } = req.body;
     if (!sprintId || !projectId) return res.status(400).json({ message: 'Missing fields' });
 
@@ -120,8 +121,8 @@ router.post('/sprint/project/delete', async (req, res) => {
     }
 });
 
-// Update Project (Reference + Snapshot)
-router.post('/project/update', async (req, res) => {
+// Update Project (Reference + Snapshot) - Block external users
+router.post('/project/update', blockExternal, async (req, res) => {
     const { sprintId, projectId, name, description, department_id, project_type_id, owner_id, priority, notes } = req.body;
     if (!projectId) return res.status(400).json({ message: 'Missing projectId' });
 
@@ -168,7 +169,8 @@ router.post('/project/update', async (req, res) => {
 
 
 // Get Board Data: Stories and Tasks for a specific Sprint + Project
-router.get('/board', async (req, res) => {
+// Get board data - All authenticated users
+router.get('/board', requireAuth, async (req, res) => {
     const { sprintId, projectId, memberId } = req.query;
     if (!sprintId || !projectId) {
         return res.status(400).json({ message: 'Missing sprintId or projectId' });
@@ -304,7 +306,8 @@ router.get('/board', async (req, res) => {
 });
 
 // Update Task Status (Drag and Drop)
-router.post('/task/status', async (req, res) => {
+// Update task status - Block external users
+router.post('/task/status', blockExternal, async (req, res) => {
     const { sprintId, taskId, status, projectId, storyId } = req.body;
     // If it exists, update status.
     const user = (req.session as any).user;
@@ -369,7 +372,8 @@ router.post('/task/status', async (req, res) => {
 });
 
 // Assign Task to User
-router.post('/task/assign', async (req, res) => {
+// Assign task - Block external users
+router.post('/task/assign', blockExternal, async (req, res) => {
     const { sprintId, taskId, assignedTo, projectId } = req.body;
     if (!sprintId || !taskId) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -411,7 +415,8 @@ router.post('/task/assign', async (req, res) => {
 });
 
 // Update Story Status (drag and drop)
-router.post('/story/status', async (req, res) => {
+// Update story status - Block external users
+router.post('/story/status', blockExternal, async (req, res) => {
     const { sprintId, storyId, status, projectId } = req.body;
     if (!sprintId || !storyId || !status) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -473,7 +478,8 @@ router.post('/story/status', async (req, res) => {
 });
 
 // Assign Story to User
-router.post('/story/assign', async (req, res) => {
+// Assign story - Block external users
+router.post('/story/assign', blockExternal, async (req, res) => {
     const { sprintId, storyId, assignedTo, projectId } = req.body;
     if (!sprintId || !storyId) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -515,7 +521,8 @@ router.post('/story/assign', async (req, res) => {
 });
 
 // Update Story (including priority)
-router.put('/story', async (req, res) => {
+// Update story - Block external users
+router.put('/story', blockExternal, async (req, res) => {
     const { sprintId, projectId, storyId, title, assignedTo, priority } = req.body;
     if (!storyId || !sprintId || !projectId) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -549,7 +556,8 @@ router.put('/story', async (req, res) => {
 });
 
 // Create Story and Add to Sprint
-router.post('/story', async (req, res) => {
+// Create story - Block external users
+router.post('/story', blockExternal, async (req, res) => {
     const { sprintId, projectId, title, description, assignedTo, priority, planned_completion_date } = req.body;
     if (!sprintId || !projectId || !title) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -585,7 +593,8 @@ router.post('/story', async (req, res) => {
 });
 
 // Create Task and Add to Sprint
-router.post('/task', async (req, res) => {
+// Create task - Block external users
+router.post('/task', blockExternal, async (req, res) => {
     const { sprintId, projectId, storyId, title, description, priority, estimatedHours, assignedTo } = req.body;
     if (!sprintId || !projectId || !title) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -621,7 +630,8 @@ router.post('/task', async (req, res) => {
 });
 
 // Update Task Details
-router.post('/task/update', async (req, res) => {
+// Update task - Block external users
+router.post('/task/update', blockExternal, async (req, res) => {
     const { id, taskId, sprintId, title, description, status, priority, estimatedHours, assignedTo, progress, risk_and_countermeasure, planned_completion_date } = req.body;
     const finalTaskId = id || taskId;
     if (!finalTaskId || !sprintId) return res.status(400).json({ message: 'Missing taskId or sprintId' });
@@ -716,7 +726,8 @@ router.post('/task/update', async (req, res) => {
 });
 
 // Update Story Details
-router.post('/story/update', async (req, res) => {
+// Update story details - Block external users
+router.post('/story/update', blockExternal, async (req, res) => {
     const {
         storyId,
         sprintId,
@@ -797,7 +808,8 @@ router.post('/story/update', async (req, res) => {
 });
 
 // Search for available stories (not in current sprint)
-router.get('/stories/available', async (req, res) => {
+// Get available stories - All authenticated users
+router.get('/stories/available', requireAuth, async (req, res) => {
     const { projectId, sprintId, search } = req.query;
     if (!projectId || !sprintId) {
         return res.status(400).json({ message: 'Missing projectId or sprintId' });
@@ -829,7 +841,8 @@ router.get('/stories/available', async (req, res) => {
 });
 
 // Search for available tasks (not in current sprint)
-router.get('/tasks/available', async (req, res) => {
+// Get available tasks - All authenticated users
+router.get('/tasks/available', requireAuth, async (req, res) => {
     const { projectId, sprintId, storyId, search } = req.query;
     if (!projectId || !sprintId) {
         return res.status(400).json({ message: 'Missing projectId or sprintId' });
@@ -867,7 +880,8 @@ router.get('/tasks/available', async (req, res) => {
 });
 
 // Reuse existing Story (Add to Sprint)
-router.post('/story/reuse', async (req, res) => {
+// Reuse story - Block external users
+router.post('/story/reuse', blockExternal, async (req, res) => {
     const { sprintId, projectId, storyId, assignedTo } = req.body;
     if (!sprintId || !projectId || !storyId) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -886,7 +900,8 @@ router.post('/story/reuse', async (req, res) => {
 });
 
 // Reuse existing Task (Add to Sprint)
-router.post('/task/reuse', async (req, res) => {
+// Reuse task - Block external users
+router.post('/task/reuse', blockExternal, async (req, res) => {
     const { sprintId, projectId, storyId, taskId, assignedTo } = req.body;
     if (!sprintId || !projectId || !taskId) {
         return res.status(400).json({ message: 'Missing required fields' });
@@ -921,7 +936,8 @@ router.post('/task/reuse', async (req, res) => {
 });
 
 // Delete Story (from sprint or permanently)
-router.post('/story/delete', async (req, res) => {
+// Delete story - Block external users
+router.post('/story/delete', blockExternal, async (req, res) => {
     const { sprintId, projectId, storyId } = req.body;
 
     // Validate required fields

@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from '@/lib/utils';
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { usePermissions, Permission } from '@/hooks/usePermissions';
 
 interface UserData {
     id: number;
@@ -22,6 +23,7 @@ interface UserData {
 }
 
 export default function UsersPage() {
+    const { hasPermission } = usePermissions();
     const [users, setUsers] = useState<UserData[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<UserData | null>(null);
@@ -108,18 +110,20 @@ export default function UsersPage() {
                     <p className="text-sm text-muted-foreground mt-1">管理团队成员及其权限</p>
                 </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                    <DialogTrigger asChild>
-                        <Button
-                            onClick={() => {
-                                setEditingUser(null);
-                                setFormData({ user_name: '', display_name: '', password: '', role: 'developer' });
-                            }}
-                            className="gap-2"
-                        >
-                            <Plus className="w-4 h-4" />
-                            添加成员
-                        </Button>
-                    </DialogTrigger>
+                    {hasPermission(Permission.CREATE_USER) && (
+                        <DialogTrigger asChild>
+                            <Button
+                                onClick={() => {
+                                    setEditingUser(null);
+                                    setFormData({ user_name: '', display_name: '', password: '', role: 'developer' });
+                                }}
+                                className="gap-2"
+                            >
+                                <Plus className="w-4 h-4" />
+                                添加成员
+                            </Button>
+                        </DialogTrigger>
+                    )}
                     <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
                             <DialogTitle>{editingUser ? '编辑成员' : '添加新成员'}</DialogTitle>
@@ -222,22 +226,26 @@ export default function UsersPage() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                                onClick={() => openEdit(user)}
-                                            >
-                                                <Pencil className="w-4 h-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                onClick={() => handleDelete(user.id)}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
+                                            {hasPermission(Permission.EDIT_USER) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => openEdit(user)}
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </Button>
+                                            )}
+                                            {hasPermission(Permission.DELETE_USER) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                    onClick={() => handleDelete(user.id)}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>

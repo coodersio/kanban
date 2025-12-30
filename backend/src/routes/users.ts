@@ -1,11 +1,12 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import pool from '../db/connection';
+import { requireAuth, requirePermission, Permission } from '../middleware/permissions';
 
 const router = express.Router();
 
-// List Users
-router.get('/', async (req, res) => {
+// List Users - All authenticated users can view
+router.get('/', requireAuth, async (req, res) => {
     try {
         const result = await pool.query('SELECT id, user_name, display_name, role, created_at FROM users ORDER BY created_at DESC');
         res.json(result.rows);
@@ -15,8 +16,8 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Create User
-router.post('/', async (req, res) => {
+// Create User - Admin only
+router.post('/', requirePermission(Permission.CREATE_USER), async (req, res) => {
     const { user_name, display_name, password, role } = req.body;
     try {
         const passwordHash = await bcrypt.hash(password, 10);
@@ -34,8 +35,8 @@ router.post('/', async (req, res) => {
     }
 });
 
-// Update User (Simplified, usually separate password update)
-router.put('/:id', async (req, res) => {
+// Update User - Admin only
+router.put('/:id', requirePermission(Permission.EDIT_USER), async (req, res) => {
     const { id } = req.params;
     const { display_name, role, password } = req.body;
 
@@ -66,8 +67,8 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Delete User
-router.delete('/:id', async (req, res) => {
+// Delete User - Admin only
+router.delete('/:id', requirePermission(Permission.DELETE_USER), async (req, res) => {
     const { id } = req.params;
     try {
         await pool.query('DELETE FROM users WHERE id = $1', [id]);

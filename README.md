@@ -1,7 +1,7 @@
 # KanBan Weekly Report System
 
 一个基于Sprint迭代管理的看板系统，用于替代传统的Excel周报。
-
+npm --prefix frontend run dev
 ## 技术栈
 
 - **Frontend**: React 19 + TypeScript + Vite

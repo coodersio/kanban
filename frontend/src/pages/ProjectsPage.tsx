@@ -9,6 +9,7 @@ import { Plus, Pencil, Trash2, Briefcase, Search as SearchIcon, AlertTriangle } 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import StoriesManager from "./components/StoriesManager";
+import { usePermissions, Permission } from '@/hooks/usePermissions';
 
 interface Project {
     id: number;
@@ -29,6 +30,7 @@ interface Option {
 }
 
 export default function ProjectsPage() {
+    const { hasPermission } = usePermissions();
     const [projects, setProjects] = useState<Project[]>([]);
     const [departments, setDepartments] = useState<Option[]>([]);
     const [types, setTypes] = useState<Option[]>([]);
@@ -160,20 +162,22 @@ export default function ProjectsPage() {
                     </p>
                 </div>
 
-                <div className="p-4 border-b">
-                    <Button
-                        onClick={() => {
-                            setEditingItem(null);
-                            setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0', source: '' });
-                            setIsOpen(true);
-                        }}
-                        className="w-full gap-2"
-                        size="sm"
-                    >
-                        <Plus className="w-4 h-4" />
-                        新建项目
-                    </Button>
-                </div>
+                {hasPermission(Permission.CREATE_PROJECT) && (
+                    <div className="p-4 border-b">
+                        <Button
+                            onClick={() => {
+                                setEditingItem(null);
+                                setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0', source: '' });
+                                setIsOpen(true);
+                            }}
+                            className="w-full gap-2"
+                            size="sm"
+                        >
+                            <Plus className="w-4 h-4" />
+                            新建项目
+                        </Button>
+                    </div>
+                )}
 
                 <div className="p-4">
                     <div className="relative">
@@ -214,28 +218,32 @@ export default function ProjectsPage() {
                                     <div className="flex items-start justify-between gap-2">
                                         <h3 className="font-semibold text-sm line-clamp-1">{proj.name}</h3>
                                         <div className="flex gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openEdit(proj);
-                                                }}
-                                            >
-                                                <Pencil className="w-3 h-3" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteClick(proj);
-                                                }}
-                                            >
-                                                <Trash2 className="w-3 h-3" />
-                                            </Button>
+                                            {hasPermission(Permission.EDIT_PROJECT) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEdit(proj);
+                                                    }}
+                                                >
+                                                    <Pencil className="w-3 h-3" />
+                                                </Button>
+                                            )}
+                                            {hasPermission(Permission.DELETE_PROJECT) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteClick(proj);
+                                                    }}
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                     {proj.description && (

@@ -20,8 +20,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { cn } from '@/lib/utils';
+import { usePermissions, Permission } from '@/hooks/usePermissions';
 
 export default function SprintsPage() {
+    const { hasPermission } = usePermissions();
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Sprint | null>(null);
@@ -203,21 +205,23 @@ export default function SprintsPage() {
                     <p className="text-sm text-muted-foreground mt-1">管理项目迭代周期和时间线</p>
                 </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                    <DialogTrigger asChild>
-                        <Button
-                            onClick={() => {
-                                setEditingItem(null);
-                                setFormData({ name: '', start_date: '', end_date: '', status: 'planning' });
-                                setStartDate(undefined);
-                                setEndDate(undefined);
-                                fetchActiveProjects();
-                            }}
-                            className="gap-2"
-                        >
-                            <Plus className="w-4 h-4" />
-                            新建迭代
-                        </Button>
-                    </DialogTrigger>
+                    {hasPermission(Permission.CREATE_SPRINT) && (
+                        <DialogTrigger asChild>
+                            <Button
+                                onClick={() => {
+                                    setEditingItem(null);
+                                    setFormData({ name: '', start_date: '', end_date: '', status: 'planning' });
+                                    setStartDate(undefined);
+                                    setEndDate(undefined);
+                                    fetchActiveProjects();
+                                }}
+                                className="gap-2"
+                            >
+                                <Plus className="w-4 h-4" />
+                                新建迭代
+                            </Button>
+                        </DialogTrigger>
+                    )}
                     <DialogContent className="sm:max-w-[500px]">
                         <DialogHeader>
                             <DialogTitle>{editingItem ? '编辑迭代' : '新建迭代'}</DialogTitle>
@@ -373,8 +377,8 @@ export default function SprintsPage() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
-                                            {/* Export Dropdown - 不显示给Backlog */}
-                                            {sprint.id !== -1 && (
+                                            {/* Export Dropdown - 不显示给Backlog，根据权限控制 */}
+                                            {sprint.id !== -1 && (hasPermission(Permission.EXPORT_SUMMARY_REPORT) || hasPermission(Permission.EXPORT_PERSONAL_REPORT)) && (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button
@@ -387,18 +391,22 @@ export default function SprintsPage() {
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleExportSummary(sprint.id)}>
-                                                            汇总周报
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handleExportPersonal(sprint.id)}>
-                                                            个人周报
-                                                        </DropdownMenuItem>
+                                                        {hasPermission(Permission.EXPORT_SUMMARY_REPORT) && (
+                                                            <DropdownMenuItem onClick={() => handleExportSummary(sprint.id)}>
+                                                                汇总周报
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {hasPermission(Permission.EXPORT_PERSONAL_REPORT) && (
+                                                            <DropdownMenuItem onClick={() => handleExportPersonal(sprint.id)}>
+                                                                个人周报
+                                                            </DropdownMenuItem>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             )}
 
-                                            {/* 激活按钮 - 不显示给Backlog */}
-                                            {sprint.id !== -1 && sprint.status !== 'active' && (
+                                            {/* 激活按钮 - 不显示给Backlog，仅Admin */}
+                                            {sprint.id !== -1 && sprint.status !== 'active' && hasPermission(Permission.ACTIVATE_SPRINT) && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -410,8 +418,8 @@ export default function SprintsPage() {
                                                 </Button>
                                             )}
 
-                                            {/* 编辑按钮 - 不显示给Backlog */}
-                                            {sprint.id !== -1 && (
+                                            {/* 编辑按钮 - 不显示给Backlog，仅Admin */}
+                                            {sprint.id !== -1 && hasPermission(Permission.EDIT_SPRINT) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -422,8 +430,8 @@ export default function SprintsPage() {
                                                 </Button>
                                             )}
 
-                                            {/* 删除按钮 - 不显示给Backlog */}
-                                            {sprint.id !== -1 && (
+                                            {/* 删除按钮 - 不显示给Backlog，仅Admin */}
+                                            {sprint.id !== -1 && hasPermission(Permission.DELETE_SPRINT) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"

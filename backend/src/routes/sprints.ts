@@ -1,5 +1,6 @@
 import express from 'express';
 import pool from '../db/connection';
+import { requireAuth, requirePermission, Permission } from '../middleware/permissions';
 
 const router = express.Router();
 
@@ -21,7 +22,8 @@ const toUiStatus = (status: string) => {
     }
 };
 
-router.get('/', async (req, res) => {
+// List Sprints - All authenticated users can view
+router.get('/', requireAuth, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM sprints ORDER BY start_date DESC');
         const sprints = result.rows.map(row => ({
@@ -36,7 +38,8 @@ router.get('/', async (req, res) => {
     }
 });
 
-router.post('/', async (req, res) => {
+// Create Sprint - Admin only
+router.post('/', requirePermission(Permission.CREATE_SPRINT), async (req, res) => {
     const { name, start_date, end_date, projectIds } = req.body;
     const client = await pool.connect();
     try {
@@ -75,7 +78,8 @@ router.post('/', async (req, res) => {
     }
 });
 
-router.put('/:id', async (req, res) => {
+// Update Sprint - Admin only
+router.put('/:id', requirePermission(Permission.EDIT_SPRINT), async (req, res) => {
     const { id } = req.params;
     const { name, start_date, end_date, status } = req.body;
     try {
@@ -95,7 +99,8 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-router.delete('/:id', async (req, res) => {
+// Delete Sprint - Admin only
+router.delete('/:id', requirePermission(Permission.DELETE_SPRINT), async (req, res) => {
     const { id } = req.params;
     try {
         await pool.query('DELETE FROM sprints WHERE id = $1', [id]);
@@ -106,7 +111,8 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-router.post('/:id/activate', async (req, res) => {
+// Activate Sprint - Admin only
+router.post('/:id/activate', requirePermission(Permission.ACTIVATE_SPRINT), async (req, res) => {
     const { id } = req.params;
     const client = await pool.connect();
     try {
@@ -138,7 +144,8 @@ router.post('/:id/activate', async (req, res) => {
     }
 });
 
-router.post('/:id/close', async (req, res) => {
+// Close Sprint - Admin only
+router.post('/:id/close', requirePermission(Permission.ACTIVATE_SPRINT), async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query(
