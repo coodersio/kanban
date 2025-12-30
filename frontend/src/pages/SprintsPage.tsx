@@ -6,8 +6,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, Play, Check } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, Play, Check, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { cn } from '@/lib/utils';
 
@@ -16,16 +26,60 @@ export default function SprintsPage() {
     const [isOpen, setIsOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Sprint | null>(null);
     const [formData, setFormData] = useState({ name: '', start_date: '', end_date: '', status: 'planning' });
+    const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+    const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+    const [availableProjects, setAvailableProjects] = useState<any[]>([]);
+    const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
 
     const fetchData = async () => {
         const res = await fetch('/api/sprints');
         if (res.ok) setSprints(await res.json());
     };
 
+    const fetchActiveProjects = async () => {
+        try {
+            // Find current active sprint
+            const activeSprint = sprints.find(s => s.status === 'active');
+
+            if (activeSprint) {
+                // Fetch projects for the active sprint
+                const res = await fetch(`/api/workbench/sprint/${activeSprint.id}/projects`);
+                if (res.ok) {
+                    const projects = await res.json();
+                    // Filter projects that are actually in the sprint (have priority/notes)
+                    const activeProjects = projects.filter((p: any) => p.priority !== null || p.notes !== null);
+                    setAvailableProjects(activeProjects);
+                    // Select all by default
+                    setSelectedProjectIds(activeProjects.map((p: any) => p.id));
+                }
+            } else {
+                // If no active sprint, fetch all projects
+                const res = await fetch('/api/projects');
+                if (res.ok) {
+                    const allProjects = await res.json();
+                    setAvailableProjects(allProjects);
+                    // Select all by default
+                    setSelectedProjectIds(allProjects.map((p: any) => p.id));
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching active projects:', err);
+            setAvailableProjects([]);
+            setSelectedProjectIds([]);
+        }
+    };
+
     useEffect(() => { fetchData(); }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Validate dates for new sprint
+        if (!editingItem && (!startDate || !endDate)) {
+            alert('请选择开始和结束日期');
+            return;
+        }
+
         const url = editingItem ? `/api/sprints/${editingItem.id}` : '/api/sprints';
         const method = editingItem ? 'PUT' : 'POST';
 
@@ -33,7 +87,12 @@ export default function SprintsPage() {
         // For PUT (update), include status
         const payload = editingItem
             ? formData
-            : { name: formData.name, start_date: formData.start_date, end_date: formData.end_date };
+            : {
+                name: formData.name,
+                start_date: startDate ? format(startDate, 'yyyy-MM-dd') : '',
+                end_date: endDate ? format(endDate, 'yyyy-MM-dd') : '',
+                projectIds: selectedProjectIds
+            };
 
         await fetch(url, {
             method,
@@ -44,6 +103,10 @@ export default function SprintsPage() {
         setIsOpen(false);
         setEditingItem(null);
         setFormData({ name: '', start_date: '', end_date: '', status: 'planning' });
+        setStartDate(undefined);
+        setEndDate(undefined);
+        setAvailableProjects([]);
+        setSelectedProjectIds([]);
         fetchData();
     };
 
@@ -56,6 +119,66 @@ export default function SprintsPage() {
     const handleActivate = async (id: number) => {
         await fetch(`/api/sprints/${id}/activate`, { method: 'POST' });
         fetchData();
+    };
+
+    const handleExportSummary = async (sprintId: number) => {
+        try {
+            const res = await fetch(`/api/reports/sprint/${sprintId}/export`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reportType: 'summary' })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `weekly-report-sprint-${sprintId}-summary-${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } else {
+                alert('导出失败，请重试');
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('导出失败，请重试');
+        }
+    };
+
+    const handleExportPersonal = async (sprintId: number) => {
+        try {
+            const userRes = await fetch('/api/auth/me');
+            const userData = await userRes.json();
+
+            const res = await fetch(`/api/reports/sprint/${sprintId}/export`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reportType: 'personal',
+                    userId: userData.id
+                })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `weekly-report-sprint-${sprintId}-personal-${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } else {
+                alert('导出失败，请重试');
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('导出失败，请重试');
+        }
     };
 
     const openEdit = (item: Sprint) => {
@@ -94,6 +217,9 @@ export default function SprintsPage() {
                             onClick={() => {
                                 setEditingItem(null);
                                 setFormData({ name: '', start_date: '', end_date: '', status: 'planning' });
+                                setStartDate(undefined);
+                                setEndDate(undefined);
+                                fetchActiveProjects();
                             }}
                             className="gap-2"
                         >
@@ -118,26 +244,89 @@ export default function SprintsPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="start">开始日期 *</Label>
-                                    <Input
-                                        type="date"
-                                        id="start"
-                                        value={formData.start_date}
-                                        onChange={e => setFormData({ ...formData, start_date: e.target.value })}
-                                        required
-                                    />
+                                    <Label>开始日期 *</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal",
+                                                    !startDate && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {startDate ? format(startDate, "PPP", { locale: zhCN }) : <span>选择开始日期</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={startDate}
+                                                onSelect={setStartDate}
+                                                initialFocus
+                                                locale={zhCN}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="end">结束日期 *</Label>
-                                    <Input
-                                        type="date"
-                                        id="end"
-                                        value={formData.end_date}
-                                        onChange={e => setFormData({ ...formData, end_date: e.target.value })}
-                                        required
-                                    />
+                                    <Label>结束日期 *</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal",
+                                                    !endDate && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {endDate ? format(endDate, "PPP", { locale: zhCN }) : <span>选择结束日期</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={endDate}
+                                                onSelect={setEndDate}
+                                                initialFocus
+                                                locale={zhCN}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </div>
+                            {!editingItem && availableProjects.length > 0 && (
+                                <div className="space-y-2 pt-2 border-t">
+                                    <Label>关联项目</Label>
+                                    <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-md p-3 bg-muted/20">
+                                        {availableProjects.map(project => (
+                                            <div key={project.id} className="flex items-center gap-2">
+                                                <Checkbox
+                                                    id={`project-${project.id}`}
+                                                    checked={selectedProjectIds.includes(project.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                            setSelectedProjectIds([...selectedProjectIds, project.id]);
+                                                        } else {
+                                                            setSelectedProjectIds(selectedProjectIds.filter(id => id !== project.id));
+                                                        }
+                                                    }}
+                                                />
+                                                <label
+                                                    htmlFor={`project-${project.id}`}
+                                                    className="text-sm cursor-pointer flex-1"
+                                                >
+                                                    {project.name}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        已选择 {selectedProjectIds.length} 个项目
+                                    </p>
+                                </div>
+                            )}
                             <DialogFooter className="gap-2">
                                 <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                                     取消
@@ -189,6 +378,28 @@ export default function SprintsPage() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
+                                            {/* Export Dropdown */}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 gap-1.5"
+                                                    >
+                                                        <Download className="w-3 h-3" />
+                                                        导出
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleExportSummary(sprint.id)}>
+                                                        汇总周报
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleExportPersonal(sprint.id)}>
+                                                        个人周报
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+
                                             {sprint.status !== 'active' && (
                                                 <Button
                                                     variant="outline"

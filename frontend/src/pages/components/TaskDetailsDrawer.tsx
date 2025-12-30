@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Task, Member } from "@/types";
-import { User, Tag, Hash, Flag, Calendar as CalendarIcon, AlertTriangle, Percent } from 'lucide-react';
+import type { Task, Member } from "@/types";
+import { User, Tag, Hash, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -36,6 +36,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
     const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
     const [progress, setProgress] = useState(0);
     const [risk, setRisk] = useState('');
+    const [estimatedHours, setEstimatedHours] = useState<number | undefined>(undefined);
 
     // Permission Logic
     const isExternal = currentUser?.role === 'external';
@@ -52,12 +53,13 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
             setTitle(task.title || '');
             setDescription(task.description || '');
             setStatus(task.status || 'not_started');
-            setPriority(task.priority || 'Should');
+            setPriority(task.priority || '中');
             setSize(task.size || 'Medium');
             setAssignedTo(task.assigned_to_user?.id || null);
             setDueDate(task.due_date ? new Date(task.due_date) : undefined);
             setProgress(task.progress || 0);
             setRisk(task.risk_and_countermeasure || '');
+            setEstimatedHours(task.estimated_hours || undefined);
         }
     }, [task, open]);
 
@@ -75,7 +77,8 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
             assignedTo,
             due_date: dueDate?.toISOString() || null,
             progress,
-            risk_and_countermeasure: risk
+            risk_and_countermeasure: risk,
+            estimated_hours: estimatedHours || null
         });
         onClose();
     };
@@ -142,11 +145,9 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="High">High</SelectItem>
-                                    <SelectItem value="Medium">Medium</SelectItem>
-                                    <SelectItem value="Low">Low</SelectItem>
-                                    <SelectItem value="Must">Must</SelectItem>
-                                    <SelectItem value="Should">Should</SelectItem>
+                                    <SelectItem value="高">高</SelectItem>
+                                    <SelectItem value="中">中</SelectItem>
+                                    <SelectItem value="低">低</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -230,6 +231,24 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                             step={5}
                             disabled={!canEdit}
                             className="w-full"
+                        />
+                    </div>
+
+                    {/* Estimated Hours */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="task-estimated-hours" className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5" /> 预估工时（小时）
+                        </Label>
+                        <Input
+                            id="task-estimated-hours"
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={estimatedHours || ''}
+                            onChange={(e) => setEstimatedHours(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            placeholder="例如: 4"
+                            disabled={!canEdit}
+                            className="h-9"
                         />
                     </div>
 

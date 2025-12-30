@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import type { BoardData, Story } from "@/types";
+import type { BoardData, Story, Task } from "@/types";
 import StoryCard from '@/pages/components/StoryCard';
 import StoryDetailDialog from '@/pages/components/StoryDetailDialog';
 import { cn } from "@/lib/utils";
@@ -24,7 +24,8 @@ function KanbanColumn({
     sprintId,
     projectId,
     members,
-    onTaskUpdate
+    onTaskUpdate,
+    onEditTask
 }: {
     id: string,
     status: string,
@@ -33,7 +34,8 @@ function KanbanColumn({
     sprintId: string,
     projectId: number,
     members: any[],
-    onTaskUpdate: () => void
+    onTaskUpdate: () => void,
+    onEditTask?: (task: any) => void
 }) {
     const { setNodeRef, isOver } = useDroppable({ id });
     const config = STATUS_CONFIG[status] || STATUS_CONFIG['not_started'];
@@ -69,12 +71,13 @@ function KanbanColumn({
                         projectId={projectId}
                         members={members}
                         onTaskUpdate={onTaskUpdate}
+                        onEditTask={onEditTask}
                     />
                 ))}
 
                 {stories.length === 0 && (
                     <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-                        暂无需求
+                        暂无节点
                     </div>
                 )}
             </div>
@@ -88,14 +91,16 @@ export default function KanbanBoard({
     onAddTask,
     onEditTask,
     onEditStory,
-    filterMemberId
+    filterMemberId,
+    members
 }: {
     sprintId: string,
     projectId: number,
     onAddTask?: (id: number | null) => void,
     onEditTask?: (task: any) => void,
     onEditStory?: (story: Story) => void,
-    filterMemberId?: number | null
+    filterMemberId?: number | null,
+    members?: any[]
 }) {
     const [data, setData] = useState<BoardData>({ stories: [], tasks: [], members: [] });
     const [activeId, setActiveId] = useState<number | null>(null);
@@ -204,8 +209,9 @@ export default function KanbanBoard({
                             onStoryClick={handleStoryClick}
                             sprintId={sprintId}
                             projectId={projectId}
-                            members={data.members}
+                            members={members || data.members}
                             onTaskUpdate={fetchData}
+                            onEditTask={onEditTask}
                         />
                         <KanbanColumn
                             id="column::in_progress"
@@ -214,8 +220,9 @@ export default function KanbanBoard({
                             onStoryClick={handleStoryClick}
                             sprintId={sprintId}
                             projectId={projectId}
-                            members={data.members}
+                            members={members || data.members}
                             onTaskUpdate={fetchData}
+                            onEditTask={onEditTask}
                         />
                         <KanbanColumn
                             id="column::completed"
@@ -224,18 +231,19 @@ export default function KanbanBoard({
                             onStoryClick={handleStoryClick}
                             sprintId={sprintId}
                             projectId={projectId}
-                            members={data.members}
+                            members={members || data.members}
                             onTaskUpdate={fetchData}
+                            onEditTask={onEditTask}
                         />
                     </div>
 
                     {data.stories.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center py-20 opacity-50 text-sm text-muted-foreground">
-                            <p className="mb-4">暂无需求</p>
+                            <p className="mb-4">暂无节点</p>
                             {onEditStory && (
                                 <Button onClick={() => onEditStory({} as Story)} size="sm" variant="outline">
                                     <Plus className="w-4 h-4 mr-2" />
-                                    添加需求
+                                    添加关键节点计划
                                 </Button>
                             )}
                         </div>
@@ -250,8 +258,9 @@ export default function KanbanBoard({
                                 isOverlay
                                 sprintId={sprintId}
                                 projectId={projectId}
-                                members={data.members}
+                                members={members || data.members}
                                 onTaskUpdate={fetchData}
+                                onEditTask={onEditTask}
                             />
                         </div>
                     ) : null}
@@ -268,8 +277,9 @@ export default function KanbanBoard({
                 story={selectedStory}
                 sprintId={sprintId}
                 projectId={projectId}
-                members={data.members}
+                members={members || data.members}
                 onUpdate={fetchData}
+                onEditTask={onEditTask}
             />
         </>
     );

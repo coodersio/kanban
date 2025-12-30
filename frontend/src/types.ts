@@ -3,6 +3,7 @@ export interface Member {
     user_name: string;
     display_name: string;
     avatar_url?: string;
+    role?: string;
 }
 
 export interface Department {
@@ -29,17 +30,24 @@ export interface Task {
     due_date?: string;
     progress?: number;
     risk_and_countermeasure?: string;
+    estimated_hours?: number; // NEW: 预估工时（小时）
     created_by?: number;
 }
 
 export interface Story {
     id: number;
     title: string;
+    description?: string;
     status: string;
     progress?: number;
     task_count?: number;
     assigned_to_user?: Member;
     created_by?: number;
+    planned_completion_date?: string; // NEW: 计划完成日期 (YYYY-MM-DD)
+    actual_completion_date?: string;  // NEW: 实际完成日期 (ISO 8601)
+    risk_and_countermeasure?: string; // NEW: 风险及应对措施
+    estimated_hours?: number;         // NEW: 预估工时（小时）
+    priority?: string;                // NEW: 优先级
 }
 
 export interface Sprint {
@@ -56,7 +64,7 @@ export interface Project {
     description: string;
     department_id?: number;
     project_type_id?: number;
-    priority?: number;
+    priority?: string | number;
     notes?: string;
 }
 

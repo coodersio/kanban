@@ -3,7 +3,11 @@ import { useOutletContext } from 'react-router-dom';
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, Layout, User, Settings, LayoutGrid, ArrowUpDown } from 'lucide-react';
+import { Plus, ChevronDown, Layout, User, Settings, LayoutGrid, ArrowUpDown, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { zhCN } from "date-fns/locale";
 import KanbanBoard from './components/KanbanBoard';
 import ProjectSidebar from './components/ProjectSidebar';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -36,6 +40,18 @@ import {
     CommandList,
 } from "@/components/ui/command";
 
+// Helper function to convert priority between number and string
+const normalizePriority = (priority: string | number | undefined): string => {
+    if (typeof priority === 'string') return priority;
+    if (typeof priority === 'number') {
+        // Convert old number priorities to new string format
+        if (priority <= 1) return '高';
+        if (priority <= 2) return '中';
+        return '低';
+    }
+    return '中'; // default
+};
+
 export default function Workbench() {
     const { currentUser } = useOutletContext<{ currentUser: { id: number, role: string, displayName: string } }>();
     const isAdmin = currentUser?.role === 'admin';
@@ -54,10 +70,11 @@ export default function Workbench() {
     const [newTitle, setNewTitle] = useState('');
     const [newDesc, setNewDesc] = useState('');
     const [targetStoryId, setTargetStoryId] = useState<number | null>(null);
-    const [priority, setPriority] = useState('Should');
+    const [priority, setPriority] = useState('中');
     const [size, setSize] = useState('Medium');
     const [assignedTo, setAssignedTo] = useState<number | null>(null);
     const [storyPriority, setStoryPriority] = useState('medium');
+    const [storyPlannedDate, setStoryPlannedDate] = useState<Date | undefined>(undefined);
     const [filterMemberId, setFilterMemberId] = useState<number | null>(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
@@ -65,10 +82,11 @@ export default function Workbench() {
     const [projectTypes, setProjectTypes] = useState<ProjectType[]>([]);
     const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
     const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+    const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
     const [priorityNotes, setPriorityNotes] = useState('');
-    const [projectPriority, setProjectPriority] = useState<number>(0);
+    const [projectPriority, setProjectPriority] = useState<string>('中');
 
 
     // Edit Task Drawer State
@@ -168,11 +186,14 @@ export default function Workbench() {
         fetch('/api/users')
             .then(res => res.json())
             .then(data => {
-                setMembers(data.map((u: any) => ({
+                // Filter out external users from avatar display
+                const filteredData = data.filter((u: any) => u.role !== 'external');
+                setMembers(filteredData.map((u: any) => ({
                     id: u.id,
                     user_name: u.user_name,
                     display_name: u.display_name,
-                    avatar_url: u.avatar_url || null
+                    avatar_url: u.avatar_url || null,
+                    role: u.role
                 })));
             })
             .catch(err => console.error('Error fetching users:', err));
@@ -226,7 +247,8 @@ export default function Workbench() {
                     title: newTitle,
                     description: newDesc,
                     assignedTo: assignedTo,
-                    priority: storyPriority
+                    priority: storyPriority,
+                    planned_completion_date: storyPlannedDate?.toISOString().split('T')[0] || null
                 })
             });
             if (res.ok) {
@@ -235,6 +257,7 @@ export default function Workbench() {
                 setNewDesc('');
                 setAssignedTo(null);
                 setStoryPriority('medium');
+                setStoryPlannedDate(undefined);
                 setRefreshTrigger(prev => prev + 1);
             }
         } catch (err) {
@@ -296,7 +319,7 @@ export default function Workbench() {
                 setNewTitle('');
                 setNewDesc('');
                 setTargetStoryId(null);
-                setPriority('Should');
+                setPriority('中');
                 setSize('Medium');
                 setAssignedTo(null);
                 setRefreshTrigger(prev => prev + 1);
@@ -389,6 +412,7 @@ export default function Workbench() {
                 description: newDesc,
                 department_id: selectedDeptId,
                 project_type_id: selectedTypeId,
+                owner_id: selectedOwnerId,
                 priority: projectPriority,
                 notes: priorityNotes
             };
@@ -426,8 +450,9 @@ export default function Workbench() {
         setNewDesc('');
         setSelectedDeptId(null);
         setSelectedTypeId(null);
+        setSelectedOwnerId(null);
         setPriorityNotes('');
-        setProjectPriority(0);
+        setProjectPriority('中');
         setIsEditMode(false);
         setEditingProjectId(null);
         setActiveProjectTab('create');
@@ -444,8 +469,9 @@ export default function Workbench() {
         setNewDesc(project.description);
         setSelectedDeptId(project.department_id || null);
         setSelectedTypeId(project.project_type_id || null);
+        setSelectedOwnerId(project.owner_id || null);
         setPriorityNotes(project.notes || '');
-        setProjectPriority(project.priority || 0);
+        setProjectPriority(normalizePriority(project.priority));
         setIsEditMode(true);
         setEditingProjectId(project.id);
         setIsProjectDialogOpen(true);
@@ -461,6 +487,7 @@ export default function Workbench() {
     const openAddStoryDialog = () => {
         setAssignedTo(null); // Reset assignee
         setStoryPriority('medium'); // Reset priority to default
+        setStoryPlannedDate(undefined); // Reset planned date
         setIsStoryDialogOpen(true);
     };
 
@@ -611,7 +638,7 @@ export default function Workbench() {
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm font-medium h-9 px-4 rounded-md text-xs gap-1.5"
                             >
-                                <Plus className="w-4 h-4" /> 添加需求
+                                <Plus className="w-4 h-4" /> 添加关键节点计划
                             </Button>
                             <Button
                                 onClick={() => openAddTaskDialog()}
@@ -670,6 +697,7 @@ export default function Workbench() {
                                 sprintId={selectedSprintId}
                                 projectId={selectedProjectId}
                                 filterMemberId={filterMemberId}
+                                members={members}
                                 onAddTask={openAddTaskDialog}
                                 onEditTask={openEditTask}
                                 onEditStory={openEditStory}
@@ -689,7 +717,7 @@ export default function Workbench() {
             <Dialog open={isStoryDialogOpen} onOpenChange={setIsStoryDialogOpen}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle className="text-lg font-semibold">添加需求</DialogTitle>
+                        <DialogTitle className="text-lg font-semibold">添加关键节点计划</DialogTitle>
                     </DialogHeader>
 
                     <nav className="flex gap-4 border-b mb-4">
@@ -700,7 +728,7 @@ export default function Workbench() {
                                 activeStoryTab === 'create' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                             )}
                         >
-                            新建需求
+                            新建节点
                         </button>
                         <button
                             onClick={() => setActiveStoryTab('reuse')}
@@ -716,7 +744,7 @@ export default function Workbench() {
                     {activeStoryTab === 'create' ? (
                         <div className="grid gap-4 py-2">
                             <div className="grid gap-2">
-                                <Label htmlFor="title" className="text-sm font-medium">需求名称</Label>
+                                <Label htmlFor="title" className="text-sm font-medium">节点名称</Label>
                                 <Input
                                     id="title"
                                     placeholder="例如：实现用户认证系统"
@@ -756,10 +784,38 @@ export default function Workbench() {
                                 </div>
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="desc" className="text-sm font-medium">需求描述</Label>
+                                <Label className="text-sm font-medium flex items-center gap-2">
+                                    <CalendarIcon className="w-3.5 h-3.5" />
+                                    计划完成日期
+                                </Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal",
+                                                !storyPlannedDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            {storyPlannedDate ? format(storyPlannedDate, "PPP", { locale: zhCN }) : <span>选择计划完成日期</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            mode="single"
+                                            selected={storyPlannedDate}
+                                            onSelect={setStoryPlannedDate}
+                                            initialFocus
+                                            locale={zhCN}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="desc" className="text-sm font-medium">节点描述</Label>
                                 <Textarea
                                     id="desc"
-                                    placeholder="输入详细的需求说明..."
+                                    placeholder="输入详细的说明..."
                                     value={newDesc}
                                     onChange={(e) => setNewDesc(e.target.value)}
                                     className="min-h-[100px]"
@@ -769,7 +825,7 @@ export default function Workbench() {
                     ) : (
                         <div className="grid gap-4 py-2">
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">搜索已有需求</Label>
+                                <Label className="text-sm font-medium">搜索已有节点</Label>
                                 <Input
                                     placeholder="输入关键词搜索..."
                                     value={storyReuseSearch}
@@ -777,7 +833,7 @@ export default function Workbench() {
                                 />
                             </div>
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">选择需求</Label>
+                                <Label className="text-sm font-medium">选择节点</Label>
                                 <div className="max-h-[300px] overflow-y-auto space-y-2">
                                     {availableStories.map(s => (
                                         <div
@@ -798,7 +854,7 @@ export default function Workbench() {
                                     ))}
                                     {availableStories.length === 0 && (
                                         <div className="text-center py-8 text-slate-300 text-xs font-bold uppercase tracking-widest italic">
-                                            没有可复用的需求
+                                            没有可复用的节点
                                         </div>
                                     )}
                                 </div>
@@ -825,9 +881,9 @@ export default function Workbench() {
                     <DialogFooter className="mt-4">
                         <Button variant="outline" onClick={() => setIsStoryDialogOpen(false)}>取消</Button>
                         {activeStoryTab === 'create' ? (
-                            <Button onClick={handleAddStory}>创建需求</Button>
+                            <Button onClick={handleAddStory}>创建节点</Button>
                         ) : (
-                            <Button onClick={handleReuseStory} disabled={!selectedReuseStoryId}>选用需求</Button>
+                            <Button onClick={handleReuseStory} disabled={!selectedReuseStoryId}>选用节点</Button>
                         )}
                     </DialogFooter>
                 </DialogContent>
@@ -967,13 +1023,13 @@ export default function Workbench() {
                                 </Select>
                             </div>
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">关联需求</Label>
+                                <Label className="text-sm font-medium">关联关键节点</Label>
                                 <Select value={targetStoryId?.toString() || '0'} onValueChange={(v) => setTargetStoryId(v === '0' ? null : parseInt(v))}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="选择关联需求" />
+                                        <SelectValue placeholder="选择关联关键节点" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="0">无关联需求</SelectItem>
+                                        <SelectItem value="0">无关联关键节点</SelectItem>
                                         {stories.map(s => (
                                             <SelectItem key={s.id} value={s.id.toString()}>
                                                 {s.title}
@@ -990,9 +1046,9 @@ export default function Workbench() {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Must">Must</SelectItem>
-                                            <SelectItem value="Should">Should</SelectItem>
-                                            <SelectItem value="Could">Could</SelectItem>
+                                            <SelectItem value="高">高</SelectItem>
+                                            <SelectItem value="中">中</SelectItem>
+                                            <SelectItem value="低">低</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1032,10 +1088,10 @@ export default function Workbench() {
                                 />
                             </div>
                             <div className="grid gap-2">
-                                <Label className="text-sm font-medium">关联需求</Label>
+                                <Label className="text-sm font-medium">关联关键节点</Label>
                                 <Select value={targetStoryId?.toString() || '0'} onValueChange={(v) => setTargetStoryId(v === '0' ? null : parseInt(v))}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="选择关联需求" />
+                                        <SelectValue placeholder="选择关联关键节点" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="0">查看所有任务</SelectItem>
@@ -1174,14 +1230,35 @@ export default function Workbench() {
                                     </SelectContent>
                                 </Select>
                             </div>
+                            <div className="grid gap-2">
+                                <Label className="text-sm font-medium">项目负责人</Label>
+                                <Select value={selectedOwnerId?.toString() || '0'} onValueChange={(v) => setSelectedOwnerId(v === '0' ? null : parseInt(v))}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="选择负责人" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="0">未分配</SelectItem>
+                                        {members.filter(m => m.role !== 'external').map(m => (
+                                            <SelectItem key={m.id} value={m.id.toString()}>
+                                                {m.display_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label className="text-sm font-medium">迭代优先级</Label>
-                                    <Input
-                                        type="number"
-                                        value={projectPriority}
-                                        onChange={(e) => setProjectPriority(parseInt(e.target.value) || 0)}
-                                    />
+                                    <Select value={projectPriority} onValueChange={setProjectPriority}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="选择优先级" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="高">高</SelectItem>
+                                            <SelectItem value="中">中</SelectItem>
+                                            <SelectItem value="低">低</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="grid gap-2">
                                     <Label className="text-sm font-medium">迭代备注</Label>
@@ -1237,11 +1314,16 @@ export default function Workbench() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label className="text-sm font-medium">迭代优先级</Label>
-                                    <Input
-                                        type="number"
-                                        value={projectPriority}
-                                        onChange={(e) => setProjectPriority(parseInt(e.target.value) || 0)}
-                                    />
+                                    <Select value={projectPriority} onValueChange={setProjectPriority}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="选择优先级" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="高">高</SelectItem>
+                                            <SelectItem value="中">中</SelectItem>
+                                            <SelectItem value="低">低</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="grid gap-2">
                                     <Label className="text-sm font-medium">迭代备注</Label>

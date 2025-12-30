@@ -70,7 +70,7 @@ router.post('/sprint/projects', async (req, res) => {
     try {
         await pool.query(
             'INSERT INTO sprint_projects (sprint_id, project_id, priority, notes) VALUES ($1, $2, $3, $4) ON CONFLICT (sprint_id, project_id) DO NOTHING',
-            [sprintId, projectId, priority || 0, notes || '']
+            [sprintId, projectId, priority || '中', notes || '']
         );
         res.json({ success: true });
     } catch (err) {
@@ -81,7 +81,7 @@ router.post('/sprint/projects', async (req, res) => {
 
 // Update Project (Reference + Snapshot)
 router.post('/project/update', async (req, res) => {
-    const { sprintId, projectId, name, description, department_id, project_type_id, priority, notes } = req.body;
+    const { sprintId, projectId, name, description, department_id, project_type_id, owner_id, priority, notes } = req.body;
     if (!projectId) return res.status(400).json({ message: 'Missing projectId' });
 
     const client = await pool.connect();
@@ -90,8 +90,8 @@ router.post('/project/update', async (req, res) => {
 
         // 1. Update Reference Table
         await client.query(
-            'UPDATE projects SET software_name = $1, description = $2, department_id = $3, project_type_id = $4, updated_at = NOW() WHERE id = $5',
-            [name, description, department_id, project_type_id, projectId]
+            'UPDATE projects SET software_name = $1, description = $2, department_id = $3, project_type_id = $4, owner_id = $5, updated_at = NOW() WHERE id = $6',
+            [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null, projectId]
         );
 
         // 2. Upsert Snapshot Table
@@ -104,12 +104,12 @@ router.post('/project/update', async (req, res) => {
             if (check.rows.length > 0) {
                 await client.query(
                     'UPDATE sprint_projects SET priority = $1, notes = $2, updated_at = NOW() WHERE sprint_id = $3 AND project_id = $4',
-                    [priority || 0, notes || '', sprintId, projectId]
+                    [priority || '中', notes || '', sprintId, projectId]
                 );
             } else {
                 await client.query(
                     'INSERT INTO sprint_projects (sprint_id, project_id, priority, notes) VALUES ($1, $2, $3, $4)',
-                    [sprintId, projectId, priority || 0, notes || '']
+                    [sprintId, projectId, priority || '中', notes || '']
                 );
             }
         }
@@ -161,12 +161,13 @@ router.get('/board', async (req, res) => {
 
         // Efficient JOIN query to get stories with their sprint session data and assignee
         let storiesQuery = `
-            SELECT 
-                s.*, 
-                ss.status, 
+            SELECT
+                s.*,
+                ss.status,
                 ss.progress,
                 u.id as assignee_id,
-                u.display_name as assignee_name
+                u.display_name as assignee_name,
+                (SELECT COUNT(*) FROM sprint_tasks st WHERE st.story_id = s.id AND st.sprint_id = $1) as task_count
             FROM stories s
             JOIN sprint_stories ss ON s.id = ss.story_id AND ss.sprint_id = $1
             LEFT JOIN users u ON ss.assigned_to = u.id
@@ -236,6 +237,7 @@ router.get('/board', async (req, res) => {
             ...row,
             status: row.status || 'not_started',
             progress: row.progress || 0,
+            task_count: parseInt(row.task_count) || 0,
             assigned_to_user: row.assignee_id ? {
                 id: row.assignee_id,
                 display_name: row.assignee_name,
@@ -362,24 +364,29 @@ router.post('/story/status', async (req, res) => {
             }
         }
 
-        // Check if exists
+        // Check if exists and get current status
         const check = await pool.query(
-            'SELECT id FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
+            'SELECT id, status FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
             [sprintId, storyId]
         );
 
         if (check.rows.length > 0) {
-            // Update existing snapshot
-            await pool.query(
-                'UPDATE sprint_stories SET status = $1, updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3',
-                [status, sprintId, storyId]
-            );
+            const currentStatus = check.rows[0].status;
+            const shouldSetActualDate = status === 'completed' && currentStatus !== 'completed';
+
+            // Update existing snapshot with auto-set actual_completion_date if needed
+            const updateQuery = shouldSetActualDate
+                ? 'UPDATE sprint_stories SET status = $1, actual_completion_date = NOW(), updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3'
+                : 'UPDATE sprint_stories SET status = $1, updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3';
+
+            await pool.query(updateQuery, [status, sprintId, storyId]);
         } else {
             // Insert new snapshot (shouldn't normally happen with drag-drop, but handle it)
-            await pool.query(
-                'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status) VALUES ($1, $2, $3, $4)',
-                [sprintId, projectId, storyId, status]
-            );
+            const insertQuery = status === 'completed'
+                ? 'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, actual_completion_date) VALUES ($1, $2, $3, $4, NOW())'
+                : 'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status) VALUES ($1, $2, $3, $4)';
+
+            await pool.query(insertQuery, [sprintId, projectId, storyId, status]);
         }
         res.json({ success: true });
     } catch (err) {
@@ -424,7 +431,7 @@ router.put('/story', async (req, res) => {
 
 // Create Story and Add to Sprint
 router.post('/story', async (req, res) => {
-    const { sprintId, projectId, title, description, assignedTo, priority } = req.body;
+    const { sprintId, projectId, title, description, assignedTo, priority, planned_completion_date } = req.body;
     if (!sprintId || !projectId || !title) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
@@ -443,8 +450,8 @@ router.post('/story', async (req, res) => {
 
         // 2. Create Snapshot (Add to Sprint)
         await client.query(
-            'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, assigned_to, priority) VALUES ($1, $2, $3, $4, $5, $6)',
-            [sprintId, projectId, storyId, 'not_started', assignedTo || null, priority || 'medium']
+            'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, assigned_to, priority, planned_completion_date) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [sprintId, projectId, storyId, 'not_started', assignedTo || null, priority || 'medium', planned_completion_date || null]
         );
 
         await client.query('COMMIT');
@@ -591,7 +598,17 @@ router.post('/task/update', async (req, res) => {
 
 // Update Story Details
 router.post('/story/update', async (req, res) => {
-    const { storyId, sprintId, title, description, status, assignedTo } = req.body;
+    const {
+        storyId,
+        sprintId,
+        title,
+        description,
+        status,
+        assignedTo,
+        planned_completion_date,
+        estimated_hours,
+        risk_and_countermeasure
+    } = req.body;
     if (!storyId || !sprintId) return res.status(400).json({ message: 'Missing storyId or sprintId' });
 
     const user = (req.session as any).user;
@@ -618,11 +635,36 @@ router.post('/story/update', async (req, res) => {
             [title, description || '', storyId]
         );
 
-        // 2. Update Snapshot (with sprint_id filter to avoid affecting other sprints)
-        await client.query(
-            'UPDATE sprint_stories SET status = $1, assigned_to = $2, updated_at = NOW() WHERE story_id = $3 AND sprint_id = $4',
-            [status, assignedTo || null, storyId, sprintId]
+        // 2. Check current status for auto-setting actual_completion_date
+        const checkStatus = await client.query(
+            'SELECT status FROM sprint_stories WHERE story_id = $1 AND sprint_id = $2',
+            [storyId, sprintId]
         );
+
+        const currentStatus = checkStatus.rows[0]?.status;
+        const shouldSetActualDate = status === 'completed' && currentStatus !== 'completed';
+
+        // 3. Update Snapshot (with sprint_id filter to avoid affecting other sprints)
+        const updateQuery = shouldSetActualDate
+            ? `UPDATE sprint_stories
+               SET status = $1, assigned_to = $2, planned_completion_date = $3,
+                   estimated_hours = $4, risk_and_countermeasure = $5,
+                   actual_completion_date = NOW(), updated_at = NOW()
+               WHERE story_id = $6 AND sprint_id = $7`
+            : `UPDATE sprint_stories
+               SET status = $1, assigned_to = $2, planned_completion_date = $3,
+                   estimated_hours = $4, risk_and_countermeasure = $5, updated_at = NOW()
+               WHERE story_id = $6 AND sprint_id = $7`;
+
+        await client.query(updateQuery, [
+            status,
+            assignedTo || null,
+            planned_completion_date || null,
+            estimated_hours || null,
+            risk_and_countermeasure || '',
+            storyId,
+            sprintId
+        ]);
 
         await client.query('COMMIT');
         res.json({ success: true });

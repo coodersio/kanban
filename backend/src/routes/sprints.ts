@@ -37,21 +37,41 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { name, start_date, end_date } = req.body;
+    const { name, start_date, end_date, projectIds } = req.body;
+    const client = await pool.connect();
     try {
-        const result = await pool.query(
+        await client.query('BEGIN');
+
+        // 1. Create the sprint
+        const result = await client.query(
             'INSERT INTO sprints (sprint_number, start_date, end_date, status) VALUES ($1, $2, $3, $4) RETURNING *',
             [name, start_date, end_date, 'planned']
         );
-        const row = result.rows[0];
+        const sprint = result.rows[0];
+
+        // 2. If projectIds provided, insert sprint_projects associations
+        if (projectIds && Array.isArray(projectIds) && projectIds.length > 0) {
+            for (const projectId of projectIds) {
+                await client.query(
+                    'INSERT INTO sprint_projects (sprint_id, project_id) VALUES ($1, $2)',
+                    [sprint.id, projectId]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+
         res.status(201).json({
-            ...row,
-            name: row.sprint_number,
-            status: toUiStatus(row.status)
+            ...sprint,
+            name: sprint.sprint_number,
+            status: toUiStatus(sprint.status)
         });
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error creating sprint:', err);
         res.status(500).json({ message: 'Internal server error', error: String(err) });
+    } finally {
+        client.release();
     }
 });
 

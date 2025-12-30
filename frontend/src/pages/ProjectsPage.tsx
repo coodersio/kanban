@@ -18,6 +18,8 @@ interface Project {
     project_type_id: number;
     department_name?: string;
     project_type_name?: string;
+    owner_id?: number;
+    owner_name?: string;
 }
 
 interface Option {
@@ -29,12 +31,13 @@ export default function ProjectsPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [departments, setDepartments] = useState<Option[]>([]);
     const [types, setTypes] = useState<Option[]>([]);
+    const [users, setUsers] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
 
     const [isOpen, setIsOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<Project | null>(null);
     const [formData, setFormData] = useState({
-        name: '', description: '', department_id: '', project_type_id: ''
+        name: '', description: '', department_id: '', project_type_id: '', owner_id: '0'
     });
 
     const fetchProjects = async () => {
@@ -43,12 +46,18 @@ export default function ProjectsPage() {
     };
 
     const fetchOptions = async () => {
-        const [dRes, tRes] = await Promise.all([
+        const [dRes, tRes, uRes] = await Promise.all([
             fetch('/api/departments'),
-            fetch('/api/project-types')
+            fetch('/api/project-types'),
+            fetch('/api/users')
         ]);
         if (dRes.ok) setDepartments(await dRes.json());
         if (tRes.ok) setTypes(await tRes.json());
+        if (uRes.ok) {
+            const userData = await uRes.json();
+            // Filter out external users
+            setUsers(userData.filter((u: any) => u.role !== 'external'));
+        }
     };
 
     useEffect(() => {
@@ -69,7 +78,7 @@ export default function ProjectsPage() {
 
         setIsOpen(false);
         setEditingItem(null);
-        setFormData({ name: '', description: '', department_id: '', project_type_id: '' });
+        setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0' });
         fetchProjects();
     };
 
@@ -85,7 +94,8 @@ export default function ProjectsPage() {
             name: item.name,
             description: item.description || '',
             department_id: item.department_id?.toString() || '',
-            project_type_id: item.project_type_id?.toString() || ''
+            project_type_id: item.project_type_id?.toString() || '',
+            owner_id: item.owner_id?.toString() || ''
         });
         setIsOpen(true);
     };
@@ -108,7 +118,7 @@ export default function ProjectsPage() {
                         <Button
                             onClick={() => {
                                 setEditingItem(null);
-                                setFormData({ name: '', description: '', department_id: '', project_type_id: '' });
+                                setFormData({ name: '', description: '', department_id: '', project_type_id: '', owner_id: '0' });
                             }}
                             className="gap-2"
                         >
@@ -127,7 +137,7 @@ export default function ProjectsPage() {
                                     id="name"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="请输入项目名称"
+                                    placeholder="例如：通用标检上位机"
                                     required
                                 />
                             </div>
@@ -168,6 +178,20 @@ export default function ProjectsPage() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="owner">项目负责人</Label>
+                                <Select value={formData.owner_id} onValueChange={(val) => setFormData({ ...formData, owner_id: val })}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="选择负责人" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="0">未分配</SelectItem>
+                                        {users.map(u => (
+                                            <SelectItem key={u.id} value={u.id.toString()}>{u.display_name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <DialogFooter className="gap-2">
                                 <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>

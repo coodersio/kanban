@@ -15,7 +15,27 @@ interface StoryCardProps {
     projectId?: number;
     members?: Member[];
     onTaskUpdate?: () => void;
+    onEditTask?: (task: Task) => void;
 }
+
+// Generate avatar color based on user ID
+const getAvatarColor = (userId: number) => {
+    const colors = [
+        'bg-blue-500 text-white',
+        'bg-green-500 text-white',
+        'bg-purple-500 text-white',
+        'bg-orange-500 text-white',
+        'bg-pink-500 text-white',
+        'bg-cyan-500 text-white',
+        'bg-amber-500 text-white',
+        'bg-indigo-500 text-white',
+        'bg-rose-500 text-white',
+        'bg-teal-500 text-white',
+        'bg-violet-500 text-white',
+        'bg-fuchsia-500 text-white',
+    ];
+    return colors[userId % colors.length];
+};
 
 export default function StoryCard({
     story,
@@ -24,7 +44,8 @@ export default function StoryCard({
     sprintId,
     projectId,
     members = [],
-    onTaskUpdate
+    onTaskUpdate,
+    onEditTask
 }: StoryCardProps) {
     const [isTasksExpanded, setIsTasksExpanded] = useState(false);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -139,11 +160,11 @@ export default function StoryCard({
             low: { label: '低', className: 'bg-blue-100 text-blue-700 border-blue-200' }
         };
 
-        // Task priorities (Must, Should, Could)
+        // Task priorities (高, 中, 低)
         const taskConfig = {
-            Must: { label: 'Must', className: 'bg-red-100 text-red-700 border-red-200' },
-            Should: { label: 'Should', className: 'bg-blue-100 text-blue-700 border-blue-200' },
-            Could: { label: 'Could', className: 'bg-green-100 text-green-700 border-green-200' }
+            高: { label: '高', className: 'bg-red-100 text-red-700 border-red-200' },
+            中: { label: '中', className: 'bg-blue-100 text-blue-700 border-blue-200' },
+            低: { label: '低', className: 'bg-green-100 text-green-700 border-green-200' }
         };
 
         const config = isStory ? storyConfig : taskConfig;
@@ -195,8 +216,7 @@ export default function StoryCard({
                     </div>
                     {story.assigned_to_user && (
                         <Avatar className="w-6 h-6 flex-shrink-0">
-                            <AvatarImage src={story.assigned_to_user.avatar_url} />
-                            <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                            <AvatarFallback className={cn("text-[9px] font-semibold", getAvatarColor(story.assigned_to_user.id))}>
                                 {story.assigned_to_user.display_name.charAt(0)}
                             </AvatarFallback>
                         </Avatar>
@@ -247,12 +267,18 @@ export default function StoryCard({
                                 </button>
 
                                 {/* Task Title */}
-                                <span className={cn(
-                                    "text-xs flex-1 min-w-0 truncate",
-                                    task.status === 'completed' && "line-through text-muted-foreground"
-                                )}>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEditTask?.(task);
+                                    }}
+                                    className={cn(
+                                        "text-xs flex-1 min-w-0 truncate text-left hover:text-primary transition-colors",
+                                        task.status === 'completed' && "line-through text-muted-foreground"
+                                    )}
+                                >
                                     {task.title}
-                                </span>
+                                </button>
 
                                 {/* Priority Badge */}
                                 {getPriorityBadge(task.priority)}

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import {
     Plus,
     Trash2,
+    Pencil,
     CheckCircle2,
     Circle,
     Clock,
@@ -32,6 +33,7 @@ interface StoryDetailDialogProps {
     projectId: number;
     members: Member[];
     onUpdate: () => void;
+    onEditTask?: (task: Task) => void;
 }
 
 export default function StoryDetailDialog({
@@ -41,7 +43,8 @@ export default function StoryDetailDialog({
     sprintId,
     projectId,
     members,
-    onUpdate
+    onUpdate,
+    onEditTask
 }: StoryDetailDialogProps) {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [isTaskListExpanded, setIsTaskListExpanded] = useState(true);
@@ -56,7 +59,7 @@ export default function StoryDetailDialog({
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [newTaskDesc, setNewTaskDesc] = useState('');
     const [newTaskAssignee, setNewTaskAssignee] = useState<number | null>(null);
-    const [newTaskPriority, setNewTaskPriority] = useState('Should');
+    const [newTaskPriority, setNewTaskPriority] = useState('中');
     const [newTaskSize, setNewTaskSize] = useState('Medium');
 
     // Initialize story edit state when dialog opens
@@ -108,7 +111,7 @@ export default function StoryDetailDialog({
                 setNewTaskTitle('');
                 setNewTaskDesc('');
                 setNewTaskAssignee(null);
-                setNewTaskPriority('Should');
+                setNewTaskPriority('中');
                 setNewTaskSize('Medium');
                 setIsAddingTask(false);
 
@@ -288,9 +291,9 @@ export default function StoryDetailDialog({
     const getPriorityBadge = (priority?: string) => {
         if (!priority) return null;
         const config = {
-            Must: 'bg-red-100 text-red-700 border-red-200',
-            Should: 'bg-blue-100 text-blue-700 border-blue-200',
-            Could: 'bg-green-100 text-green-700 border-green-200'
+            高: 'bg-red-100 text-red-700 border-red-200',
+            中: 'bg-blue-100 text-blue-700 border-blue-200',
+            低: 'bg-green-100 text-green-700 border-green-200'
         };
         return (
             <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', config[priority as keyof typeof config])}>
@@ -308,7 +311,7 @@ export default function StoryDetailDialog({
                 className="w-[600px] sm:w-[600px] max-w-[85vw] overflow-hidden flex flex-col p-0"
             >
                 <SheetHeader className="px-6 pt-6 pb-4 border-b">
-                    <SheetTitle className="text-lg font-semibold">编辑需求</SheetTitle>
+                    <SheetTitle className="text-lg font-semibold">编辑关键节点计划</SheetTitle>
                 </SheetHeader>
 
                 <div className="flex-1 overflow-y-auto space-y-6 px-6 py-4">
@@ -326,7 +329,7 @@ export default function StoryDetailDialog({
                                     }
                                 }}
                                 className="text-base"
-                                placeholder="需求标题"
+                                placeholder="节点标题"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -430,9 +433,9 @@ export default function StoryDetailDialog({
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="Must">Must</SelectItem>
-                                                        <SelectItem value="Should">Should</SelectItem>
-                                                        <SelectItem value="Could">Could</SelectItem>
+                                                        <SelectItem value="高">高</SelectItem>
+                                                        <SelectItem value="中">中</SelectItem>
+                                                        <SelectItem value="低">低</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -540,15 +543,25 @@ export default function StoryDetailDialog({
                                                 </div>
                                             </div>
 
-                                            {/* Delete Button */}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDeleteTask(task.id)}
-                                                className="h-7 w-7 text-muted-foreground hover:text-destructive flex-shrink-0"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
+                                            {/* Edit & Delete Buttons */}
+                                            <div className="flex gap-1 flex-shrink-0">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => onEditTask?.(task)}
+                                                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                                >
+                                                    <Pencil className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleDeleteTask(task.id)}
+                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}

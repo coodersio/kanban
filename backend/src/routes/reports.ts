@@ -1,104 +1,508 @@
 import express from 'express';
+import type { Request, Response } from 'express';
 import pool from '../db/connection';
 import ExcelJS from 'exceljs';
 
 const router = express.Router();
 
-router.get('/weekly', async (req, res) => {
-    const { sprintId } = req.query;
-    if (!sprintId) {
-        return res.status(400).json({ message: 'Missing sprintId' });
-    }
+// ============================================================
+// GET /api/reports/sprint/:sprintId/data
+// Get weekly report data for a specific sprint
+// ============================================================
+router.get('/sprint/:sprintId/data', async (req: Request, res: Response) => {
+    const { sprintId } = req.params;
+    const { userId } = req.query;
 
     try {
-        // 1. Fetch Sprint Details
-        const sprintRes = await pool.query('SELECT * FROM sprints WHERE id = $1', [sprintId]);
-        if (sprintRes.rows.length === 0) {
+        // 1. Get Sprint Info
+        const sprintResult = await pool.query(
+            'SELECT id, name, start_date, end_date, status FROM sprints WHERE id = $1',
+            [sprintId]
+        );
+        if (sprintResult.rows.length === 0) {
             return res.status(404).json({ message: 'Sprint not found' });
         }
-        const sprint = sprintRes.rows[0];
+        const sprint = sprintResult.rows[0];
 
-        // 2. Fetch Projects in Sprint
-        // Since we don't have a "Sprint Projects" manager yet, we fetch projects that have stories/tasks in this sprint,
-        // OR we can just fetch all active projects for now (simpler for this phase).
-        // Let's go with the data-driven approach: fetch projects linked via stories/tasks.
-        // Actually, for the "Flow Model", we should query `sprint_stories` and `sprint_tasks`.
-
-        const dataQuery = `
-            SELECT 
-                p.software_name as project_name,
-                d.name as department_name,
-                s.title as story_title,
-                t.title as task_title,
-                t.description as task_desc,
-                st.status,
-                st.progress,
-                u.display_name as assignee,
-                st.notes,
-                st.risk_and_countermeasure
-            FROM sprint_tasks st
-            JOIN tasks t ON st.task_id = t.id
-            JOIN projects p ON st.project_id = p.id
+        // 2. Get Active Projects in this Sprint
+        const projectsQuery = `
+            SELECT DISTINCT p.id, p.name, d.name AS department_name, pt.name AS project_type_name
+            FROM projects p
             LEFT JOIN departments d ON p.department_id = d.id
-            LEFT JOIN stories s ON st.story_id = s.id
-            LEFT JOIN users u ON st.assigned_to = u.id
-            WHERE st.sprint_id = $1
-            ORDER BY d.name, p.software_name, s.id, t.id
+            LEFT JOIN project_types pt ON p.project_type_id = pt.id
+            WHERE p.id IN (
+                SELECT DISTINCT sp.project_id FROM sprint_projects sp WHERE sp.sprint_id = $1
+                UNION
+                SELECT DISTINCT ss.project_id FROM sprint_stories ss WHERE ss.sprint_id = $1
+                UNION
+                SELECT DISTINCT st.project_id FROM sprint_tasks st WHERE st.sprint_id = $1
+            )
+            ORDER BY p.id
         `;
+        const projectsResult = await pool.query(projectsQuery, [sprintId]);
 
-        const result = await pool.query(dataQuery, [sprintId]);
-        const rows = result.rows;
+        // 3. For each project, get stories and tasks
+        const projects = [];
+        for (const project of projectsResult.rows) {
+            // Get stories
+            const storiesQuery = `
+                SELECT
+                    s.id, s.title, s.description,
+                    ss.status, ss.progress, ss.priority,
+                    ss.planned_completion_date, ss.actual_completion_date,
+                    ss.risk_and_countermeasure, ss.estimated_hours,
+                    u.id AS assigned_user_id, u.display_name AS assigned_user_name
+                FROM stories s
+                JOIN sprint_stories ss ON s.id = ss.story_id
+                LEFT JOIN users u ON ss.assigned_to = u.id
+                WHERE ss.sprint_id = $1 AND ss.project_id = $2
+                ${userId ? 'AND ss.assigned_to = $3' : ''}
+                ORDER BY
+                    CASE ss.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+                    s.id
+            `;
+            const storiesParams = userId ? [sprintId, project.id, userId] : [sprintId, project.id];
+            const storiesResult = await pool.query(storiesQuery, storiesParams);
 
-        // 3. Create Excel Workbook
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Weekly Report');
+            const stories = [];
+            for (const story of storiesResult.rows) {
+                // Get tasks for this story
+                const tasksQuery = `
+                    SELECT
+                        t.id, t.title, t.description,
+                        st.status, st.progress, st.priority, st.size,
+                        st.risk_and_countermeasure, st.estimated_hours,
+                        u.id AS assigned_user_id, u.display_name AS assigned_user_name
+                    FROM tasks t
+                    JOIN sprint_tasks st ON t.id = st.task_id
+                    LEFT JOIN users u ON st.assigned_to = u.id
+                    WHERE st.sprint_id = $1 AND st.story_id = $2
+                    ${userId ? 'AND st.assigned_to = $3' : ''}
+                    ORDER BY t.id
+                `;
+                const tasksParams = userId ? [sprintId, story.id, userId] : [sprintId, story.id];
+                const tasksResult = await pool.query(tasksQuery, tasksParams);
 
-        // Define Columns
-        worksheet.columns = [
-            { header: '部门', key: 'department', width: 15 },
-            { header: '项目', key: 'project', width: 20 },
-            { header: '需求/功能', key: 'story', width: 30 },
-            { header: '任务内容', key: 'task', width: 40 },
-            { header: '状态', key: 'status', width: 15 },
-            { header: '进度', key: 'progress', width: 10 },
-            { header: '负责人', key: 'assignee', width: 15 },
-            { header: '备注/风险', key: 'notes', width: 30 },
-        ];
+                stories.push({
+                    id: story.id,
+                    title: story.title,
+                    description: story.description,
+                    status: story.status,
+                    priority: story.priority,
+                    progress: story.progress,
+                    assigned_to_user: story.assigned_user_id
+                        ? { id: story.assigned_user_id, display_name: story.assigned_user_name }
+                        : null,
+                    planned_completion_date: story.planned_completion_date,
+                    actual_completion_date: story.actual_completion_date,
+                    risk_and_countermeasure: story.risk_and_countermeasure,
+                    estimated_hours: story.estimated_hours,
+                    tasks: tasksResult.rows.map((task: any) => ({
+                        id: task.id,
+                        title: task.title,
+                        description: task.description,
+                        status: task.status,
+                        priority: task.priority,
+                        size: task.size,
+                        progress: task.progress,
+                        assigned_to_user: task.assigned_user_id
+                            ? { id: task.assigned_user_id, display_name: task.assigned_user_name }
+                            : null,
+                        risk_and_countermeasure: task.risk_and_countermeasure,
+                        estimated_hours: task.estimated_hours
+                    }))
+                });
+            }
 
-        // Style Header Row
-        worksheet.getRow(1).font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
-        worksheet.getRow(1).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF4F46E5' } // Primary Color (Indigo)
-        };
+            // Calculate completion rate
+            const totalStories = stories.length;
+            const completedStories = stories.filter((s: any) => s.status === 'completed').length;
+            const completion_rate = totalStories > 0
+                ? Math.round((completedStories / totalStories) * 100)
+                : 0;
 
-        // Add Data
-        rows.forEach(row => {
-            worksheet.addRow({
-                department: row.department_name || '-',
-                project: row.project_name,
-                story: row.story_title || '无关联需求',
-                task: row.task_title || row.task_desc, // Fallback to desc if no title
-                status: row.status,
-                progress: `${row.progress}%`,
-                assignee: row.assignee || '待定',
-                notes: [row.notes, row.risk_and_countermeasure].filter(Boolean).join('; ')
+            projects.push({
+                id: project.id,
+                name: project.name,
+                department_name: project.department_name,
+                project_type_name: project.project_type_name,
+                stories,
+                completion_rate
             });
+        }
+
+        // 4. Get Next Sprint Info
+        const nextSprintQuery = `
+            SELECT id, name, start_date
+            FROM sprints
+            WHERE start_date > (SELECT start_date FROM sprints WHERE id = $1)
+                AND status IN ('planned', 'current')
+            ORDER BY start_date ASC
+            LIMIT 1
+        `;
+        const nextSprintResult = await pool.query(nextSprintQuery, [sprintId]);
+
+        let next_sprint: any = { id: null, name: null, planned_stories: [] };
+        if (nextSprintResult.rows.length > 0) {
+            const nextSprintData = nextSprintResult.rows[0];
+            const nextStoriesQuery = `
+                SELECT s.id, s.title, ss.planned_completion_date
+                FROM stories s
+                JOIN sprint_stories ss ON s.id = ss.story_id
+                WHERE ss.sprint_id = $1
+                ${userId ? 'AND ss.assigned_to = $2' : ''}
+                ORDER BY ss.planned_completion_date NULLS LAST, s.id
+            `;
+            const nextStoriesParams = userId ? [nextSprintData.id, userId] : [nextSprintData.id];
+            const nextStoriesResult = await pool.query(nextStoriesQuery, nextStoriesParams);
+
+            next_sprint = {
+                id: nextSprintData.id,
+                name: nextSprintData.name,
+                planned_stories: nextStoriesResult.rows
+            };
+        }
+
+        // 5. Return Response
+        res.json({
+            sprint,
+            projects,
+            next_sprint
         });
 
-        // Response Headers
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename=Weekly_Report_${sprint.sprint_number}.xlsx`);
-
-        // Write to Response
-        await workbook.xlsx.write(res);
-        res.end();
-
-    } catch (err) {
-        console.error('Error generating report:', err);
+    } catch (error) {
+        console.error('Error fetching weekly report data:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+// ============================================================
+// Helper Functions for Excel Generation
+// ============================================================
+
+function getISOWeek(date: Date): number {
+    const target = new Date(date.valueOf());
+    const dayNr = (date.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+        target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+}
+
+function getWeekNumber(dateString: string): number {
+    const date = new Date(dateString);
+    return getISOWeek(date);
+}
+
+function sanitizeForExcel(text: string): string {
+    if (!text) return '';
+    if (text.startsWith('=') || text.startsWith('+') || text.startsWith('-') || text.startsWith('@')) {
+        text = "'" + text;
+    }
+    return text;
+}
+
+function generateWeeklySummary(story: any): string {
+    if (story.status !== 'completed' && story.tasks.every((t: any) => t.status !== 'completed')) {
+        return '未完成';
+    }
+    const completedTasks = story.tasks.filter((t: any) => t.status === 'completed');
+    if (completedTasks.length === 0) {
+        return `【${story.title}】: 进行中`;
+    }
+    const taskTitles = completedTasks.map((t: any) => t.title).join(', ');
+    return `【${story.title}】: ${taskTitles}`;
+}
+
+function generateRiskSummary(stories: any[]): string {
+    const risks: string[] = [];
+    const seen = new Set<string>();
+    for (const story of stories) {
+        if (story.risk_and_countermeasure && story.risk_and_countermeasure.trim()) {
+            const text = story.risk_and_countermeasure.trim();
+            if (!seen.has(text)) {
+                risks.push(`【${story.title}】: ${text}`);
+                seen.add(text);
+            }
+        }
+        for (const task of story.tasks) {
+            if (task.risk_and_countermeasure && task.risk_and_countermeasure.trim()) {
+                const text = task.risk_and_countermeasure.trim();
+                if (!seen.has(text)) {
+                    risks.push(`【${story.title} - ${task.title}】: ${text}`);
+                    seen.add(text);
+                }
+            }
+        }
+    }
+    return risks.length > 0 ? risks.join('\\n\\n') : '无';
+}
+
+function generateNextWeekPlan(nextSprint: any): string {
+    if (!nextSprint.id || nextSprint.planned_stories.length === 0) {
+        return '暂无计划';
+    }
+    const stories = nextSprint.planned_stories
+        .map((s: any) => {
+            const dateText = s.planned_completion_date ? ` (${s.planned_completion_date})` : '';
+            return `• ${s.title}${dateText}`;
+        })
+        .join('\\n');
+    return stories || '暂无计划';
+}
+
+// ============================================================
+// POST /api/reports/sprint/:sprintId/export
+// Export weekly report as Excel file
+// ============================================================
+router.post('/sprint/:sprintId/export', async (req: Request, res: Response) => {
+    const { sprintId } = req.params;
+    const { userId, reportType } = req.body;
+
+    try {
+        const { sprint, projects, next_sprint } = await fetchWeeklyReportData(sprintId, userId);
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('周报');
+        worksheet.columns = [
+            { width: 15 }, { width: 30 }, { width: 25 },
+            { width: 12 }, { width: 25 }, { width: 30 }
+        ];
+        const weekNum = getWeekNumber(sprint.start_date);
+        const nextWeekNum = next_sprint.id ? weekNum + 1 : weekNum + 1;
+        const headerRow = worksheet.addRow([
+            '项目名称',
+            '项目目标及关键节点计划（关键节点）',
+            `S${weekNum}周总结`,
+            '完成率',
+            `S${nextWeekNum}周计划`,
+            '风险及应对'
+        ]);
+        headerRow.eachCell((cell) => {
+            cell.font = { bold: true, size: 11 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            cell.border = {
+                top: { style: 'thin' }, left: { style: 'thin' },
+                bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+        });
+        headerRow.height = 30;
+        let currentRow = 2;
+        for (const project of projects) {
+            if (project.stories.length === 0) continue;
+            const startRow = currentRow;
+            worksheet.mergeCells(`A${startRow}:A${startRow + project.stories.length - 1}`);
+            const projectCell = worksheet.getCell(`A${startRow}`);
+            projectCell.value = sanitizeForExcel(project.name);
+            projectCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            projectCell.font = { bold: true };
+            projectCell.border = {
+                top: { style: 'thin' }, left: { style: 'thin' },
+                bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+            for (let i = 0; i < project.stories.length; i++) {
+                const story = project.stories[i];
+                const row = startRow + i;
+                const storyCell = worksheet.getCell(`B${row}`);
+                storyCell.value = story.planned_completion_date
+                    ? `${sanitizeForExcel(story.title)}\\n(计划: ${story.planned_completion_date})`
+                    : sanitizeForExcel(story.title);
+                storyCell.alignment = { vertical: 'top', wrapText: true };
+                storyCell.border = {
+                    top: { style: 'thin' }, left: { style: 'thin' },
+                    bottom: { style: 'thin' }, right: { style: 'thin' }
+                };
+                const summaryCell = worksheet.getCell(`C${row}`);
+                summaryCell.value = sanitizeForExcel(generateWeeklySummary(story));
+                summaryCell.alignment = { vertical: 'top', wrapText: true };
+                summaryCell.border = {
+                    top: { style: 'thin' }, left: { style: 'thin' },
+                    bottom: { style: 'thin' }, right: { style: 'thin' }
+                };
+            }
+            worksheet.mergeCells(`D${startRow}:D${startRow + project.stories.length - 1}`);
+            const rateCell = worksheet.getCell(`D${startRow}`);
+            rateCell.value = `${project.completion_rate}%`;
+            rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            rateCell.font = {
+                bold: true,
+                color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
+            };
+            rateCell.border = {
+                top: { style: 'thin' }, left: { style: 'thin' },
+                bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+            worksheet.mergeCells(`E${startRow}:E${startRow + project.stories.length - 1}`);
+            const planCell = worksheet.getCell(`E${startRow}`);
+            planCell.value = sanitizeForExcel(generateNextWeekPlan(next_sprint));
+            planCell.alignment = { vertical: 'top', wrapText: true };
+            planCell.border = {
+                top: { style: 'thin' }, left: { style: 'thin' },
+                bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+            worksheet.mergeCells(`F${startRow}:F${startRow + project.stories.length - 1}`);
+            const riskCell = worksheet.getCell(`F${startRow}`);
+            riskCell.value = sanitizeForExcel(generateRiskSummary(project.stories));
+            riskCell.alignment = { vertical: 'top', wrapText: true };
+            riskCell.border = {
+                top: { style: 'thin' }, left: { style: 'thin' },
+                bottom: { style: 'thin' }, right: { style: 'thin' }
+            };
+            currentRow += project.stories.length;
+        }
+        const filename = reportType === 'personal'
+            ? `weekly-report-sprint-${sprintId}-personal-${new Date().toISOString().split('T')[0]}.xlsx`
+            : `weekly-report-sprint-${sprintId}-summary-${new Date().toISOString().split('T')[0]}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error('Error generating Excel:', error);
+        res.status(500).json({ message: 'Failed to generate Excel report' });
+    }
+});
+
+// ============================================================
+// Helper function to fetch weekly report data (reusable)
+// ============================================================
+async function fetchWeeklyReportData(sprintId: string, userId?: number | string) {
+    const sprintResult = await pool.query(
+        'SELECT id, name, start_date, end_date, status FROM sprints WHERE id = $1',
+        [sprintId]
+    );
+    if (sprintResult.rows.length === 0) {
+        throw new Error('Sprint not found');
+    }
+    const sprint = sprintResult.rows[0];
+    const projectsQuery = `
+        SELECT DISTINCT p.id, p.name, d.name AS department_name, pt.name AS project_type_name
+        FROM projects p
+        LEFT JOIN departments d ON p.department_id = d.id
+        LEFT JOIN project_types pt ON p.project_type_id = pt.id
+        WHERE p.id IN (
+            SELECT DISTINCT sp.project_id FROM sprint_projects sp WHERE sp.sprint_id = $1
+            UNION
+            SELECT DISTINCT ss.project_id FROM sprint_stories ss WHERE ss.sprint_id = $1
+            UNION
+            SELECT DISTINCT st.project_id FROM sprint_tasks st WHERE st.sprint_id = $1
+        )
+        ORDER BY p.id
+    `;
+    const projectsResult = await pool.query(projectsQuery, [sprintId]);
+    const projects = [];
+    for (const project of projectsResult.rows) {
+        const storiesQuery = `
+            SELECT
+                s.id, s.title, s.description,
+                ss.status, ss.progress, ss.priority,
+                ss.planned_completion_date, ss.actual_completion_date,
+                ss.risk_and_countermeasure, ss.estimated_hours,
+                u.id AS assigned_user_id, u.display_name AS assigned_user_name
+            FROM stories s
+            JOIN sprint_stories ss ON s.id = ss.story_id
+            LEFT JOIN users u ON ss.assigned_to = u.id
+            WHERE ss.sprint_id = $1 AND ss.project_id = $2
+            ${userId ? 'AND ss.assigned_to = $3' : ''}
+            ORDER BY
+                CASE ss.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+                s.id
+        `;
+        const storiesParams = userId ? [sprintId, project.id, userId] : [sprintId, project.id];
+        const storiesResult = await pool.query(storiesQuery, storiesParams);
+        const stories = [];
+        for (const story of storiesResult.rows) {
+            const tasksQuery = `
+                SELECT
+                    t.id, t.title, t.description,
+                    st.status, st.progress, st.priority, st.size,
+                    st.risk_and_countermeasure, st.estimated_hours,
+                    u.id AS assigned_user_id, u.display_name AS assigned_user_name
+                FROM tasks t
+                JOIN sprint_tasks st ON t.id = st.task_id
+                LEFT JOIN users u ON st.assigned_to = u.id
+                WHERE st.sprint_id = $1 AND st.story_id = $2
+                ${userId ? 'AND st.assigned_to = $3' : ''}
+                ORDER BY t.id
+            `;
+            const tasksParams = userId ? [sprintId, story.id, userId] : [sprintId, story.id];
+            const tasksResult = await pool.query(tasksQuery, tasksParams);
+            stories.push({
+                id: story.id,
+                title: story.title,
+                description: story.description,
+                status: story.status,
+                priority: story.priority,
+                progress: story.progress,
+                assigned_to_user: story.assigned_user_id
+                    ? { id: story.assigned_user_id, display_name: story.assigned_user_name }
+                    : null,
+                planned_completion_date: story.planned_completion_date,
+                actual_completion_date: story.actual_completion_date,
+                risk_and_countermeasure: story.risk_and_countermeasure,
+                estimated_hours: story.estimated_hours,
+                tasks: tasksResult.rows.map((task: any) => ({
+                    id: task.id,
+                    title: task.title,
+                    description: task.description,
+                    status: task.status,
+                    priority: task.priority,
+                    size: task.size,
+                    progress: task.progress,
+                    assigned_to_user: task.assigned_user_id
+                        ? { id: task.assigned_user_id, display_name: task.assigned_user_name }
+                        : null,
+                    risk_and_countermeasure: task.risk_and_countermeasure,
+                    estimated_hours: task.estimated_hours
+                }))
+            });
+        }
+        const totalStories = stories.length;
+        const completedStories = stories.filter((s: any) => s.status === 'completed').length;
+        const completion_rate = totalStories > 0
+            ? Math.round((completedStories / totalStories) * 100)
+            : 0;
+        projects.push({
+            id: project.id,
+            name: project.name,
+            department_name: project.department_name,
+            project_type_name: project.project_type_name,
+            stories,
+            completion_rate
+        });
+    }
+    const nextSprintQuery = `
+        SELECT id, name, start_date
+        FROM sprints
+        WHERE start_date > (SELECT start_date FROM sprints WHERE id = $1)
+            AND status IN ('planned', 'current')
+        ORDER BY start_date ASC
+        LIMIT 1
+    `;
+    const nextSprintResult = await pool.query(nextSprintQuery, [sprintId]);
+    let next_sprint: any = { id: null, name: null, planned_stories: [] };
+    if (nextSprintResult.rows.length > 0) {
+        const nextSprintData = nextSprintResult.rows[0];
+        const nextStoriesQuery = `
+            SELECT s.id, s.title, ss.planned_completion_date
+            FROM stories s
+            JOIN sprint_stories ss ON s.id = ss.story_id
+            WHERE ss.sprint_id = $1
+            ${userId ? 'AND ss.assigned_to = $2' : ''}
+            ORDER BY ss.planned_completion_date NULLS LAST, s.id
+        `;
+        const nextStoriesParams = userId ? [nextSprintData.id, userId] : [nextSprintData.id];
+        const nextStoriesResult = await pool.query(nextStoriesQuery, nextStoriesParams);
+        next_sprint = {
+            id: nextSprintData.id,
+            name: nextSprintData.name,
+            planned_stories: nextStoriesResult.rows
+        };
+    }
+    return { sprint, projects, next_sprint };
+}
 
 export default router;

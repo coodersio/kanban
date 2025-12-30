@@ -5,9 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Story, Member } from "@/types";
-import { User, Flag, MessageSquare } from 'lucide-react';
+import type { Story, Member } from "@/types";
+import { User, Flag, MessageSquare, Calendar as CalendarIcon, Clock, AlertTriangle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { zhCN } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 import { Badge } from "@/components/ui/badge";
 
@@ -27,6 +32,9 @@ export default function StoryDetailsDrawer({ story, open, onClose, onSave, membe
     const [status, setStatus] = useState('not_started');
     const [assignedTo, setAssignedTo] = useState<number | null>(null);
     const [description, setDescription] = useState('');
+    const [plannedDate, setPlannedDate] = useState<Date | undefined>(undefined);
+    const [estimatedHours, setEstimatedHours] = useState<number | undefined>(undefined);
+    const [riskCountermeasure, setRiskCountermeasure] = useState('');
 
     const isAdmin = currentUser?.role === 'admin';
     const isDeveloper = currentUser?.role === 'developer';
@@ -44,6 +52,9 @@ export default function StoryDetailsDrawer({ story, open, onClose, onSave, membe
             setStatus(story.status || 'not_started');
             setAssignedTo(story.assigned_to_user?.id || null);
             setDescription((story as any).description || '');
+            setPlannedDate(story.planned_completion_date ? new Date(story.planned_completion_date) : undefined);
+            setEstimatedHours(story.estimated_hours || undefined);
+            setRiskCountermeasure(story.risk_and_countermeasure || '');
 
             // Fetch History
             fetch(`/api/workbench/story/${story.id}/history`)
@@ -63,7 +74,10 @@ export default function StoryDetailsDrawer({ story, open, onClose, onSave, membe
             title,
             status,
             assignedTo,
-            description
+            description,
+            planned_completion_date: plannedDate?.toISOString().split('T')[0] || null,
+            estimated_hours: estimatedHours || null,
+            risk_and_countermeasure: riskCountermeasure
         });
         onClose();
     };
@@ -171,6 +185,69 @@ export default function StoryDetailsDrawer({ story, open, onClose, onSave, membe
                                     className="min-h-[200px] border-none bg-secondary/20 focus:bg-secondary/40 focus:ring-0 resize-none p-4 text-sm"
                                 />
                             </div>
+
+                            {/* NEW FIELDS */}
+                            <div className="grid grid-cols-2 gap-6 pt-2 border-t">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                                        <CalendarIcon className="w-3.5 h-3.5" /> 计划完成日期 *
+                                    </Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant={"ghost"}
+                                                className={cn(
+                                                    "w-full justify-start text-left font-medium h-9 px-2 -ml-2 hover:bg-secondary/50",
+                                                    !plannedDate && "text-muted-foreground"
+                                                )}
+                                                disabled={!canEdit}
+                                            >
+                                                {plannedDate ? format(plannedDate, "PPP", { locale: zhCN }) : <span>设置计划完成日期</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={plannedDate}
+                                                onSelect={setPlannedDate}
+                                                initialFocus
+                                                locale={zhCN}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="estimated-hours" className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                                        <Clock className="w-3.5 h-3.5" /> 预估工时（小时）
+                                    </Label>
+                                    <Input
+                                        id="estimated-hours"
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        value={estimatedHours || ''}
+                                        onChange={(e) => setEstimatedHours(e.target.value ? parseFloat(e.target.value) : undefined)}
+                                        placeholder="例如: 8.5"
+                                        disabled={!canEdit}
+                                        className="h-9"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 pt-2 border-t">
+                                <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-orange-500" />
+                                    风险及应对措施
+                                </Label>
+                                <Textarea
+                                    value={riskCountermeasure}
+                                    onChange={(e) => setRiskCountermeasure(e.target.value)}
+                                    disabled={!canEdit}
+                                    placeholder="描述潜在风险和应对措施..."
+                                    className="min-h-[100px] border-none bg-secondary/20 focus:bg-secondary/40 focus:ring-0 resize-none p-4 text-sm"
+                                />
+                            </div>
                         </>
                     ) : (
                         <div className="space-y-6">
@@ -217,12 +294,4 @@ export default function StoryDetailsDrawer({ story, open, onClose, onSave, membe
             </SheetContent>
         </Sheet>
     );
-}
-
-// Utility for classNames
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs))
 }
