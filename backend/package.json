@@ -8,7 +8,8 @@
         "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
         "build": "tsc",
         "migrate:up": "node dist/scripts/migrate.js up",
-        "migrate:down": "node dist/scripts/migrate.js down"
+        "migrate:down": "node dist/scripts/migrate.js down",
+        "seed": "ts-node src/scripts/seed.ts"
     },
     "keywords": [],
     "author": "",
