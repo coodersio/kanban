@@ -41,14 +41,11 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
     const [taskSprintId, setTaskSprintId] = useState<number>(-1);
 
     // Permission Logic
-    const isExternal = currentUser?.role === 'external';
     const isAdmin = currentUser?.role === 'admin';
     const isDeveloper = currentUser?.role === 'developer';
+    const isExternal = currentUser?.role === 'external';
 
-    const isCreator = task?.created_by === currentUser?.id;
-    const isAssignee = task?.assigned_to_user?.id === currentUser?.id;
-
-    const canEdit = isAdmin || (isDeveloper && (isCreator || isAssignee));
+    const canEdit = isAdmin || isDeveloper; // Admin and Developer can edit, External cannot
 
     useEffect(() => {
         if (task) {

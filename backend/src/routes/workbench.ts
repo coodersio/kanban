@@ -319,31 +319,7 @@ router.post('/task/status', blockExternal, async (req, res) => {
     }
 
     try {
-        // Permission Check for Developer
-        if (role === 'developer') {
-            // Can only update if assigned to me.
-            // If creating (moving to a column for first time?), I must be the assignee.
-            // BUT, the UI drag drop usually doesn't set assignee, it just moves column.
-            // If the task is NOT assigned to me, I cannot move it.
-
-            // Check ownership
-            const check = await pool.query(
-                'SELECT assigned_to FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
-                [sprintId, taskId]
-            );
-            if (check.rows.length > 0) {
-                if (check.rows[0].assigned_to !== userId) {
-                    return res.status(403).json({ message: 'You can only move your own tasks' });
-                }
-            }
-            // If not in sprint_tasks yet, logic below will insert. 
-            // Logic below inserts with status. Assignee? 
-            // In current 'INSERT' logic (Lines 218), it copies from 'tasks' table? 
-            // No, it inserts with NULL assignee if not provided?
-            // Actually, lines 218 don't provide assignee. It defaults to null.
-            // Developers shouldn't be grabbing unassigned tasks by just moving them unless we Auto-Assign.
-            // For now, let's block if not already assigned.
-        }
+        // Developers and Admins can update task status (already blocked external users above)
 
         // Check if exists
         const check = await pool.query(
@@ -431,20 +407,7 @@ router.post('/story/status', blockExternal, async (req, res) => {
     }
 
     try {
-        // Permission Check for Developer
-        if (role === 'developer') {
-            // Check if story is assigned to me or created by me
-            const check = await pool.query(
-                'SELECT assigned_to FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
-                [sprintId, storyId]
-            );
-            if (check.rows.length > 0) {
-                const assignedTo = check.rows[0].assigned_to;
-                if (assignedTo !== null && assignedTo !== userId) {
-                    return res.status(403).json({ message: 'You can only move your own stories' });
-                }
-            }
-        }
+        // Developers and Admins can update story status (already blocked external users above)
 
         // Check if exists and get current status
         const check = await pool.query(
@@ -647,23 +610,7 @@ router.post('/task/update', blockExternal, async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Update Reference Task
-        // Verify Permission for Reference Update
-        if (role === 'developer') {
-            const taskCheck = await client.query('SELECT created_by FROM tasks WHERE id = $1', [finalTaskId]);
-            // Also check current assignee in sprint_tasks for the specific sprint
-            const stCheck = await client.query(
-                'SELECT assigned_to FROM sprint_tasks WHERE task_id = $1 AND sprint_id = $2',
-                [finalTaskId, sprintId]
-            );
-
-            const isCreator = taskCheck.rows[0]?.created_by === userId;
-            const isAssignee = stCheck.rows[0]?.assigned_to === userId;
-
-            if (!isCreator && !isAssignee) {
-                await client.query('ROLLBACK');
-                return res.status(403).json({ message: 'You can only edit your own tasks' });
-            }
-        }
+        // Developers and Admins can edit all tasks (already blocked external users above)
 
         await client.query(
             'UPDATE tasks SET title = $1, description = $2, priority = $3, estimated_hours = $4 WHERE id = $5',
@@ -747,13 +694,7 @@ router.post('/story/update', blockExternal, async (req, res) => {
 
     if (role === 'external') return res.status(403).json({ message: 'Forbidden' });
 
-    if (role === 'developer') {
-        // Can only edit if created by self
-        const check = await pool.query('SELECT created_by FROM stories WHERE id = $1', [storyId]);
-        if (check.rows[0]?.created_by !== userId) {
-            return res.status(403).json({ message: 'You can only edit your own stories' });
-        }
-    }
+    // Developers and Admins can edit all stories (already blocked external users above)
 
     const client = await pool.connect();
     try {
