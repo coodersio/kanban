@@ -220,34 +220,22 @@ router.get('/board', async (req, res) => {
         `;
         const storiesParams: any[] = [sprintId, projectId];
 
-        // Developer: Can see all stories in project/sprint, but edit is restricted (frontend).
-        // External: Can see all stories. 
-        // Filter logic currently applies to BOARD columns/swimlanes via memberId.
-
-        let filterMemberId = memberId;
-        if (role === 'developer') {
-            // Requirement: "Developer User: Can only see tasks assigned to them"
-            // Does this apply to Stories? "Can see stories they participate in" or all?
-            // Architecture 6.4.2: "Can see stories they participate in".
-            // For simplicity and context, usually Developers need to see all stories to know what to pick.
-            // But let's stick to "Can see assigned tasks" strictly. 
-            // For Stories, let's allow seeing ALL stories for now to avoid empty board confusion, 
-            // as tasks are children of stories. Hiding stories might hide the tasks.
-        }
-
-        if (filterMemberId && filterMemberId !== '0') {
+        // Optional filter by member (for frontend filtering)
+        // All users should see the same data by default
+        if (memberId && memberId !== '0') {
             storiesQuery += ` AND (ss.assigned_to = $3 OR EXISTS (
-                SELECT 1 FROM sprint_tasks st 
+                SELECT 1 FROM sprint_tasks st
                 WHERE st.story_id = s.id AND st.sprint_id = $1 AND st.assigned_to = $3
             ))`;
-            storiesParams.push(filterMemberId);
+            storiesParams.push(memberId);
         }
 
         storiesQuery += ` ORDER BY ss.order_index ASC, s.id ASC`;
         const storiesResult = await pool.query(storiesQuery, storiesParams);
 
-        // TASK VISIBILITY
-        // Architecture: Developer "Only see tasks assigned to current user"
+        // TASK QUERY
+        // All users see the same tasks (role-based filtering removed)
+        // Optional filtering by memberId for frontend member filter
 
         let tasksQuery = `
             SELECT
@@ -267,11 +255,9 @@ router.get('/board', async (req, res) => {
         `;
         const params: any[] = [sprintId, projectId];
 
-        // Force filter for developers
-        if (role === 'developer') {
-            tasksQuery += ` AND st.assigned_to = $3`;
-            params.push(userId);
-        } else if (memberId && memberId !== '0') {
+        // Optional filter by member (for frontend filtering)
+        // All users should see the same data by default
+        if (memberId && memberId !== '0') {
             tasksQuery += ` AND st.assigned_to = $3`;
             params.push(memberId);
         }
