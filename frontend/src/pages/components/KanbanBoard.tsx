@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import type { BoardData, Story, Task } from "@/types";
+import type { BoardData, Story, Task, Sprint } from "@/types";
 import StoryCard from '@/pages/components/StoryCard';
 import StoryDetailDialog from '@/pages/components/StoryDetailDialog';
 import { cn } from "@/lib/utils";
@@ -25,7 +25,9 @@ function KanbanColumn({
     projectId,
     members,
     onTaskUpdate,
-    onEditTask
+    onEditTask,
+    sprints,
+    onStoryMove
 }: {
     id: string,
     status: string,
@@ -35,7 +37,9 @@ function KanbanColumn({
     projectId: number,
     members: any[],
     onTaskUpdate: () => void,
-    onEditTask?: (task: any) => void
+    onEditTask?: (task: any) => void,
+    sprints?: Sprint[],
+    onStoryMove?: () => void
 }) {
     const { setNodeRef, isOver } = useDroppable({ id });
     const config = STATUS_CONFIG[status] || STATUS_CONFIG['not_started'];
@@ -72,6 +76,8 @@ function KanbanColumn({
                         members={members}
                         onTaskUpdate={onTaskUpdate}
                         onEditTask={onEditTask}
+                        sprints={sprints}
+                        onStoryMove={onStoryMove}
                     />
                 ))}
 
@@ -92,7 +98,9 @@ export default function KanbanBoard({
     onEditTask,
     onEditStory,
     filterMemberId,
-    members
+    members,
+    sprints,
+    onStoryMove
 }: {
     sprintId: string,
     projectId: number,
@@ -100,7 +108,9 @@ export default function KanbanBoard({
     onEditTask?: (task: any) => void,
     onEditStory?: (story: Story) => void,
     filterMemberId?: number | null,
-    members?: any[]
+    members?: any[],
+    sprints?: Sprint[],
+    onStoryMove?: () => void
 }) {
     const [data, setData] = useState<BoardData>({ stories: [], tasks: [], members: [] });
     const [activeId, setActiveId] = useState<number | null>(null);
@@ -212,6 +222,8 @@ export default function KanbanBoard({
                             members={members || data.members}
                             onTaskUpdate={fetchData}
                             onEditTask={onEditTask}
+                            sprints={sprints}
+                            onStoryMove={onStoryMove}
                         />
                         <KanbanColumn
                             id="column::in_progress"
@@ -223,6 +235,8 @@ export default function KanbanBoard({
                             members={members || data.members}
                             onTaskUpdate={fetchData}
                             onEditTask={onEditTask}
+                            sprints={sprints}
+                            onStoryMove={onStoryMove}
                         />
                         <KanbanColumn
                             id="column::completed"
@@ -234,6 +248,8 @@ export default function KanbanBoard({
                             members={members || data.members}
                             onTaskUpdate={fetchData}
                             onEditTask={onEditTask}
+                            sprints={sprints}
+                            onStoryMove={onStoryMove}
                         />
                     </div>
 
@@ -261,6 +277,8 @@ export default function KanbanBoard({
                                 members={members || data.members}
                                 onTaskUpdate={fetchData}
                                 onEditTask={onEditTask}
+                                sprints={sprints}
+                                onStoryMove={onStoryMove}
                             />
                         </div>
                     ) : null}

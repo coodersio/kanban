@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import type { Story, Task, Member } from "@/types";
+import type { Story, Task, Member, Sprint } from "@/types";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, Clock, ChevronDown, ChevronRight, User } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, ChevronDown, ChevronRight, User, MoreVertical } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 interface StoryCardProps {
     story: Story;
@@ -16,6 +18,8 @@ interface StoryCardProps {
     members?: Member[];
     onTaskUpdate?: () => void;
     onEditTask?: (task: Task) => void;
+    sprints?: Sprint[];
+    onStoryMove?: () => void;
 }
 
 // Generate avatar color based on user ID
@@ -45,7 +49,9 @@ export default function StoryCard({
     projectId,
     members = [],
     onTaskUpdate,
-    onEditTask
+    onEditTask,
+    sprints = [],
+    onStoryMove
 }: StoryCardProps) {
     const [isTasksExpanded, setIsTasksExpanded] = useState(false);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -139,6 +145,41 @@ export default function StoryCard({
         }
     };
 
+    const handleMoveStory = async (toSprintId: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        if (!sprintId || !projectId) {
+            alert('Missing sprint or project information');
+            return;
+        }
+
+        const fromSprintId = parseInt(sprintId);
+        if (toSprintId === fromSprintId) return;
+
+        try {
+            const res = await fetch('/api/workbench/story/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    storyId: story.id,
+                    fromSprintId,
+                    toSprintId,
+                    projectId
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to move story');
+            }
+
+            alert('Story moved successfully!');
+            onStoryMove?.();
+        } catch (err) {
+            console.error('Error moving story:', err);
+            alert('Failed to move story. Please try again.');
+        }
+    };
+
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'completed':
@@ -214,13 +255,46 @@ export default function StoryCard({
                             </div>
                         )}
                     </div>
-                    {story.assigned_to_user && (
-                        <Avatar className="w-6 h-6 flex-shrink-0">
-                            <AvatarFallback className={cn("text-[9px] font-semibold", getAvatarColor(story.assigned_to_user.id))}>
-                                {story.assigned_to_user.display_name.charAt(0)}
-                            </AvatarFallback>
-                        </Avatar>
-                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                        {story.assigned_to_user && (
+                            <Avatar className="w-6 h-6">
+                                <AvatarFallback className={cn("text-[9px] font-semibold", getAvatarColor(story.assigned_to_user.id))}>
+                                    {story.assigned_to_user.display_name.charAt(0)}
+                                </AvatarFallback>
+                            </Avatar>
+                        )}
+                        {/* Move Menu */}
+                        {!isOverlay && sprints.length > 0 && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-secondary">
+                                        <MoreVertical className="w-3.5 h-3.5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                    <DropdownMenuItem disabled className="text-xs font-semibold">
+                                        移动到迭代
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        className="text-xs"
+                                        onClick={(e) => handleMoveStory(-1, e)}
+                                    >
+                                        📋 Backlog
+                                    </DropdownMenuItem>
+                                    {sprints.filter(s => s.id !== -1).map(s => (
+                                        <DropdownMenuItem
+                                            key={s.id}
+                                            className="text-xs"
+                                            onClick={(e) => handleMoveStory(s.id, e)}
+                                        >
+                                            {s.name} {s.status === 'active' && '●'}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+                    </div>
                 </div>
 
                 {/* Task Count with Expand Icon */}

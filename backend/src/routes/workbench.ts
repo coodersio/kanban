@@ -920,4 +920,134 @@ router.get('/story/:id/history', async (req, res) => {
     }
 });
 
+// Move Task to another Sprint (including Backlog)
+router.post('/task/move', async (req, res) => {
+    const { taskId, fromSprintId, toSprintId, storyId, projectId } = req.body;
+
+    if (taskId === undefined || toSprintId === undefined || !storyId || !projectId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Ensure target sprint has Story snapshot
+        const storyCheck = await client.query(
+            'SELECT * FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
+            [toSprintId, storyId]
+        );
+
+        if (storyCheck.rows.length === 0) {
+            // Create Story snapshot in target sprint
+            await client.query(
+                'INSERT INTO sprint_stories (sprint_id, story_id, project_id, status) VALUES ($1, $2, $3, $4)',
+                [toSprintId, storyId, projectId, 'not_started']
+            );
+        }
+
+        // 2. Check if target sprint already has this Task snapshot
+        const taskCheck = await client.query(
+            'SELECT * FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
+            [toSprintId, taskId]
+        );
+
+        if (taskCheck.rows.length > 0) {
+            // Target already has Task, delete source snapshot (merge)
+            await client.query(
+                'DELETE FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
+                [fromSprintId, taskId]
+            );
+        } else {
+            // Target doesn't have Task, UPDATE sprint_id
+            await client.query(
+                'UPDATE sprint_tasks SET sprint_id = $1 WHERE sprint_id = $2 AND task_id = $3',
+                [toSprintId, fromSprintId, taskId]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error moving task:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
+
+// Move entire Story (and all its Tasks) to another Sprint
+router.post('/story/move', async (req, res) => {
+    const { storyId, fromSprintId, toSprintId, projectId } = req.body;
+
+    if (!storyId || toSprintId === undefined || !projectId) {
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Handle Story snapshot
+        const storyCheck = await client.query(
+            'SELECT * FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
+            [toSprintId, storyId]
+        );
+
+        if (storyCheck.rows.length > 0) {
+            // Target already has Story snapshot, delete source
+            await client.query(
+                'DELETE FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',
+                [fromSprintId, storyId]
+            );
+        } else {
+            // Target doesn't have Story, UPDATE sprint_id
+            await client.query(
+                'UPDATE sprint_stories SET sprint_id = $1 WHERE sprint_id = $2 AND story_id = $3',
+                [toSprintId, fromSprintId, storyId]
+            );
+        }
+
+        // 2. Get all Tasks from source sprint
+        const tasksResult = await client.query(
+            'SELECT task_id FROM sprint_tasks WHERE sprint_id = $1 AND story_id = $2',
+            [fromSprintId, storyId]
+        );
+
+        // 3. Move each Task
+        for (const row of tasksResult.rows) {
+            const taskId = row.task_id;
+
+            const taskCheck = await client.query(
+                'SELECT * FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
+                [toSprintId, taskId]
+            );
+
+            if (taskCheck.rows.length > 0) {
+                // Target already has Task, delete source
+                await client.query(
+                    'DELETE FROM sprint_tasks WHERE sprint_id = $1 AND task_id = $2',
+                    [fromSprintId, taskId]
+                );
+            } else {
+                // Target doesn't have Task, UPDATE sprint_id
+                await client.query(
+                    'UPDATE sprint_tasks SET sprint_id = $1 WHERE sprint_id = $2 AND task_id = $3',
+                    [toSprintId, fromSprintId, taskId]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error moving story:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
+
 export default router;

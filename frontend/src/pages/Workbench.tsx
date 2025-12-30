@@ -77,6 +77,7 @@ export default function Workbench() {
     const [storyPriority, setStoryPriority] = useState('medium');
     const [storyPlannedDate, setStoryPlannedDate] = useState<Date | undefined>(undefined);
     const [filterMemberId, setFilterMemberId] = useState<number | null>(null);
+    const [createSprintId, setCreateSprintId] = useState<string>(''); // For create form sprint selection
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -237,13 +238,14 @@ export default function Workbench() {
     }, [selectedSprintId, selectedProjectId, refreshTrigger]);
 
     const handleAddStory = async () => {
-        if (!newTitle || !selectedSprintId || !selectedProjectId) return;
+        const targetSprintId = createSprintId || selectedSprintId;
+        if (!newTitle || !targetSprintId || !selectedProjectId) return;
         try {
             const res = await fetch('/api/workbench/story', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sprintId: selectedSprintId,
+                    sprintId: targetSprintId,
                     projectId: selectedProjectId,
                     title: newTitle,
                     description: newDesc,
@@ -309,13 +311,14 @@ export default function Workbench() {
     }, [isStoryDialogOpen, activeStoryTab, storyReuseSearch, selectedProjectId, selectedSprintId]);
 
     const handleAddTask = async () => {
-        if (!newTitle || !selectedSprintId || !selectedProjectId) return;
+        const targetSprintId = createSprintId || selectedSprintId;
+        if (!newTitle || !targetSprintId || !selectedProjectId) return;
         try {
             const res = await fetch('/api/workbench/task', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sprintId: selectedSprintId,
+                    sprintId: targetSprintId,
                     projectId: selectedProjectId,
                     storyId: targetStoryId,
                     title: newTitle,
@@ -638,7 +641,13 @@ export default function Workbench() {
                                 <SelectValue placeholder="选择迭代..." />
                             </SelectTrigger>
                             <SelectContent className="shadow-xl border-border/60">
-                                {sprints.map(s => (
+                                {/* Backlog Option */}
+                                <SelectItem value="-1">
+                                    <div className="flex items-center gap-2">
+                                        <span>📋 Backlog</span>
+                                    </div>
+                                </SelectItem>
+                                {sprints.filter(s => s.id !== -1).map(s => (
                                     <SelectItem key={s.id} value={s.id.toString()}>
                                         <div className="flex items-center gap-2">
                                             <span>{s.name}</span>
@@ -773,6 +782,8 @@ export default function Workbench() {
                                 onAddTask={openAddTaskDialog}
                                 onEditTask={openEditTask}
                                 onEditStory={openEditStory}
+                                sprints={sprints}
+                                onStoryMove={() => setRefreshTrigger(prev => prev + 1)}
                             />
                         ) : (
                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
@@ -854,6 +865,22 @@ export default function Workbench() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="text-sm font-medium">所属迭代</Label>
+                                <Select value={createSprintId || selectedSprintId} onValueChange={setCreateSprintId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="选择迭代" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="-1">Backlog</SelectItem>
+                                        {sprints.filter(s => s.id !== -1).map(s => (
+                                            <SelectItem key={s.id} value={s.id.toString()}>
+                                                {s.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="grid gap-2">
                                 <Label className="text-sm font-medium flex items-center gap-2">
@@ -1137,6 +1164,22 @@ export default function Workbench() {
                                         {stories.map(s => (
                                             <SelectItem key={s.id} value={s.id.toString()}>
                                                 {s.title}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label className="text-sm font-medium">所属迭代</Label>
+                                <Select value={createSprintId || selectedSprintId} onValueChange={setCreateSprintId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="选择迭代" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="-1">Backlog</SelectItem>
+                                        {sprints.filter(s => s.id !== -1).map(s => (
+                                            <SelectItem key={s.id} value={s.id.toString()}>
+                                                {s.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1536,6 +1579,7 @@ export default function Workbench() {
                 currentUser={currentUser}
                 sprintId={selectedSprintId ? parseInt(selectedSprintId) : undefined}
                 projectId={selectedProjectId || undefined}
+                sprints={sprints}
             />
 
             {/* Story Details Drawer */}

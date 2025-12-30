@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import type { Task, Member } from "@/types";
-import { User, Tag, Hash, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock } from 'lucide-react';
+import type { Task, Member, Sprint } from "@/types";
+import { User, Tag, Hash, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock, GitBranch } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -24,9 +24,10 @@ interface Props {
     currentUser?: { id: number, role: string, displayName: string };
     sprintId?: number;
     projectId?: number;
+    sprints?: Sprint[];
 }
 
-export default function TaskDetailsDrawer({ task, open, onClose, onSave, members, currentUser, sprintId, projectId }: Props) {
+export default function TaskDetailsDrawer({ task, open, onClose, onSave, members, currentUser, sprintId, projectId, sprints = [] }: Props) {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [status, setStatus] = useState<Task['status']>('not_started');
@@ -37,6 +38,7 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
     const [progress, setProgress] = useState(0);
     const [risk, setRisk] = useState('');
     const [estimatedHours, setEstimatedHours] = useState<number | undefined>(undefined);
+    const [taskSprintId, setTaskSprintId] = useState<number>(-1);
 
     // Permission Logic
     const isExternal = currentUser?.role === 'external';
@@ -60,8 +62,43 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
             setProgress(task.progress || 0);
             setRisk(task.risk_and_countermeasure || '');
             setEstimatedHours(task.estimated_hours || undefined);
+            setTaskSprintId(sprintId || -1);
         }
-    }, [task, open]);
+    }, [task, open, sprintId]);
+
+    const handleSprintChange = async (newSprintId: string) => {
+        if (!task || !projectId) return;
+
+        const toSprintId = parseInt(newSprintId);
+        const fromSprintId = taskSprintId;
+
+        if (toSprintId === fromSprintId) return;
+
+        try {
+            const res = await fetch('/api/workbench/task/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    taskId: task.id,
+                    fromSprintId,
+                    toSprintId,
+                    storyId: task.story_id,
+                    projectId
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to move task');
+            }
+
+            setTaskSprintId(toSprintId);
+            // Optionally notify parent to refresh data
+            alert('Task moved successfully!');
+        } catch (err) {
+            console.error('Error moving task:', err);
+            alert('Failed to move task. Please try again.');
+        }
+    };
 
     const handleSave = () => {
         if (!task) return;
@@ -214,6 +251,33 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                                 </PopoverContent>
                             </Popover>
                         </div>
+                    </div>
+
+                    {/* Sprint Selection */}
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-normal text-muted-foreground flex items-center gap-2">
+                            <GitBranch className="w-3.5 h-3.5" /> 所属迭代
+                        </Label>
+                        <Select value={taskSprintId.toString()} onValueChange={handleSprintChange} disabled={!canEdit}>
+                            <SelectTrigger className="h-9 border-transparent hover:bg-secondary/50 transition-colors focus:ring-0 px-2 -ml-2 font-medium">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="-1">
+                                    <div className="flex items-center gap-2">
+                                        <span>📋 Backlog</span>
+                                    </div>
+                                </SelectItem>
+                                {sprints.filter(s => s.id !== -1).map(s => (
+                                    <SelectItem key={s.id} value={s.id.toString()}>
+                                        <div className="flex items-center gap-2">
+                                            <span>{s.name}</span>
+                                            {s.status === 'active' && <span className="text-[10px] text-emerald-600">●</span>}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Progress */}
