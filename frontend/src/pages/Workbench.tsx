@@ -788,10 +788,15 @@ export default function Workbench() {
                     {/* Member Filter */}
                     <div className="flex items-center pl-6 border-l gap-3">
                         <Button
-                            variant={filterMemberId === null ? "secondary" : "ghost"}
+                            variant="ghost"
                             size="sm"
                             onClick={() => setFilterMemberId(null)}
-                            className="h-8 px-3 text-xs font-medium rounded-md"
+                            className={cn(
+                                "h-8 px-3 text-xs font-medium rounded-md transition-all border",
+                                filterMemberId === null
+                                    ? "border-black"
+                                    : "border-transparent hover:bg-secondary"
+                            )}
                         >
                             全部
                         </Button>
@@ -805,8 +810,8 @@ export default function Workbench() {
                                                 className={cn(
                                                     "w-8 h-8 cursor-pointer transition-all duration-200",
                                                     m.id === filterMemberId
-                                                        ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-white scale-110 shadow-lg"
-                                                        : "hover:scale-105 opacity-75 hover:opacity-100"
+                                                        ? "ring-2 ring-black ring-offset-2 ring-offset-white"
+                                                        : "opacity-75 hover:opacity-100"
                                                 )}
                                             >
                                                 {m.avatar_url && !m.avatar_url.includes('pravatar.cc') && (
@@ -1745,6 +1750,7 @@ export default function Workbench() {
                 currentUser={currentUser}
                 sprintId={selectedSprintId ? parseInt(selectedSprintId) : undefined}
                 projectId={selectedProjectId || undefined}
+                sprints={sprints}
             />
         </div >
     );

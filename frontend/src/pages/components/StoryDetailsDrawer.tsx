@@ -439,17 +439,9 @@ export default function StoryDetailsDrawer({
     return (
         <>
             <Sheet open={open} onOpenChange={onClose}>
-                <SheetContent className="sm:max-w-md w-full border-l shadow-xl p-0 flex flex-col bg-white">
-                    <SheetHeader className="px-6 py-4 border-b flex flex-col space-y-4">
-                        <div className="space-y-2">
-                            <Input
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                disabled={!canEdit}
-                                className="text-xl font-semibold border-none shadow-none focus-visible:ring-0 p-0 h-auto placeholder:text-muted-foreground/50"
-                                placeholder="关键节点名称"
-                            />
-                        </div>
+                <SheetContent className="sm:max-w-[600px] w-full border-l shadow-xl p-0 flex flex-col bg-white">
+                    <SheetHeader className="px-6 py-4 border-b">
+                        <h2 className="text-lg font-semibold">关键计划节点</h2>
 
                         <nav className="flex gap-6 -mb-4">
                             <button
@@ -488,6 +480,19 @@ export default function StoryDetailsDrawer({
                     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
                         {activeTab === 'details' && (
                             <>
+                                {/* Story Title */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-normal text-muted-foreground">节点标题</Label>
+                                    <Input
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        disabled={!canEdit}
+                                        className="text-base font-medium"
+                                        placeholder="关键节点名称"
+                                        autoFocus={false}
+                                    />
+                                </div>
+
                                 {/* Status & Priority */}
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-1.5">
@@ -679,7 +684,6 @@ export default function StoryDetailsDrawer({
                                 {/* Risk and Countermeasure */}
                                 <div className="space-y-2 pt-2 border-t">
                                     <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                                        <AlertTriangle className="w-4 h-4 text-orange-500" />
                                         风险及应对措施
                                     </Label>
                                     <Textarea
@@ -729,177 +733,177 @@ export default function StoryDetailsDrawer({
 
                                 {/* Task List Content */}
                                 <div className="space-y-2">
-                                            {/* Add Task Form */}
-                                            {isAddingTask && (
-                                                <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-3">
-                                                    <div className="grid gap-2">
-                                                        <Label className="text-xs">任务标题 *</Label>
-                                                        <Input
-                                                            placeholder="输入任务标题..."
-                                                            value={newTaskTitle}
-                                                            onChange={(e) => setNewTaskTitle(e.target.value)}
-                                                            className="h-9 text-sm"
-                                                        />
-                                                    </div>
-                                                    <div className="grid grid-cols-3 gap-2">
-                                                        <div className="grid gap-2">
-                                                            <Label className="text-xs">负责人</Label>
-                                                            <Select value={newTaskAssignee?.toString() || '0'} onValueChange={(v) => setNewTaskAssignee(v === '0' ? null : parseInt(v))}>
-                                                                <SelectTrigger className="h-9 text-xs">
-                                                                    <SelectValue placeholder="选择" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="0">待定</SelectItem>
-                                                                    {members.map(m => (
-                                                                        <SelectItem key={m.id} value={m.id.toString()}>
-                                                                            {m.display_name}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                        <div className="grid gap-2">
-                                                            <Label className="text-xs">优先级</Label>
-                                                            <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-                                                                <SelectTrigger className="h-9 text-xs">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="高">高</SelectItem>
-                                                                    <SelectItem value="中">中</SelectItem>
-                                                                    <SelectItem value="低">低</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                        <div className="grid gap-2">
-                                                            <Label className="text-xs">工时（小时）</Label>
-                                                            <Input
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.5"
-                                                                placeholder="例如：8"
-                                                                value={newTaskEstimatedHours || ''}
-                                                                onChange={(e) => setNewTaskEstimatedHours(e.target.value ? parseFloat(e.target.value) : undefined)}
-                                                                className="h-9 text-xs"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid gap-2">
-                                                        <Label className="text-xs">任务描述</Label>
-                                                        <Textarea
-                                                            placeholder="输入任务描述..."
-                                                            value={newTaskDesc}
-                                                            onChange={(e) => setNewTaskDesc(e.target.value)}
-                                                            className="min-h-[60px] text-sm"
-                                                        />
-                                                    </div>
-                                                    <div className="flex gap-2 justify-end">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => setIsAddingTask(false)}
-                                                            className="h-8 text-xs"
-                                                        >
-                                                            取消
-                                                        </Button>
-                                                        <Button
-                                                            onClick={handleAddTask}
-                                                            size="sm"
-                                                            className="h-8 text-xs"
-                                                        >
-                                                            创建任务
-                                                        </Button>
-                                                    </div>
+                                    {/* Add Task Form */}
+                                    {isAddingTask && (
+                                        <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-3">
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">任务标题 *</Label>
+                                                <Input
+                                                    placeholder="输入任务标题..."
+                                                    value={newTaskTitle}
+                                                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                                                    className="h-9 text-sm"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs">负责人</Label>
+                                                    <Select value={newTaskAssignee?.toString() || '0'} onValueChange={(v) => setNewTaskAssignee(v === '0' ? null : parseInt(v))}>
+                                                        <SelectTrigger className="h-9 text-xs">
+                                                            <SelectValue placeholder="选择" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="0">待定</SelectItem>
+                                                            {members.map(m => (
+                                                                <SelectItem key={m.id} value={m.id.toString()}>
+                                                                    {m.display_name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
                                                 </div>
-                                            )}
-
-                                            {/* Task List */}
-                                            {tasks.map((task) => (
-                                                <div
-                                                    key={task.id}
-                                                    className="bg-card border border-border rounded-lg p-3 hover:border-primary/30 transition-all"
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs">优先级</Label>
+                                                    <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+                                                        <SelectTrigger className="h-9 text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="高">高</SelectItem>
+                                                            <SelectItem value="中">中</SelectItem>
+                                                            <SelectItem value="低">低</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs">工时（小时）</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.5"
+                                                        placeholder="例如：8"
+                                                        value={newTaskEstimatedHours || ''}
+                                                        onChange={(e) => setNewTaskEstimatedHours(e.target.value ? parseFloat(e.target.value) : undefined)}
+                                                        className="h-9 text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs">任务描述</Label>
+                                                <Textarea
+                                                    placeholder="输入任务描述..."
+                                                    value={newTaskDesc}
+                                                    onChange={(e) => setNewTaskDesc(e.target.value)}
+                                                    className="min-h-[60px] text-sm"
+                                                />
+                                            </div>
+                                            <div className="flex gap-2 justify-end">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setIsAddingTask(false)}
+                                                    className="h-8 text-xs"
                                                 >
-                                                    <div className="flex items-start gap-3">
-                                                        {/* Status Toggle */}
-                                                        <button
-                                                            onClick={() => handleToggleTaskStatus(task)}
-                                                            className="mt-0.5 flex-shrink-0 hover:scale-110 transition-transform"
+                                                    取消
+                                                </Button>
+                                                <Button
+                                                    onClick={handleAddTask}
+                                                    size="sm"
+                                                    className="h-8 text-xs"
+                                                >
+                                                    创建任务
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Task List */}
+                                    {tasks.map((task) => (
+                                        <div
+                                            key={task.id}
+                                            className="bg-card border border-border rounded-lg p-3 hover:border-primary/30 transition-all"
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                {/* Status Toggle */}
+                                                <button
+                                                    onClick={() => handleToggleTaskStatus(task)}
+                                                    className="mt-0.5 flex-shrink-0 hover:scale-110 transition-transform"
+                                                    disabled={!canEdit}
+                                                >
+                                                    {getStatusIcon(task.status)}
+                                                </button>
+
+                                                {/* Task Info */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-start justify-between gap-2 mb-1">
+                                                        <span className={cn(
+                                                            "text-sm font-medium",
+                                                            task.status === 'completed' && "line-through text-muted-foreground"
+                                                        )}>
+                                                            {task.title}
+                                                        </span>
+                                                        {getPriorityBadge(task.priority)}
+                                                    </div>
+                                                    {task.description && (
+                                                        <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
+                                                            {task.description}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex items-center gap-3">
+                                                        {/* Assignee Selector */}
+                                                        <Select
+                                                            value={task.assigned_to_user?.id.toString() || '0'}
+                                                            onValueChange={(v) => handleAssignTask(task.id, v === '0' ? null : parseInt(v))}
                                                             disabled={!canEdit}
                                                         >
-                                                            {getStatusIcon(task.status)}
-                                                        </button>
+                                                            <SelectTrigger className="h-7 w-[140px] text-xs">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <User className="w-3 h-3" />
+                                                                    <SelectValue placeholder="分配给..." />
+                                                                </div>
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="0" className="text-xs">待分配</SelectItem>
+                                                                {members.map(m => (
+                                                                    <SelectItem key={m.id} value={m.id.toString()} className="text-xs">
+                                                                        {m.display_name}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
 
-                                                        {/* Task Info */}
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-start justify-between gap-2 mb-1">
-                                                                <span className={cn(
-                                                                    "text-sm font-medium",
-                                                                    task.status === 'completed' && "line-through text-muted-foreground"
-                                                                )}>
-                                                                    {task.title}
-                                                                </span>
-                                                                {getPriorityBadge(task.priority)}
-                                                            </div>
-                                                            {task.description && (
-                                                                <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
-                                                                    {task.description}
-                                                                </p>
-                                                            )}
-                                                            <div className="flex items-center gap-3">
-                                                                {/* Assignee Selector */}
-                                                                <Select
-                                                                    value={task.assigned_to_user?.id.toString() || '0'}
-                                                                    onValueChange={(v) => handleAssignTask(task.id, v === '0' ? null : parseInt(v))}
-                                                                    disabled={!canEdit}
-                                                                >
-                                                                    <SelectTrigger className="h-7 w-[140px] text-xs">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <User className="w-3 h-3" />
-                                                                            <SelectValue placeholder="分配给..." />
-                                                                        </div>
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="0" className="text-xs">待分配</SelectItem>
-                                                                        {members.map(m => (
-                                                                            <SelectItem key={m.id} value={m.id.toString()} className="text-xs">
-                                                                                {m.display_name}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-
-                                                                {task.estimated_hours && (
-                                                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                                                        {task.estimated_hours}h
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Edit & Delete Buttons */}
-                                                        {canEdit && (
-                                                            <div className="flex gap-1 flex-shrink-0">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleEditTask(task)}
-                                                                    className="h-7 w-7 text-muted-foreground hover:text-primary"
-                                                                >
-                                                                    <Pencil className="w-3.5 h-3.5" />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleDeleteTask(task.id)}
-                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </Button>
-                                                            </div>
+                                                        {task.estimated_hours && (
+                                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                                {task.estimated_hours}h
+                                                            </Badge>
                                                         )}
                                                     </div>
                                                 </div>
-                                            ))}
+
+                                                {/* Edit & Delete Buttons */}
+                                                {canEdit && (
+                                                    <div className="flex gap-1 flex-shrink-0">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => handleEditTask(task)}
+                                                            className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => handleDeleteTask(task.id)}
+                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
 
                                     {tasks.length === 0 && !isAddingTask && (
                                         <div className="text-center py-8 text-muted-foreground text-sm">

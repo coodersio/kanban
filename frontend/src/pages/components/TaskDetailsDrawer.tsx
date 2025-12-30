@@ -124,16 +124,21 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
 
     return (
         <Sheet open={open} onOpenChange={onClose}>
-            <SheetContent className="sm:max-w-md w-full border-l shadow-xl p-0 flex flex-col bg-white">
+            <SheetContent className="sm:max-w-[600px] w-full border-l shadow-xl p-0 flex flex-col bg-white">
+                <SheetHeader className="px-6 py-4 border-b">
+                    <h2 className="text-lg font-semibold">任务详情</h2>
+                </SheetHeader>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     {/* Task Title */}
                     <div className="space-y-2">
+                        <Label className="text-xs font-normal text-muted-foreground">任务标题</Label>
                         <Input
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             disabled={!canEdit}
-                            className="text-xl font-semibold border-none shadow-none focus-visible:ring-0 p-0 h-auto placeholder:text-muted-foreground/50"
+                            className="text-base font-medium"
                             placeholder="任务名称"
+                            autoFocus={false}
                         />
                     </div>
                     {/* Status & Priority */}
