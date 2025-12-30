@@ -26,20 +26,37 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { name, description, department_id, project_type_id, owner_id } = req.body;
+    const { name, description, department_id, project_type_id, owner_id, sprintId, priority, notes } = req.body;
+    const client = await pool.connect();
     try {
-        const result = await pool.query(
+        await client.query('BEGIN');
+
+        // 1. Create project in projects table
+        const result = await client.query(
             'INSERT INTO projects (software_name, description, department_id, project_type_id, owner_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
             [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null]
         );
         const row = result.rows[0];
+
+        // 2. If sprintId is provided, add project to sprint_projects
+        if (sprintId) {
+            await client.query(
+                'INSERT INTO sprint_projects (sprint_id, project_id, priority, notes) VALUES ($1, $2, $3, $4)',
+                [sprintId, row.id, priority || '中', notes || '']
+            );
+        }
+
+        await client.query('COMMIT');
         res.status(201).json({
             ...row,
             name: row.software_name
         });
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error creating project:', err);
         res.status(500).json({ message: 'Internal server error', error: String(err) });
+    } finally {
+        client.release();
     }
 });
 

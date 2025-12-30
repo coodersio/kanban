@@ -66,6 +66,9 @@ export interface Project {
     project_type_id?: number;
     priority?: string | number;
     notes?: string;
+    owner_id?: number;
+    owner_name?: string;
+    software_name?: string; // Backend compatibility
 }
 
 export interface BoardData {

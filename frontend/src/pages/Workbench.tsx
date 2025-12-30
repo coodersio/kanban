@@ -445,6 +445,45 @@ export default function Workbench() {
         }
     };
 
+    const handleDeleteProjectFromSprint = async () => {
+        if (!editingProjectId || !selectedSprintId) return;
+
+        if (!confirm('确定要从当前迭代中删除该项目吗？这将删除该项目在本迭代的所有快照数据。')) {
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/workbench/sprint/project/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId: selectedSprintId,
+                    projectId: editingProjectId
+                })
+            });
+
+            if (res.ok) {
+                setIsProjectDialogOpen(false);
+                resetProjectForm();
+                // Refresh project list
+                fetch(`/api/workbench/sprint/${selectedSprintId}/projects`)
+                    .then(r => r.json())
+                    .then(data => {
+                        setProjects(data);
+                        // If the deleted project was selected, clear selection
+                        if (selectedProjectId === editingProjectId) {
+                            setSelectedProjectId(null);
+                        }
+                    });
+            } else {
+                alert('删除失败，请重试');
+            }
+        } catch (err) {
+            console.error('Error deleting project from sprint:', err);
+            alert('删除失败，请重试');
+        }
+    };
+
     const resetProjectForm = () => {
         setNewTitle('');
         setNewDesc('');
@@ -913,7 +952,11 @@ export default function Workbench() {
                                                 {s.status === 'active' ? '进行中' : s.status === 'archived' ? '已归档' : '计划中'}
                                             </Badge>
                                             <span className="text-xs text-muted-foreground">
-                                                {new Date(s.start_date).toLocaleDateString()} - {new Date(s.end_date).toLocaleDateString()}
+                                                {s.start_date && s.end_date ? (
+                                                    `${new Date(s.start_date).toLocaleDateString()} - ${new Date(s.end_date).toLocaleDateString()}`
+                                                ) : (
+                                                    '未设置日期'
+                                                )}
                                             </span>
                                         </div>
                                     </div>
@@ -1195,7 +1238,7 @@ export default function Workbench() {
                                 <Label htmlFor="project-name" className="text-sm font-medium">项目名称</Label>
                                 <Input
                                     id="project-name"
-                                    placeholder="例如：电商平台重构"
+                                    placeholder="例如：通用标检平台"
                                     value={newTitle}
                                     onChange={(e) => setNewTitle(e.target.value)}
                                 />
@@ -1337,16 +1380,33 @@ export default function Workbench() {
                         </div>
                     )}
                     <DialogFooter className="mt-4">
-                        <Button variant="outline" onClick={() => setIsProjectDialogOpen(false)}>取消</Button>
-                        {activeProjectTab === 'create' ? (
-                            <Button onClick={handleSaveProject}>
-                                {isEditMode ? '保存修改' : '创建项目'}
-                            </Button>
-                        ) : (
-                            <Button onClick={handleReuseProject} disabled={!selectedReuseProjectId}>
-                                选用项目
-                            </Button>
-                        )}
+                        <div className="flex w-full items-center justify-between">
+                            {/* Left side: Delete button (only when editing) */}
+                            <div>
+                                {isEditMode && activeProjectTab === 'create' && (
+                                    <Button
+                                        variant="destructive"
+                                        onClick={handleDeleteProjectFromSprint}
+                                        type="button"
+                                    >
+                                        删除
+                                    </Button>
+                                )}
+                            </div>
+                            {/* Right side: Cancel and Save/Reuse buttons */}
+                            <div className="flex gap-2">
+                                <Button variant="outline" onClick={() => setIsProjectDialogOpen(false)}>取消</Button>
+                                {activeProjectTab === 'create' ? (
+                                    <Button onClick={handleSaveProject}>
+                                        {isEditMode ? '保存修改' : '创建项目'}
+                                    </Button>
+                                ) : (
+                                    <Button onClick={handleReuseProject} disabled={!selectedReuseProjectId}>
+                                        选用项目
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

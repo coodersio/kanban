@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, Play, Check, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, Play, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import {
@@ -239,7 +239,7 @@ export default function SprintsPage() {
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     required
-                                    placeholder="例如: Sprint 58"
+                                    placeholder="例如：W-52"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -373,7 +373,11 @@ export default function SprintsPage() {
                                     <TableCell className="text-sm text-muted-foreground">
                                         <div className="flex items-center gap-2">
                                             <CalendarIcon className="w-3 h-3" />
-                                            {format(new Date(sprint.start_date), 'yyyy-MM-dd')} 至 {format(new Date(sprint.end_date), 'yyyy-MM-dd')}
+                                            {sprint.start_date && sprint.end_date ? (
+                                                `${format(new Date(sprint.start_date), 'yyyy-MM-dd')} 至 ${format(new Date(sprint.end_date), 'yyyy-MM-dd')}`
+                                            ) : (
+                                                '未设置日期'
+                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">

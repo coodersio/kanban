@@ -4,20 +4,16 @@ import pool from '../db/connection';
 const router = express.Router();
 
 // Get all projects associated with a specific sprint
-// For now, we return ALL projects because we haven't implemented "Adding Project to Sprint" logic yet.
-// In a real flow, we would query `sprint_projects`.
-// To keep it simple for the prototype, we will return all projects and just pretend they are in the sprint,
-// OR we can implement a simple auto-add query.
-// Let's stick to the plan: query `projects`, but ideally we should only show relevant ones.
-// Current decision: Return ALL active projects to allow user to select them and see their status in this sprint.
+// Only return projects that have been added to this sprint (exist in sprint_projects)
 router.get('/sprint/:sprintId/projects', async (req, res) => {
     try {
         const { sprintId } = req.params;
-        // Join with sprint_projects to get snapshot fields
+        // INNER JOIN to only get projects that are actually in this sprint
         const result = await pool.query(`
-            SELECT p.*, sp.priority, sp.notes
+            SELECT p.*, sp.priority, sp.notes, u.id as owner_id, u.display_name as owner_name
             FROM projects p
-            LEFT JOIN sprint_projects sp ON p.id = sp.project_id AND sp.sprint_id = $1
+            INNER JOIN sprint_projects sp ON p.id = sp.project_id AND sp.sprint_id = $1
+            LEFT JOIN users u ON p.owner_id = u.id
             ORDER BY p.id ASC
         `, [sprintId]);
 
@@ -76,6 +72,44 @@ router.post('/sprint/projects', async (req, res) => {
     } catch (err) {
         console.error('Error adding project to sprint:', err);
         res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Delete project from sprint (remove snapshot)
+router.post('/sprint/project/delete', async (req, res) => {
+    const { sprintId, projectId } = req.body;
+    if (!sprintId || !projectId) return res.status(400).json({ message: 'Missing fields' });
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Delete project snapshot from sprint
+        await client.query(
+            'DELETE FROM sprint_projects WHERE sprint_id = $1 AND project_id = $2',
+            [sprintId, projectId]
+        );
+
+        // Also delete all story and task snapshots for this project in this sprint
+        // This maintains data integrity
+        await client.query(
+            'DELETE FROM sprint_stories WHERE sprint_id = $1 AND project_id = $2',
+            [sprintId, projectId]
+        );
+
+        await client.query(
+            'DELETE FROM sprint_tasks WHERE sprint_id = $1 AND project_id = $2',
+            [sprintId, projectId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error deleting project from sprint:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    } finally {
+        client.release();
     }
 });
 
