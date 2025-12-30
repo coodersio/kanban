@@ -897,7 +897,7 @@ export default function Workbench() {
                                 activeStoryTab === 'reuse' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                             )}
                         >
-                            选用已有
+                            选用历史节点
                         </button>
                     </nav>
 
@@ -1199,7 +1199,7 @@ export default function Workbench() {
                                 activeTaskTab === 'reuse' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                             )}
                         >
-                            选用已有
+                            选用历史任务
                         </button>
                     </nav>
 
@@ -1437,7 +1437,7 @@ export default function Workbench() {
                                 activeProjectTab === 'reuse' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                             )}
                         >
-                            选用已有项目
+                            选用历史项目
                         </button>
                     </nav>
 

@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import { DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import type { BoardData, Story, Task, Sprint } from "@/types";
+import type { BoardData, Story, Sprint } from "@/types";
 import StoryCard from '@/pages/components/StoryCard';
-import StoryDetailDialog from '@/pages/components/StoryDetailDialog';
 import { cn } from "@/lib/utils";
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -114,8 +113,6 @@ export default function KanbanBoard({
 }) {
     const [data, setData] = useState<BoardData>({ stories: [], tasks: [], members: [] });
     const [activeId, setActiveId] = useState<number | null>(null);
-    const [selectedStory, setSelectedStory] = useState<Story | null>(null);
-    const [isDetailOpen, setIsDetailOpen] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -190,8 +187,9 @@ export default function KanbanBoard({
     };
 
     const handleStoryClick = (story: Story) => {
-        setSelectedStory(story);
-        setIsDetailOpen(true);
+        // Navigate to story detail by updating URL
+        window.history.pushState({}, '', `/dashboard/workbench/STORY-${story.id}`);
+        window.dispatchEvent(new PopStateEvent('popstate'));
     };
 
     const activeStory = activeId ? data.stories.find((s: Story) => s.id === activeId) : null;
@@ -284,21 +282,6 @@ export default function KanbanBoard({
                     ) : null}
                 </DragOverlay>
             </DndContext>
-
-            {/* Story Detail Dialog */}
-            <StoryDetailDialog
-                open={isDetailOpen}
-                onClose={() => {
-                    setIsDetailOpen(false);
-                    setSelectedStory(null);
-                }}
-                story={selectedStory}
-                sprintId={sprintId}
-                projectId={projectId}
-                members={members || data.members}
-                onUpdate={fetchData}
-                onEditTask={onEditTask}
-            />
         </>
     );
 }

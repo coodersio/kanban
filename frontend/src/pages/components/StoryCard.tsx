@@ -194,22 +194,24 @@ export default function StoryCard({
     const getPriorityBadge = (priority?: string, isStory: boolean = false) => {
         if (!priority) return null;
 
+        type PriorityConfig = { label: string; className: string };
+
         // Story priorities (low, medium, high)
-        const storyConfig = {
+        const storyConfig: Record<string, PriorityConfig> = {
             high: { label: '高', className: 'bg-red-100 text-red-700 border-red-200' },
             medium: { label: '中', className: 'bg-orange-100 text-orange-700 border-orange-200' },
             low: { label: '低', className: 'bg-blue-100 text-blue-700 border-blue-200' }
         };
 
         // Task priorities (高, 中, 低)
-        const taskConfig = {
+        const taskConfig: Record<string, PriorityConfig> = {
             高: { label: '高', className: 'bg-red-100 text-red-700 border-red-200' },
             中: { label: '中', className: 'bg-blue-100 text-blue-700 border-blue-200' },
             低: { label: '低', className: 'bg-green-100 text-green-700 border-green-200' }
         };
 
         const config = isStory ? storyConfig : taskConfig;
-        const priorityConfig = config[priority as keyof typeof config];
+        const priorityConfig = config[priority];
 
         if (!priorityConfig) return null;
 
