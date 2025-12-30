@@ -310,8 +310,8 @@ export default function StoryDetailsDrawer({
     };
 
     const handleEditTask = (task: Task) => {
-        // Navigate to task detail by updating URL
-        window.history.pushState({}, '', `/dashboard/workbench/TASK-${task.id}`);
+        // Navigate to task detail by updating URL (using snapshot_id)
+        window.history.pushState({}, '', `/dashboard/workbench/TASK-${task.snapshot_id}`);
         window.dispatchEvent(new PopStateEvent('popstate'));
     };
 

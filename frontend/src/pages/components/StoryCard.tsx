@@ -8,6 +8,7 @@ import { CheckCircle2, Circle, Clock, ChevronDown, ChevronRight, User, MoreVerti
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import EntityHandler from './EntityHandler';
 
 interface StoryCardProps {
     story: Story;
@@ -248,7 +249,7 @@ export default function StoryCard({
                 <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold text-foreground line-clamp-2">
-                            <span className="text-muted-foreground font-normal">[STORY-{story.id}]</span> {story.title}
+                            <EntityHandler type="STORY" id={story.id} snapshotId={story.snapshot_id} /> {story.title}
                         </h4>
                         {/* Priority Badge */}
                         {story.priority && (
@@ -343,18 +344,13 @@ export default function StoryCard({
                                 </button>
 
                                 {/* Task Title */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onEditTask?.(task);
-                                    }}
-                                    className={cn(
-                                        "text-xs flex-1 min-w-0 truncate text-left hover:text-primary transition-colors",
-                                        task.status === 'completed' && "line-through text-muted-foreground"
-                                    )}
-                                >
-                                    <span className="text-muted-foreground font-normal">[TASK-{task.id}]</span> {task.title}
-                                </button>
+                                <div className={cn(
+                                    "text-xs flex-1 min-w-0 flex items-center gap-1",
+                                    task.status === 'completed' && "line-through text-muted-foreground"
+                                )}>
+                                    <EntityHandler type="TASK" id={task.id} snapshotId={task.snapshot_id} />
+                                    <span className="truncate">{task.title}</span>
+                                </div>
 
                                 {/* Priority Badge */}
                                 {getPriorityBadge(task.priority)}

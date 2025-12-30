@@ -180,7 +180,7 @@ export default function TaskRow({
                     >
                         <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
-                    <EntityHandler type="TASK" id={task.id} />
+                    <EntityHandler type="TASK" id={task.id} snapshotId={task.snapshot_id} />
                     {task.title}
                 </span>
             </TableCell>

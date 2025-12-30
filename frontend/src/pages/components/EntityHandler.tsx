@@ -3,17 +3,23 @@ import { cn } from '@/lib/utils';
 
 interface EntityHandlerProps {
     type: 'STORY' | 'TASK';
-    id: number;
+    id: number;              // 引用表ID (fallback)
+    snapshotId?: number;     // 快照表ID，用于显示和URL导航
     className?: string;
 }
 
-export default function EntityHandler({ type, id, className }: EntityHandlerProps) {
+export default function EntityHandler({ type, id, snapshotId, className }: EntityHandlerProps) {
     const navigate = useNavigate();
 
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        navigate(`/dashboard/workbench/${type}-${id}`);
+        // 优先使用 snapshotId 进行导航，如果没有则使用 id（向后兼容）
+        const navigationId = snapshotId ?? id;
+        navigate(`/dashboard/workbench/${type}-${navigationId}`);
     };
+
+    // 优先显示 snapshotId，如果没有则显示 id
+    const displayId = snapshotId ?? id;
 
     return (
         <button
@@ -23,7 +29,7 @@ export default function EntityHandler({ type, id, className }: EntityHandlerProp
                 className
             )}
         >
-            [{type}-{id}]
+            [{type}-{displayId}]
         </button>
     );
 }

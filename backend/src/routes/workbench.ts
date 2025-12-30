@@ -10,7 +10,14 @@ router.get('/sprint/:sprintId/projects', async (req, res) => {
         const { sprintId } = req.params;
         // INNER JOIN to only get projects that are actually in this sprint
         const result = await pool.query(`
-            SELECT p.*, sp.priority, sp.notes, u.id as owner_id, u.display_name as owner_name
+            SELECT
+                p.*,
+                sp.id as snapshot_id,
+                sp.sprint_id,
+                sp.priority,
+                sp.notes,
+                u.id as owner_id,
+                u.display_name as owner_name
             FROM projects p
             INNER JOIN sprint_projects sp ON p.id = sp.project_id AND sp.sprint_id = $1
             LEFT JOIN users u ON p.owner_id = u.id
@@ -197,6 +204,8 @@ router.get('/board', async (req, res) => {
         let storiesQuery = `
             SELECT
                 s.*,
+                ss.id as snapshot_id,
+                ss.sprint_id,
                 ss.status,
                 ss.progress,
                 u.id as assignee_id,
@@ -239,9 +248,11 @@ router.get('/board', async (req, res) => {
         // Architecture: Developer "Only see tasks assigned to current user"
 
         let tasksQuery = `
-            SELECT 
-                t.*, 
-                st.status, 
+            SELECT
+                t.*,
+                st.id as snapshot_id,
+                st.sprint_id,
+                st.status,
                 st.progress,
                 u.id as assignee_id,
                 u.display_name as assignee_name
@@ -585,7 +596,7 @@ router.post('/story', async (req, res) => {
 
 // Create Task and Add to Sprint
 router.post('/task', async (req, res) => {
-    const { sprintId, projectId, storyId, title, description, priority, size, assignedTo } = req.body;
+    const { sprintId, projectId, storyId, title, description, priority, estimatedHours, assignedTo } = req.body;
     if (!sprintId || !projectId || !title) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
@@ -597,8 +608,8 @@ router.post('/task', async (req, res) => {
         // 1. Create Reference Task
         const userId = (req.session as any).user?.id || null;
         const taskRes = await client.query(
-            'INSERT INTO tasks (project_id, story_id, title, description, priority, size, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-            [projectId, storyId || null, title, description || '', priority || 'Should', size || 'Medium', userId]
+            'INSERT INTO tasks (project_id, story_id, title, description, priority, estimated_hours, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+            [projectId, storyId || null, title, description || '', priority || 'Should', estimatedHours || null, userId]
         );
         const taskId = taskRes.rows[0].id;
 
@@ -609,7 +620,7 @@ router.post('/task', async (req, res) => {
         );
 
         await client.query('COMMIT');
-        res.status(201).json({ id: taskId, title, status: 'not_started', story_id: storyId, priority, size, assigned_to: assignedTo });
+        res.status(201).json({ id: taskId, title, status: 'not_started', story_id: storyId, priority, estimated_hours: estimatedHours, assigned_to: assignedTo });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error creating task:', err);
@@ -621,7 +632,7 @@ router.post('/task', async (req, res) => {
 
 // Update Task Details
 router.post('/task/update', async (req, res) => {
-    const { id, taskId, sprintId, title, description, status, priority, size, assignedTo, progress, risk_and_countermeasure } = req.body;
+    const { id, taskId, sprintId, title, description, status, priority, estimatedHours, assignedTo, progress, risk_and_countermeasure } = req.body;
     const finalTaskId = id || taskId;
     if (!finalTaskId || !sprintId) return res.status(400).json({ message: 'Missing taskId or sprintId' });
 
@@ -655,8 +666,8 @@ router.post('/task/update', async (req, res) => {
         }
 
         await client.query(
-            'UPDATE tasks SET title = $1, description = $2, priority = $3, size = $4 WHERE id = $5',
-            [title, description, priority, size, finalTaskId]
+            'UPDATE tasks SET title = $1, description = $2, priority = $3, estimated_hours = $4 WHERE id = $5',
+            [title, description, priority, estimatedHours || null, finalTaskId]
         );
 
         // 2. Update Snapshot (sprint_tasks) - now filtering by sprint_id to avoid affecting other sprints
@@ -1300,6 +1311,140 @@ router.get('/task/:id', async (req, res) => {
         res.json(task);
     } catch (err) {
         console.error('Error fetching task:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get Story by Snapshot ID (sprint_stories.id)
+// This allows direct URL access and auto-switches to correct sprint
+router.get('/sprint-story/:snapshotId', async (req, res) => {
+    const { snapshotId } = req.params;
+
+    try {
+        const result = await pool.query(`
+            SELECT
+                s.*,
+                ss.id as snapshot_id,
+                ss.sprint_id,
+                ss.status,
+                ss.progress,
+                ss.priority as snapshot_priority,
+                ss.planned_completion_date,
+                ss.actual_completion_date,
+                ss.estimated_hours,
+                ss.risk_and_countermeasure,
+                u.id as assignee_id,
+                u.display_name as assignee_name,
+                (SELECT COUNT(*) FROM sprint_tasks st WHERE st.story_id = s.id AND st.sprint_id = ss.sprint_id) as task_count
+            FROM sprint_stories ss
+            JOIN stories s ON ss.story_id = s.id
+            LEFT JOIN users u ON ss.assigned_to = u.id
+            WHERE ss.id = $1
+        `, [snapshotId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Story snapshot not found' });
+        }
+
+        const row = result.rows[0];
+        const story = {
+            ...row,
+            status: row.status || 'not_started',
+            progress: row.progress || 0,
+            task_count: parseInt(row.task_count) || 0,
+            assigned_to_user: row.assignee_id ? {
+                id: row.assignee_id,
+                display_name: row.assignee_name,
+                avatar_url: `https://i.pravatar.cc/150?u=${row.assignee_id}`
+            } : null
+        };
+
+        res.json(story);
+    } catch (err) {
+        console.error('Error fetching story snapshot:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get Task by Snapshot ID (sprint_tasks.id)
+// This allows direct URL access and auto-switches to correct sprint
+router.get('/sprint-task/:snapshotId', async (req, res) => {
+    const { snapshotId } = req.params;
+
+    try {
+        const result = await pool.query(`
+            SELECT
+                t.*,
+                st.id as snapshot_id,
+                st.sprint_id,
+                st.status,
+                st.progress,
+                st.risk_and_countermeasure,
+                u.id as assignee_id,
+                u.display_name as assignee_name
+            FROM sprint_tasks st
+            JOIN tasks t ON st.task_id = t.id
+            LEFT JOIN users u ON st.assigned_to = u.id
+            WHERE st.id = $1
+        `, [snapshotId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Task snapshot not found' });
+        }
+
+        const row = result.rows[0];
+        const task = {
+            ...row,
+            status: row.status || 'not_started',
+            progress: row.progress || 0,
+            assigned_to_user: row.assignee_id ? {
+                id: row.assignee_id,
+                display_name: row.assignee_name,
+                avatar_url: `https://i.pravatar.cc/150?u=${row.assignee_id}`
+            } : null
+        };
+
+        res.json(task);
+    } catch (err) {
+        console.error('Error fetching task snapshot:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get Project by Snapshot ID (sprint_projects.id)
+// This allows direct URL access and auto-switches to correct sprint
+router.get('/sprint-project/:snapshotId', async (req, res) => {
+    const { snapshotId } = req.params;
+
+    try {
+        const result = await pool.query(`
+            SELECT
+                p.*,
+                sp.id as snapshot_id,
+                sp.sprint_id,
+                sp.priority,
+                sp.notes,
+                u.id as owner_id,
+                u.display_name as owner_name
+            FROM sprint_projects sp
+            JOIN projects p ON sp.project_id = p.id
+            LEFT JOIN users u ON p.owner_id = u.id
+            WHERE sp.id = $1
+        `, [snapshotId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Project snapshot not found' });
+        }
+
+        const row = result.rows[0];
+        const project = {
+            ...row,
+            name: row.software_name
+        };
+
+        res.json(project);
+    } catch (err) {
+        console.error('Error fetching project snapshot:', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 });

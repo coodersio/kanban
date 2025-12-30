@@ -303,7 +303,7 @@ export default function ListViewStoryRow({
                 <TableCell>
                     <div className="flex items-center gap-2">
                         <span className="font-semibold flex items-center gap-2">
-                            <EntityHandler type="STORY" id={story.id} />
+                            <EntityHandler type="STORY" id={story.id} snapshotId={story.snapshot_id} />
                             {story.title}
                         </span>
                         <span className="text-xs text-muted-foreground">

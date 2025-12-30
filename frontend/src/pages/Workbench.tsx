@@ -79,7 +79,7 @@ export default function Workbench() {
     const [newDesc, setNewDesc] = useState('');
     const [targetStoryId, setTargetStoryId] = useState<number | null>(null);
     const [priority, setPriority] = useState('中');
-    const [size, setSize] = useState('Medium');
+    const [estimatedHours, setEstimatedHours] = useState<number | undefined>(undefined);
     const [assignedTo, setAssignedTo] = useState<number | null>(null);
     const [storyPriority, setStoryPriority] = useState('medium');
     const [storyPlannedDate, setStoryPlannedDate] = useState<Date | undefined>(undefined);
@@ -226,11 +226,13 @@ export default function Workbench() {
             .then(res => res.json())
             .then(data => {
                 setProjects(data);
-                if (data.length > 0 && !selectedProjectId) {
-                    setSelectedProjectId(data[0].id);
+                // Auto-select first project if no project in URL
+                const hasProjectInUrl = location.pathname.match(/\/PROJECT-(\d+)$/);
+                if (data.length > 0 && !selectedProjectId && !hasProjectInUrl && data[0].snapshot_id) {
+                    navigate(`/dashboard/workbench/PROJECT-${data[0].snapshot_id}`, { replace: true });
                 }
             });
-    }, [selectedSprintId]);
+    }, [selectedSprintId, navigate, location.pathname, selectedProjectId]);
 
     // Fetch Stories for the current board (for the dropdown)
     useEffect(() => {
@@ -244,37 +246,63 @@ export default function Workbench() {
             .catch(err => console.error(err));
     }, [selectedSprintId, selectedProjectId, refreshTrigger]);
 
-    // URL synchronization - Open drawers based on URL
+    // URL synchronization - Open drawers based on URL and auto-switch sprint
     useEffect(() => {
-        const pathMatch = location.pathname.match(/\/(STORY|TASK)-(\d+)$/);
+        const pathMatch = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)$/);
 
         if (pathMatch) {
-            const [, type, id] = pathMatch;
-            const entityId = parseInt(id);
+            const [, type, snapshotId] = pathMatch;
+            const id = parseInt(snapshotId);
 
-            if (type === 'STORY') {
-                // Fetch and open story
-                fetch(`/api/workbench/story/${entityId}?sprintId=${selectedSprintId}`)
+            if (type === 'PROJECT') {
+                // Fetch project snapshot and auto-switch sprint
+                fetch(`/api/workbench/sprint-project/${id}`)
+                    .then(res => res.json())
+                    .then(project => {
+                        // Auto-switch to the sprint this project belongs to
+                        if (project.sprint_id && project.sprint_id.toString() !== selectedSprintId) {
+                            setSelectedSprintId(project.sprint_id.toString());
+                        }
+                        // Set selected project using the reference ID
+                        if (selectedProjectId !== project.id) {
+                            setSelectedProjectId(project.id);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error fetching project snapshot:', err);
+                        navigate('/dashboard/workbench');
+                    });
+            } else if (type === 'STORY') {
+                // Fetch story snapshot and auto-switch sprint
+                fetch(`/api/workbench/sprint-story/${id}`)
                     .then(res => res.json())
                     .then(story => {
+                        // Auto-switch to the sprint this story belongs to
+                        if (story.sprint_id && story.sprint_id.toString() !== selectedSprintId) {
+                            setSelectedSprintId(story.sprint_id.toString());
+                        }
                         setSelectedStoryForEdit(story);
                         setIsStoryDrawerOpen(true);
                     })
                     .catch(err => {
-                        console.error('Error fetching story:', err);
+                        console.error('Error fetching story snapshot:', err);
                         // Navigate back if story not found
                         navigate('/dashboard/workbench');
                     });
             } else if (type === 'TASK') {
-                // Fetch and open task
-                fetch(`/api/workbench/task/${entityId}?sprintId=${selectedSprintId}`)
+                // Fetch task snapshot and auto-switch sprint
+                fetch(`/api/workbench/sprint-task/${id}`)
                     .then(res => res.json())
                     .then(task => {
+                        // Auto-switch to the sprint this task belongs to
+                        if (task.sprint_id && task.sprint_id.toString() !== selectedSprintId) {
+                            setSelectedSprintId(task.sprint_id.toString());
+                        }
                         setSelectedTask(task);
                         setIsDrawerOpen(true);
                     })
                     .catch(err => {
-                        console.error('Error fetching task:', err);
+                        console.error('Error fetching task snapshot:', err);
                         // Navigate back if task not found
                         navigate('/dashboard/workbench');
                     });
@@ -284,7 +312,7 @@ export default function Workbench() {
             setIsStoryDrawerOpen(false);
             setIsDrawerOpen(false);
         }
-    }, [location.pathname, selectedSprintId, navigate]);
+    }, [location.pathname, navigate]);
 
     const handleAddStory = async () => {
         const targetSprintId = createSprintId || selectedSprintId;
@@ -373,7 +401,7 @@ export default function Workbench() {
                     title: newTitle,
                     description: newDesc,
                     priority,
-                    size,
+                    estimatedHours: estimatedHours,
                     assignedTo: assignedTo
                 })
             });
@@ -383,7 +411,7 @@ export default function Workbench() {
                 setNewDesc('');
                 setTargetStoryId(null);
                 setPriority('中');
-                setSize('Medium');
+                setEstimatedHours(undefined);
                 setAssignedTo(null);
                 setRefreshTrigger(prev => prev + 1);
             }
@@ -473,9 +501,9 @@ export default function Workbench() {
                     .then(r => r.json())
                     .then(data => {
                         setProjects(data);
-                        // 选中第一个添加的项目
+                        // 导航到第一个添加的项目
                         if (selectedReuseProjectIds.length > 0) {
-                            setSelectedProjectId(selectedReuseProjectIds[0]);
+                            navigate(`/dashboard/workbench/PROJECT-${selectedReuseProjectIds[0]}`);
                         }
                     });
             } else {
@@ -521,7 +549,11 @@ export default function Workbench() {
                     .then(data => {
                         setProjects(data);
                         if (!isEditMode && newProjOrMsg.id) {
-                            setSelectedProjectId(newProjOrMsg.id);
+                            // Find the newly created project in the refreshed list to get its snapshot_id
+                            const newProject = data.find((p: Project) => p.id === newProjOrMsg.id);
+                            if (newProject?.snapshot_id) {
+                                navigate(`/dashboard/workbench/PROJECT-${newProject.snapshot_id}`);
+                            }
                         }
                     });
             }
@@ -555,9 +587,13 @@ export default function Workbench() {
                     .then(r => r.json())
                     .then(data => {
                         setProjects(data);
-                        // If the deleted project was selected, clear selection
+                        // If the deleted project was selected, navigate to first project or workbench home
                         if (selectedProjectId === editingProjectId) {
-                            setSelectedProjectId(null);
+                            if (data.length > 0 && data[0].snapshot_id) {
+                                navigate(`/dashboard/workbench/PROJECT-${data[0].snapshot_id}`);
+                            } else {
+                                navigate('/dashboard/workbench');
+                            }
                         }
                     });
             } else {
@@ -631,8 +667,8 @@ export default function Workbench() {
     };
 
     const openEditTask = (task: Task) => {
-        // Navigate to task URL instead of directly opening drawer
-        navigate(`/dashboard/workbench/TASK-${task.id}`);
+        // Navigate to task URL instead of directly opening drawer (using snapshot_id)
+        navigate(`/dashboard/workbench/TASK-${task.snapshot_id}`);
     };
 
     const handleUpdateStory = async (updatedStory: any) => {
@@ -652,8 +688,8 @@ export default function Workbench() {
 
     const openEditStory = (story: Story) => {
         if (story.id === 0) return; // Can't edit "Uncategorized"
-        // Navigate to story URL instead of directly opening drawer
-        navigate(`/dashboard/workbench/STORY-${story.id}`);
+        // Navigate to story URL instead of directly opening drawer (using snapshot_id)
+        navigate(`/dashboard/workbench/STORY-${story.snapshot_id}`);
     };
 
     const project = projects.find(p => p.id === selectedProjectId);
@@ -798,7 +834,16 @@ export default function Workbench() {
                         <ProjectSidebar
                             projects={projects}
                             selectedId={selectedProjectId}
-                            onSelect={setSelectedProjectId}
+                            onSelect={(projectId) => {
+                                // Find the project and use its snapshot_id for URL
+                                const project = projects.find(p => p.id === projectId);
+                                if (project?.snapshot_id) {
+                                    navigate(`/dashboard/workbench/PROJECT-${project.snapshot_id}`);
+                                } else {
+                                    console.warn('Project snapshot_id not found, using project id as fallback', project);
+                                    navigate(`/dashboard/workbench/PROJECT-${projectId}`);
+                                }
+                            }}
                             onAddClick={openAddProjectDialog}
                             onEditClick={openEditProjectDialog}
                         />
@@ -1277,17 +1322,16 @@ export default function Workbench() {
                                     </Select>
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label className="text-sm font-medium">工时</Label>
-                                    <Select value={size} onValueChange={setSize}>
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Tiny">Tiny</SelectItem>
-                                            <SelectItem value="Medium">Medium</SelectItem>
-                                            <SelectItem value="Huge">Huge</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Label className="text-sm font-medium">预估工时（小时）</Label>
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        placeholder="请输入预估工时"
+                                        value={estimatedHours ?? ''}
+                                        onChange={(e) => setEstimatedHours(e.target.value ? parseFloat(e.target.value) : undefined)}
+                                        className="w-full"
+                                    />
                                 </div>
                             </div>
                             <div className="grid gap-2">

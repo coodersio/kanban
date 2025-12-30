@@ -187,8 +187,8 @@ export default function KanbanBoard({
     };
 
     const handleStoryClick = (story: Story) => {
-        // Navigate to story detail by updating URL
-        window.history.pushState({}, '', `/dashboard/workbench/STORY-${story.id}`);
+        // Navigate to story detail by updating URL (using snapshot_id)
+        window.history.pushState({}, '', `/dashboard/workbench/STORY-${story.snapshot_id}`);
         window.dispatchEvent(new PopStateEvent('popstate'));
     };
 

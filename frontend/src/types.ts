@@ -18,7 +18,9 @@ export interface ProjectType {
 }
 
 export interface Task {
-    id: number;
+    id: number;                   // tasks.id (引用表ID)
+    snapshot_id?: number;         // sprint_tasks.id (快照表ID)
+    sprint_id?: number;           // 所属迭代ID
     title: string;
     status: 'not_started' | 'in_progress' | 'completed';
     story_id?: number;
@@ -35,7 +37,9 @@ export interface Task {
 }
 
 export interface Story {
-    id: number;
+    id: number;                       // stories.id (引用表ID)
+    snapshot_id?: number;             // sprint_stories.id (快照表ID)
+    sprint_id?: number;               // 所属迭代ID
     title: string;
     description?: string;
     status: string;
@@ -59,7 +63,9 @@ export interface Sprint {
 }
 
 export interface Project {
-    id: number;
+    id: number;                       // projects.id (引用表ID)
+    snapshot_id?: number;             // sprint_projects.id (快照表ID)
+    sprint_id?: number;               // 所属迭代ID
     name: string;
     description: string;
     department_id?: number;

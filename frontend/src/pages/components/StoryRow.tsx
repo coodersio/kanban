@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, MoreHorizontal, Plus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import EntityHandler from './EntityHandler';
 
 // Monday.com style status headers
 const STATUS_CONFIG: Record<string, { label: string, color: string, bg: string }> = {
@@ -79,7 +80,7 @@ export default function StoryRow({ story, tasks, onAddTask, onEditTask, onEditSt
                         <h4 className={cn("text-lg font-semibold tracking-tight transition-colors",
                             story.id === 0 ? "text-slate-500" : "text-foreground group-hover:text-primary"
                         )}>
-                            {story.id !== 0 && <span className="text-muted-foreground font-normal">[STORY-{story.id}]</span>} {story.title}
+                            {story.id !== 0 && <EntityHandler type="STORY" id={story.id} snapshotId={story.snapshot_id} />} {story.title}
                         </h4>
                         {story.id !== 0 && (
                             <Button variant="ghost" size="icon" className="w-5 h-5 opacity-0 group-hover/title:opacity-100 text-slate-400 hover:text-primary">
