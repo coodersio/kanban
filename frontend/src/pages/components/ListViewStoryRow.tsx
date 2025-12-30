@@ -3,10 +3,12 @@ import type { Story, Task, Member } from "@/types";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronRight, ChevronDown, AlertTriangle, GripVertical } from "lucide-react";
+import { ChevronRight, ChevronDown, GripVertical, Plus, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TaskRow from './TaskRow';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import EntityHandler from './EntityHandler';
 import { useSortable } from '@dnd-kit/sortable';
@@ -98,6 +100,12 @@ export default function ListViewStoryRow({
     useEffect(() => {
         setSortedTasks(tasks);
     }, [tasks]);
+
+    // Inline add task state
+    const [isAddingTask, setIsAddingTask] = useState(false);
+    const [newTaskTitle, setNewTaskTitle] = useState('');
+    const [newTaskAssignee, setNewTaskAssignee] = useState<string>('0');
+    const [newTaskPriority, setNewTaskPriority] = useState('medium');
 
     // Sortable hook for story
     const {
@@ -198,6 +206,60 @@ export default function ListViewStoryRow({
         } catch (err) {
             console.error('Error assigning story:', err);
             toast({ title: "分配失败", variant: "destructive" });
+        }
+    };
+
+    const handleAddTaskClick = () => {
+        setIsAddingTask(true);
+    };
+
+    const handleCancelAddTask = () => {
+        setIsAddingTask(false);
+        setNewTaskTitle('');
+        setNewTaskAssignee('0');
+        setNewTaskPriority('medium');
+    };
+
+    const handleSaveTask = async () => {
+        if (!newTaskTitle.trim()) {
+            toast({ title: "请输入任务标题", variant: "destructive" });
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/workbench/task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sprintId,
+                    projectId,
+                    storyId: story.id,
+                    title: newTaskTitle.trim(),
+                    priority: newTaskPriority,
+                    assignedTo: newTaskAssignee === '0' ? null : parseInt(newTaskAssignee)
+                })
+            });
+
+            if (res.ok) {
+                toast({ title: "任务创建成功" });
+                handleCancelAddTask();
+                onDataChange?.();
+            } else {
+                toast({ title: "创建失败", variant: "destructive" });
+            }
+        } catch (err) {
+            console.error('Error creating task:', err);
+            toast({ title: "创建失败", variant: "destructive" });
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSaveTask();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            handleCancelAddTask();
         }
     };
 
@@ -308,27 +370,110 @@ export default function ListViewStoryRow({
 
             {/* Task Rows (when expanded) */}
             {isExpanded && (
-                <DndContext
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleTaskDragEnd}
-                >
-                    <SortableContext
-                        items={sortedTasks.map(t => t.id)}
-                        strategy={verticalListSortingStrategy}
+                <>
+                    <DndContext
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleTaskDragEnd}
                     >
-                        {sortedTasks.map(task => (
-                            <TaskRow
-                                key={task.id}
-                                task={task}
-                                members={members}
-                                onEditTask={onEditTask}
-                                sprintId={sprintId}
-                                projectId={projectId}
-                                onDataChange={onDataChange}
-                            />
-                        ))}
-                    </SortableContext>
-                </DndContext>
+                        <SortableContext
+                            items={sortedTasks.map(t => t.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {sortedTasks.map(task => (
+                                <TaskRow
+                                    key={task.id}
+                                    task={task}
+                                    members={members}
+                                    onEditTask={onEditTask}
+                                    sprintId={sprintId}
+                                    projectId={projectId}
+                                    onDataChange={onDataChange}
+                                />
+                            ))}
+                        </SortableContext>
+                    </DndContext>
+
+                    {/* Add Task Row */}
+                    {!isAddingTask ? (
+                        <TableRow className="bg-muted/20 hover:bg-muted/40 transition-colors border-t border-dashed">
+                            <TableCell colSpan={2} />
+                            <TableCell colSpan={5}>
+                                <button
+                                    onClick={handleAddTaskClick}
+                                    className="w-full text-left py-2 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    <span>添加任务</span>
+                                </button>
+                            </TableCell>
+                        </TableRow>
+                    ) : (
+                        <TableRow className="bg-blue-50/50 border-t-2 border-blue-200">
+                            <TableCell colSpan={2} />
+                            <TableCell>
+                                <Input
+                                    value={newTaskTitle}
+                                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="输入任务标题..."
+                                    className="h-8 text-sm"
+                                    autoFocus
+                                />
+                            </TableCell>
+                            <TableCell>
+                                <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-xs">
+                                    未开始
+                                </Badge>
+                            </TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+                                    <SelectTrigger className="h-8 w-[90px] text-xs">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="high">高</SelectItem>
+                                        <SelectItem value="medium">中</SelectItem>
+                                        <SelectItem value="low">低</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
+                                    <SelectTrigger className="h-8 w-[120px] text-xs">
+                                        <SelectValue placeholder="选择负责人" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="0" className="text-xs">未分配</SelectItem>
+                                        {members.map(m => (
+                                            <SelectItem key={m.id} value={m.id.toString()} className="text-xs">
+                                                {m.display_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        onClick={handleSaveTask}
+                                        size="sm"
+                                        className="h-7 w-7 p-0"
+                                    >
+                                        <Check className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                        onClick={handleCancelAddTask}
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 w-7 p-0"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </>
             )}
         </Fragment>
     );
