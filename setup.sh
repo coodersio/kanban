@@ -2,8 +2,9 @@
 
 # Configuration
 DB_User="plugcamp"
-DB_PASS="password"
+DB_PASS="Qwert12345"
 DB_NAME="workos"
+CONN_STRING="postgresql://$DB_User:$DB_PASS@localhost:5432/$DB_NAME"
 
 echo "🚀 Starting Database Setup..."
 
@@ -29,7 +30,8 @@ END
 
 # Create Database if not exists
 echo "📦 Creating database '$DB_NAME'..."
-if psql -lqt | cut -d \| -f 1 | grep -qw $DB_NAME; then
+DB_EXISTS=$(psql -lqt | cut -d \| -f 1 | grep -qw $DB_NAME && echo "yes" || echo "no")
+if [ "$DB_EXISTS" = "yes" ]; then
     echo "⚠️  Database '$DB_NAME' already exists."
 else
     createdb -O $DB_User $DB_NAME
@@ -40,7 +42,42 @@ fi
 echo "🔑 Granting privileges..."
 psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_User;"
 
+# Initialize database with admin user and backlog sprint
+echo "🌱 Initializing database with default data..."
+PGPASSWORD=$DB_PASS psql -h localhost -U $DB_User -d $DB_NAME << 'EOF'
+-- 创建admin账户
+INSERT INTO users (user_name, display_name, password_hash, role)
+VALUES (
+    'admin',
+    '系统管理员',
+    '$2b$10$qPmSyPB9C2J8qwivwnFyseMz.s2bKQEhsycDA3GcGBu6e7jc7OvYa',
+    'admin'
+)
+ON CONFLICT (user_name) DO NOTHING;
+
+-- 创建Backlog迭代
+INSERT INTO sprints (id, sprint_number, start_date, end_date, status)
+VALUES (-1, 'BACKLOG', '1970-01-01', '2099-12-31', 'planned')
+ON CONFLICT (id) DO NOTHING;
+
+-- 确保序列从1开始
+SELECT setval('sprints_id_seq', (SELECT COALESCE(MAX(id), 0) + 1 FROM sprints WHERE id > 0), false);
+EOF
+
+if [ $? -eq 0 ]; then
+    echo "✅ Admin user created (admin / admin123)"
+    echo "✅ Backlog sprint created (id: -1)"
+else
+    echo "⚠️  Failed to initialize data (tables might not exist yet - run migrations first)"
+fi
+
 echo "---------------------------------------"
 echo "🎉 Setup Complete!"
-echo "Connection String: postgres://$DB_User:$DB_PASS@localhost:5432/$DB_NAME"
+echo "Connection String: $CONN_STRING"
+echo ""
+echo "Next steps:"
+echo "  1. cd backend && npm install"
+echo "  2. npm run build"
+echo "  3. npm run migrate:up all  (run all migrations)"
+echo "  4. npm run seed  (if you skipped setup initialization)"
 echo "---------------------------------------"

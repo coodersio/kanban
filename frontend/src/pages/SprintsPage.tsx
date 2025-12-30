@@ -382,29 +382,32 @@ export default function SprintsPage() {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
-                                            {/* Export Dropdown */}
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8 gap-1.5"
-                                                    >
-                                                        <Download className="w-3 h-3" />
-                                                        导出
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleExportSummary(sprint.id)}>
-                                                        汇总周报
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => handleExportPersonal(sprint.id)}>
-                                                        个人周报
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            {/* Export Dropdown - 不显示给Backlog */}
+                                            {sprint.id !== -1 && (
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 gap-1.5"
+                                                        >
+                                                            <Download className="w-3 h-3" />
+                                                            导出
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => handleExportSummary(sprint.id)}>
+                                                            汇总周报
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleExportPersonal(sprint.id)}>
+                                                            个人周报
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            )}
 
-                                            {sprint.status !== 'active' && (
+                                            {/* 激活按钮 - 不显示给Backlog */}
+                                            {sprint.id !== -1 && sprint.status !== 'active' && (
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -415,22 +418,30 @@ export default function SprintsPage() {
                                                     激活
                                                 </Button>
                                             )}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                                onClick={() => openEdit(sprint)}
-                                            >
-                                                <Pencil className="w-4 h-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                onClick={() => handleDelete(sprint.id)}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
+
+                                            {/* 编辑按钮 - 不显示给Backlog */}
+                                            {sprint.id !== -1 && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => openEdit(sprint)}
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </Button>
+                                            )}
+
+                                            {/* 删除按钮 - 不显示给Backlog */}
+                                            {sprint.id !== -1 && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                    onClick={() => handleDelete(sprint.id)}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>
