@@ -119,7 +119,14 @@ export function useWorkbenchState() {
         setSelectedSprintId(newSprintId);
         const newParams = new URLSearchParams();
         newParams.set('sprint', newSprintId);
-        navigate(`/dashboard/workbench?${newParams.toString()}`, { replace: true });
+
+        // Preserve entity in URL if it exists (STORY/TASK/PROJECT)
+        const entityMatch = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)(-\d+)?$/);
+        const newPath = entityMatch
+            ? `/dashboard/workbench${entityMatch[0]}`
+            : '/dashboard/workbench';
+
+        navigate(`${newPath}?${newParams.toString()}`, { replace: true });
     };
 
     return {
