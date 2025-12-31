@@ -28,6 +28,7 @@ interface Props {
     open: boolean;
     onClose: () => void;
     onSave: (updatedTask: any) => void;
+    onDelete?: (taskId: number) => void;
     members: Member[];
     currentUser?: { id: number, role: string, displayName: string };
     sprintId?: number;
@@ -35,7 +36,7 @@ interface Props {
     sprints?: Sprint[];
 }
 
-export default function TaskDetailsDrawer({ task, open, onClose, onSave, members, currentUser, sprintId, projectId, sprints = [] }: Props) {
+export default function TaskDetailsDrawer({ task, open, onClose, onSave, onDelete, members, currentUser, sprintId, projectId, sprints = [] }: Props) {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [status, setStatus] = useState<Task['status']>('not_started');
@@ -146,8 +147,8 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
 
             setIsDeleteDialogOpen(false);
             onClose();
-            // Trigger parent to refresh
-            window.location.reload();
+            // Notify parent component to update state
+            onDelete?.(task.id);
         } catch (err) {
             console.error('Error deleting task:', err);
             alert('删除任务失败，请重试');

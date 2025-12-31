@@ -64,8 +64,12 @@ export default function Workbench() {
     const location = useLocation();
     const navigate = useNavigate();
 
+    // Read sprint selection from URL parameters
+    const searchParams = new URLSearchParams(location.search);
+    const urlSprintId = searchParams.get('sprint');
+
     const [sprints, setSprints] = useState<Sprint[]>([]);
-    const [selectedSprintId, setSelectedSprintId] = useState<string>('');
+    const [selectedSprintId, setSelectedSprintId] = useState<string>(urlSprintId || '');
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
@@ -176,15 +180,39 @@ export default function Workbench() {
             .then(res => res.json())
             .then(data => {
                 setSprints(data);
-                // If current selection is not in data, or it's empty, pick the active one
+
+                // Priority 1: Use URL parameter if valid
+                const searchParams = new URLSearchParams(location.search);
+                const urlSprintId = searchParams.get('sprint');
+                if (urlSprintId && data.some((s: Sprint) => s.id.toString() === urlSprintId)) {
+                    setSelectedSprintId(urlSprintId);
+                    return;
+                }
+
+                // Priority 2: Keep current selection if still valid
+                if (selectedSprintId && data.some((s: Sprint) => s.id.toString() === selectedSprintId)) {
+                    return;
+                }
+
+                // Priority 3: Default to active sprint
                 const active = data.find((s: Sprint) => s.status === 'active');
-                if (active && (!selectedSprintId || !data.some((s: Sprint) => s.id.toString() === selectedSprintId))) {
-                    setSelectedSprintId(active.id.toString());
-                } else if (!selectedSprintId && data.length > 0) { // If no sprint is selected initially, pick the first one if no active
-                    setSelectedSprintId(data[0].id.toString());
+                if (active) {
+                    const newSprintId = active.id.toString();
+                    setSelectedSprintId(newSprintId);
+                    // Update URL to reflect the selected sprint
+                    const newParams = new URLSearchParams();
+                    newParams.set('sprint', newSprintId);
+                    navigate(`/dashboard/workbench?${newParams.toString()}`, { replace: true });
+                } else if (data.length > 0) {
+                    // Priority 4: Pick first sprint if no active sprint
+                    const newSprintId = data[0].id.toString();
+                    setSelectedSprintId(newSprintId);
+                    const newParams = new URLSearchParams();
+                    newParams.set('sprint', newSprintId);
+                    navigate(`/dashboard/workbench?${newParams.toString()}`, { replace: true });
                 }
             });
-    }, [refreshTrigger]);
+    }, [refreshTrigger, location.search]);
 
     // Initial Fetch: Get Members, Departments, Project Types from DB
     useEffect(() => {
@@ -226,7 +254,10 @@ export default function Workbench() {
                 // Auto-select first project if no entity in URL
                 const hasEntityInUrl = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)(-\d+)?$/);
                 if (data.length > 0 && !selectedProjectId && !hasEntityInUrl && data[0].snapshot_id) {
-                    navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}`, { replace: true });
+                    // Preserve sprint parameter when navigating to project
+                    const params = new URLSearchParams();
+                    params.set('sprint', selectedSprintId);
+                    navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}?${params.toString()}`, { replace: true });
                 }
             });
     }, [selectedSprintId, navigate, location.pathname, selectedProjectId]);
@@ -515,10 +546,12 @@ export default function Workbench() {
                         // 导航到第一个添加的项目
                         if (selectedReuseProjectIds.length > 0) {
                             const project = data.find((p: Project) => p.id === selectedReuseProjectIds[0]);
+                            const params = new URLSearchParams();
+                            params.set('sprint', selectedSprintId);
                             if (project?.snapshot_id) {
-                                navigate(`/dashboard/workbench/PROJECT-${project.id}-${project.snapshot_id}`);
+                                navigate(`/dashboard/workbench/PROJECT-${project.id}-${project.snapshot_id}?${params.toString()}`);
                             } else {
-                                navigate(`/dashboard/workbench/PROJECT-${selectedReuseProjectIds[0]}`);
+                                navigate(`/dashboard/workbench/PROJECT-${selectedReuseProjectIds[0]}?${params.toString()}`);
                             }
                         }
                     });
@@ -569,7 +602,9 @@ export default function Workbench() {
                             // Find the newly created project in the refreshed list
                             const newProject = data.find((p: Project) => p.id === newProjOrMsg.id);
                             if (newProject?.snapshot_id) {
-                                navigate(`/dashboard/workbench/PROJECT-${newProject.id}-${newProject.snapshot_id}`);
+                                const params = new URLSearchParams();
+                                params.set('sprint', selectedSprintId);
+                                navigate(`/dashboard/workbench/PROJECT-${newProject.id}-${newProject.snapshot_id}?${params.toString()}`);
                             }
                         }
                     });
@@ -607,9 +642,13 @@ export default function Workbench() {
                         // If the deleted project was selected, navigate to first project or workbench home
                         if (selectedProjectId === editingProjectId) {
                             if (data.length > 0 && data[0].snapshot_id) {
-                                navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}`);
+                                const params = new URLSearchParams();
+                                params.set('sprint', selectedSprintId);
+                                navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}?${params.toString()}`);
                             } else {
-                                navigate('/dashboard/workbench');
+                                const params = new URLSearchParams();
+                                params.set('sprint', selectedSprintId);
+                                navigate(`/dashboard/workbench?${params.toString()}`);
                             }
                         }
                     });
@@ -685,6 +724,11 @@ export default function Workbench() {
         }
     };
 
+    const handleDeleteTask = (taskId: number) => {
+        // Trigger refresh to update the board/list view
+        setRefreshTrigger(prev => prev + 1);
+    };
+
     const openEditTask = (task: Task) => {
         // Navigate to task URL with new format: TASK-{id}-{snapshot_id}
         if (task.snapshot_id) {
@@ -721,8 +765,10 @@ export default function Workbench() {
 
     const handleSprintChange = (newSprintId: string) => {
         setSelectedSprintId(newSprintId);
-        // Clear URL when switching sprints - go back to base workbench view
-        navigate('/dashboard/workbench', { replace: true });
+        // Update URL with sprint parameter
+        const newParams = new URLSearchParams();
+        newParams.set('sprint', newSprintId);
+        navigate(`/dashboard/workbench?${newParams.toString()}`, { replace: true });
         // Close any open drawers
         setIsStoryDrawerOpen(false);
         setIsDrawerOpen(false);
@@ -869,11 +915,13 @@ export default function Workbench() {
                             onSelect={(projectId) => {
                                 // Find the project and use new format: PROJECT-{id}-{snapshot_id}
                                 const project = projects.find(p => p.id === projectId);
+                                const params = new URLSearchParams();
+                                params.set('sprint', selectedSprintId);
                                 if (project?.snapshot_id) {
-                                    navigate(`/dashboard/workbench/PROJECT-${project.id}-${project.snapshot_id}`);
+                                    navigate(`/dashboard/workbench/PROJECT-${project.id}-${project.snapshot_id}?${params.toString()}`);
                                 } else {
                                     console.warn('Project snapshot_id not found, using project id as fallback', project);
-                                    navigate(`/dashboard/workbench/PROJECT-${projectId}`);
+                                    navigate(`/dashboard/workbench/PROJECT-${projectId}?${params.toString()}`);
                                 }
                             }}
                             onAddClick={!isExternal ? openAddProjectDialog : undefined}
@@ -1657,6 +1705,7 @@ export default function Workbench() {
                 open={isDrawerOpen}
                 onClose={() => navigate('/dashboard/workbench')}
                 onSave={handleUpdateTask}
+                onDelete={handleDeleteTask}
                 members={members}
                 currentUser={currentUser}
                 sprintId={selectedSprintId ? parseInt(selectedSprintId) : undefined}
