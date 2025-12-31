@@ -7,6 +7,7 @@ import UsersPage from '@/pages/UsersPage';
 import SettingsPage from '@/pages/SettingsPage';
 import SprintsPage from '@/pages/SprintsPage';
 import ProjectsPage from '@/pages/ProjectsPage';
+import Help from '@/pages/Help';
 import RootRedirect from '@/components/RootRedirect';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/help" element={<Help />} />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />

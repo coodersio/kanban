@@ -27,13 +27,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { HelpDialog } from "@/components/HelpDialog";
 
 export default function DashboardLayout() {
     const location = useLocation();
     const navigate = useNavigate();
     const [currentUser, setCurrentUser] = useState<{ id: number, displayName: string, role: string } | null>(null);
-    const [helpOpen, setHelpOpen] = useState(false);
 
     useEffect(() => {
         fetch('/api/auth/me', { credentials: 'include' })
@@ -153,7 +151,7 @@ export default function DashboardLayout() {
                             variant="ghost"
                             size="icon"
                             className="h-9 w-9 text-muted-foreground hover:text-foreground"
-                            onClick={() => setHelpOpen(true)}
+                            onClick={() => window.open('/help', '_blank')}
                         >
                             <HelpCircle className="w-4 h-4" />
                         </Button>
@@ -210,9 +208,6 @@ export default function DashboardLayout() {
                     <Outlet context={{ currentUser }} />
                 </div>
             </main>
-
-            {/* Help Dialog */}
-            <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
         </div>
     );
 }
