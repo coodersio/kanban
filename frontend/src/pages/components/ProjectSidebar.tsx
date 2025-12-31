@@ -62,7 +62,7 @@ export default function ProjectSidebar({ projects, selectedId, onSelect, onAddCl
                         );
                     })}
 
-                    {onAddClick && (
+                    {/* {onAddClick && (
                         <Button
                             variant="ghost"
                             onClick={onAddClick}
@@ -71,7 +71,7 @@ export default function ProjectSidebar({ projects, selectedId, onSelect, onAddCl
                             <Plus className="w-4 h-4" />
                             <span className="text-sm">添加项目</span>
                         </Button>
-                    )}
+                    )} */}
                 </div>
             </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +7,9 @@ import { CheckCircle, Clock, Package, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { AtRiskAlert } from "@/components/AtRiskAlert";
+import { WorkloadHeatmap } from "@/components/WorkloadHeatmap";
+import { AtRiskDetailDialog } from "@/components/AtRiskDetailDialog";
 
 interface DashboardStats {
     overview: {
@@ -68,12 +72,24 @@ interface DashboardStats {
 }
 
 export default function Dashboard() {
+    const navigate = useNavigate();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [atRiskData, setAtRiskData] = useState<any>(null);
+    const [atRiskLoading, setAtRiskLoading] = useState(true);
+    const [workloadData, setWorkloadData] = useState<any>(null);
+    const [workloadLoading, setWorkloadLoading] = useState(true);
+
+    // Dialog state
+    const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+    const [detailDialogType, setDetailDialogType] = useState<'overdue' | 'blocked' | 'stale' | null>(null);
+    const [detailDialogItems, setDetailDialogItems] = useState<any[]>([]);
 
     useEffect(() => {
         fetchDashboardStats();
+        fetchAtRiskData();
+        fetchWorkloadData();
     }, []);
 
     const fetchDashboardStats = async () => {
@@ -91,6 +107,60 @@ export default function Dashboard() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchAtRiskData = async () => {
+        try {
+            setAtRiskLoading(true);
+            const res = await fetch('/api/dashboard/at-risk');
+            if (res.ok) {
+                const data = await res.json();
+                setAtRiskData(data);
+            }
+        } catch (err) {
+            console.error('Error fetching at-risk data:', err);
+        } finally {
+            setAtRiskLoading(false);
+        }
+    };
+
+    const fetchWorkloadData = async () => {
+        try {
+            setWorkloadLoading(true);
+            const res = await fetch('/api/dashboard/workload');
+            if (res.ok) {
+                const data = await res.json();
+                setWorkloadData(data);
+            }
+        } catch (err) {
+            console.error('Error fetching workload data:', err);
+        } finally {
+            setWorkloadLoading(false);
+        }
+    };
+
+    const handleAtRiskItemClick = (type: string, data: any) => {
+        // Show detail dialog with list of tasks/stories
+        const items = type === 'overdue'
+            ? [...data.stories, ...data.tasks]
+            : data.tasks;
+
+        setDetailDialogType(type as 'overdue' | 'blocked' | 'stale');
+        setDetailDialogItems(items);
+        setDetailDialogOpen(true);
+    };
+
+    const handleTaskClick = (taskId: number) => {
+        // Navigate to Workbench
+        // For now, just navigate to workbench page
+        // In the future, we can pass filter parameters
+        navigate('/dashboard/workbench');
+    };
+
+    const handleWorkloadMemberClick = (member: any) => {
+        // Navigate to Workbench
+        // In the future, we can pass member filter
+        navigate('/dashboard/workbench');
     };
 
     if (loading) {
@@ -190,6 +260,20 @@ export default function Dashboard() {
 
     return (
         <div className="p-6 space-y-6">
+            {/* At-Risk Alert & Workload Heatmap */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <AtRiskAlert
+                    data={atRiskData}
+                    loading={atRiskLoading}
+                    onItemClick={handleAtRiskItemClick}
+                />
+                <WorkloadHeatmap
+                    data={workloadData}
+                    loading={workloadLoading}
+                    onMemberClick={handleWorkloadMemberClick}
+                />
+            </div>
+
             {/* Top Widgets Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {overviewStats.map((stat, i) => (
@@ -457,6 +541,15 @@ export default function Dashboard() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* At-Risk Detail Dialog */}
+            <AtRiskDetailDialog
+                open={detailDialogOpen}
+                onOpenChange={setDetailDialogOpen}
+                type={detailDialogType}
+                items={detailDialogItems}
+                onTaskClick={handleTaskClick}
+            />
         </div>
     );
 }
