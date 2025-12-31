@@ -1079,6 +1079,20 @@ router.post('/story/move', async (req, res) => {
     try {
         await client.query('BEGIN');
 
+        // 0. Ensure target sprint has Project registered (similar to task/move ensuring story exists)
+        const projectCheck = await client.query(
+            'SELECT * FROM sprint_projects WHERE sprint_id = $1 AND project_id = $2',
+            [toSprintId, projectId]
+        );
+
+        if (projectCheck.rows.length === 0) {
+            // Target sprint doesn't have this project, create it
+            await client.query(
+                'INSERT INTO sprint_projects (sprint_id, project_id, priority) VALUES ($1, $2, $3)',
+                [toSprintId, projectId, 'medium']
+            );
+        }
+
         // 1. Handle Story snapshot
         const storyCheck = await client.query(
             'SELECT * FROM sprint_stories WHERE sprint_id = $1 AND story_id = $2',

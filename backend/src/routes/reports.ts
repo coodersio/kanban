@@ -32,6 +32,260 @@ const EXCEL_STYLES = {
 };
 
 // ============================================================
+// TEST ENDPOINT: Check Next Sprint Data
+// GET /api/reports/test/next-sprint-data/:sprintNumber
+// ============================================================
+router.get('/test/next-sprint-data/:sprintNumber', async (req: Request, res: Response) => {
+    const { sprintNumber } = req.params;
+
+    try {
+        // Find current sprint
+        const currentResult = await pool.query(
+            'SELECT id, sprint_number FROM sprints WHERE sprint_number = $1',
+            [sprintNumber]
+        );
+
+        if (currentResult.rows.length === 0) {
+            return res.status(404).json({ message: `Sprint ${sprintNumber} not found` });
+        }
+
+        const currentSprint = currentResult.rows[0];
+
+        // Find next sprint
+        const nextResult = await pool.query(
+            `SELECT id, sprint_number FROM sprints
+             WHERE id > $1 AND id > 0
+             ORDER BY id ASC
+             LIMIT 1`,
+            [currentSprint.id]
+        );
+
+        if (nextResult.rows.length === 0) {
+            return res.json({
+                current: currentSprint,
+                next: null,
+                message: 'No next sprint found'
+            });
+        }
+
+        const nextSprint = nextResult.rows[0];
+
+        // Get all projects and their stories/tasks in next sprint
+        const projectsQuery = `
+            SELECT DISTINCT
+                p.id,
+                p.software_name AS name
+            FROM projects p
+            WHERE p.id IN (
+                SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = $1
+            )
+            ORDER BY p.id
+        `;
+
+        const projectsResult = await pool.query(projectsQuery, [nextSprint.id]);
+        const projectsData = [];
+
+        for (const project of projectsResult.rows) {
+            // Get stories in next sprint for this project
+            const storiesQuery = `
+                SELECT
+                    s.id,
+                    s.title,
+                    ss.status,
+                    ss.progress
+                FROM stories s
+                JOIN sprint_stories ss ON s.id = ss.story_id
+                WHERE ss.sprint_id = $1 AND ss.project_id = $2
+                ORDER BY s.id
+            `;
+
+            const storiesResult = await pool.query(storiesQuery, [nextSprint.id, project.id]);
+
+            // Get tasks in next sprint for this project
+            const tasksQuery = `
+                SELECT
+                    t.id,
+                    t.title,
+                    st.story_id,
+                    st.status,
+                    st.progress
+                FROM tasks t
+                JOIN sprint_tasks st ON t.id = st.task_id
+                WHERE st.sprint_id = $1 AND st.project_id = $2
+                ORDER BY t.id
+            `;
+
+            const tasksResult = await pool.query(tasksQuery, [nextSprint.id, project.id]);
+
+            projectsData.push({
+                project_id: project.id,
+                project_name: project.name,
+                stories: storiesResult.rows,
+                tasks: tasksResult.rows
+            });
+        }
+
+        return res.json({
+            current: currentSprint,
+            next: nextSprint,
+            projects: projectsData
+        });
+    } catch (error) {
+        console.error('Test endpoint error:', error);
+        return res.status(500).json({ message: 'Internal server error', error: String(error) });
+    }
+});
+
+// ============================================================
+// TEST ENDPOINT: Check Current Sprint Projects
+// GET /api/reports/test/current-sprint-projects/:sprintNumber
+// ============================================================
+router.get('/test/current-sprint-projects/:sprintNumber', async (req: Request, res: Response) => {
+    const { sprintNumber } = req.params;
+
+    try {
+        // Find current sprint
+        const sprintResult = await pool.query(
+            'SELECT id, sprint_number FROM sprints WHERE sprint_number = $1',
+            [sprintNumber]
+        );
+
+        if (sprintResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Sprint not found' });
+        }
+
+        const sprint = sprintResult.rows[0];
+
+        // Get all projects in current sprint
+        const projectsQuery = `
+            SELECT DISTINCT
+                p.id,
+                p.software_name AS name
+            FROM projects p
+            WHERE p.id IN (
+                SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = $1
+            )
+            ORDER BY p.id
+        `;
+
+        const projectsResult = await pool.query(projectsQuery, [sprint.id]);
+        const projectsData = [];
+
+        for (const project of projectsResult.rows) {
+            // Get stories in current sprint for this project
+            const storiesQuery = `
+                SELECT
+                    s.id,
+                    s.title,
+                    ss.status,
+                    ss.progress
+                FROM stories s
+                JOIN sprint_stories ss ON s.id = ss.story_id
+                WHERE ss.sprint_id = $1 AND ss.project_id = $2
+                ORDER BY s.id
+            `;
+
+            const storiesResult = await pool.query(storiesQuery, [sprint.id, project.id]);
+
+            projectsData.push({
+                project_id: project.id,
+                project_name: project.name,
+                stories: storiesResult.rows
+            });
+        }
+
+        return res.json({
+            sprint: sprint,
+            projects: projectsData
+        });
+    } catch (error) {
+        console.error('Test endpoint error:', error);
+        return res.status(500).json({ message: 'Internal server error', error: String(error) });
+    }
+});
+
+// ============================================================
+// TEST ENDPOINT: Check Project Details
+// GET /api/reports/test/project/:projectId
+// ============================================================
+router.get('/test/project/:projectId', async (req: Request, res: Response) => {
+    const { projectId } = req.params;
+
+    try {
+        const projectQuery = `
+            SELECT
+                p.*,
+                pt.name AS project_type_name,
+                d.name AS department_name,
+                u.display_name AS owner_name
+            FROM projects p
+            LEFT JOIN project_types pt ON p.project_type_id = pt.id
+            LEFT JOIN departments d ON p.department_id = d.id
+            LEFT JOIN users u ON p.owner_id = u.id
+            WHERE p.id = $1
+        `;
+
+        const result = await pool.query(projectQuery, [projectId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Project not found' });
+        }
+
+        return res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Test endpoint error:', error);
+        return res.status(500).json({ message: 'Internal server error', error: String(error) });
+    }
+});
+
+// ============================================================
+// TEST ENDPOINT: Verify Sprint Sequence Logic
+// GET /api/reports/test/sprint-sequence/:sprintNumber
+// ============================================================
+router.get('/test/sprint-sequence/:sprintNumber', async (req: Request, res: Response) => {
+    const { sprintNumber } = req.params;
+
+    try {
+        // Find the current sprint by sprint_number
+        const currentResult = await pool.query(
+            'SELECT id, sprint_number, start_date, end_date, status FROM sprints WHERE sprint_number = $1',
+            [sprintNumber]
+        );
+
+        if (currentResult.rows.length === 0) {
+            return res.status(404).json({ message: `Sprint ${sprintNumber} not found` });
+        }
+
+        const currentSprint = currentResult.rows[0];
+
+        // Find next sprint using ID-based logic (same as export logic)
+        const nextResult = await pool.query(
+            `SELECT id, sprint_number, start_date, end_date, status FROM sprints
+             WHERE id > $1 AND id > 0
+             ORDER BY id ASC
+             LIMIT 1`,
+            [currentSprint.id]
+        );
+
+        const nextSprint = nextResult.rows.length > 0 ? nextResult.rows[0] : null;
+
+        // Get all sprints for reference
+        const allSprintsResult = await pool.query(
+            'SELECT id, sprint_number, status FROM sprints ORDER BY id ASC'
+        );
+
+        return res.json({
+            current: currentSprint,
+            next: nextSprint,
+            allSprints: allSprintsResult.rows
+        });
+    } catch (error) {
+        console.error('Test endpoint error:', error);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// ============================================================
 // GET /api/reports/sprint/:sprintId/data
 // Get weekly report data for a specific sprint
 // ============================================================
@@ -934,9 +1188,14 @@ router.get('/weekly', async (req: Request, res: Response) => {
             }
         }
 
+        // Get next sprint by ID (most reliable, handles non-consecutive IDs)
+        // Exclude special sprints like BACKLOG (id <= 0)
         const nextResult = await pool.query(
-            'SELECT id, sprint_number FROM sprints WHERE id = $1',
-            [currentSprintNum + 1]
+            `SELECT id, sprint_number FROM sprints
+             WHERE id > $1 AND id > 0
+             ORDER BY id ASC
+             LIMIT 1`,
+            [currentSprintNum]
         );
         if (nextResult.rows.length > 0) {
             nextSprint = nextResult.rows[0];
@@ -1055,7 +1314,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
             let nextStories: any[] = [];
             let nextTasks: any[] = [];
             if (nextSprint) {
-                // Get all stories in next sprint
+                // Get all stories in next sprint (only if project is registered in sprint_projects)
                 const nextStoriesQuery = `
                     SELECT
                         s.id,
@@ -1070,14 +1329,19 @@ router.get('/weekly', async (req: Request, res: Response) => {
                     FROM stories s
                     JOIN sprint_stories ss ON s.id = ss.story_id
                     LEFT JOIN users u ON ss.assigned_to = u.id
-                    WHERE ss.sprint_id = $1 AND ss.project_id = $2
+                    WHERE ss.sprint_id = $1
+                        AND ss.project_id = $2
+                        AND EXISTS (
+                            SELECT 1 FROM sprint_projects sp
+                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
+                        )
                     ORDER BY s.id
                 `;
 
                 const nextStoriesResult = await pool.query(nextStoriesQuery, [nextSprint.id, project.id]);
                 nextStories = nextStoriesResult.rows;
 
-                // Get all tasks in next sprint
+                // Get all tasks in next sprint (only if project is registered in sprint_projects)
                 const nextTasksQuery = `
                     SELECT
                         t.id,
@@ -1093,7 +1357,12 @@ router.get('/weekly', async (req: Request, res: Response) => {
                     FROM tasks t
                     JOIN sprint_tasks st ON t.id = st.task_id
                     LEFT JOIN users u ON st.assigned_to = u.id
-                    WHERE st.sprint_id = $1 AND st.project_id = $2
+                    WHERE st.sprint_id = $1
+                        AND st.project_id = $2
+                        AND EXISTS (
+                            SELECT 1 FROM sprint_projects sp
+                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
+                        )
                     ORDER BY st.order_index ASC, t.id ASC
                 `;
 
