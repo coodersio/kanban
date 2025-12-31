@@ -405,6 +405,44 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
             text: `${storyPrefix}${story.title}`
         });
 
+        // Story assignee - Navy color
+        const storyAssignee = story.assigned_user_name || '';
+        if (storyAssignee) {
+            richText.push({
+                font: {
+                    bold: true,
+                    name: EXCEL_STYLES.FONTS.STORY.name,
+                    size: EXCEL_STYLES.FONTS.STORY.size,
+                    color: { argb: EXCEL_STYLES.COLORS.NAVY }
+                },
+                text: `-${storyAssignee}`
+            });
+        }
+
+        // Story progress - Calculated from completed tasks / total tasks
+        const completedTasks = storyTasks.filter(t => t.status === 'completed');
+        const calculatedProgress = storyTasks.length > 0
+            ? Math.round((completedTasks.length / storyTasks.length) * 100)
+            : 0;
+
+        // Color based on progress: Green (100%), Blue (1-99%), Gray (0%)
+        let progressColor = EXCEL_STYLES.COLORS.SLATE_GRAY;
+        if (calculatedProgress >= 100) {
+            progressColor = EXCEL_STYLES.COLORS.EMERALD;  // Green for completed
+        } else if (calculatedProgress > 0) {
+            progressColor = EXCEL_STYLES.COLORS.OCEAN_BLUE;  // Blue for in progress
+        }
+
+        richText.push({
+            font: {
+                bold: true,
+                name: EXCEL_STYLES.FONTS.STORY.name,
+                size: EXCEL_STYLES.FONTS.STORY.size,
+                color: { argb: progressColor }
+            },
+            text: `-${calculatedProgress}%`
+        });
+
         // Task Layer
         for (const task of storyTasks) {
             richText.push({ text: '\n  ▪ ' });
@@ -1192,7 +1230,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
 
             // D: 需求来源 (NEW)
             const sourceCell = worksheet.getCell(`D${startRow}`);
-            sourceCell.value = project.requirement_source || '';
+            sourceCell.value = project.source || '';
             sourceCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
             // E: 部门
@@ -1240,13 +1278,45 @@ router.get('/weekly', async (req: Request, res: Response) => {
             }
             nextPlanCell.alignment = { vertical: 'top', wrapText: true };
 
-            // L: 风险及应对
+            // L: 风险及应对 - Collect and format with numbered list and story labels
             const riskCell = worksheet.getCell(`L${startRow}`);
-            const risks = project.stories
-                .map((s: any) => s.risk_and_countermeasure)
-                .filter((r: any) => r && r.trim())
-                .join('\n\n');
-            riskCell.value = risks || '无';
+            const riskItems: string[] = [];
+            const seenRisks = new Set<string>();
+
+            // Collect risks from stories and tasks
+            for (const story of project.stories) {
+                if (story.risk_and_countermeasure && story.risk_and_countermeasure.trim()) {
+                    const text = story.risk_and_countermeasure.trim();
+                    const fullText = `【${story.title}】${text}`;
+                    if (!seenRisks.has(text)) {
+                        riskItems.push(fullText);
+                        seenRisks.add(text);
+                    }
+                }
+                // Also check tasks under this story
+                if (story.tasks) {
+                    for (const task of story.tasks) {
+                        if (task.risk_and_countermeasure && task.risk_and_countermeasure.trim()) {
+                            const text = task.risk_and_countermeasure.trim();
+                            const fullText = `【${story.title}】${text}`;
+                            if (!seenRisks.has(text)) {
+                                riskItems.push(fullText);
+                                seenRisks.add(text);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Format with numbered list if multiple items
+            let riskText = '暂无';
+            if (riskItems.length === 1) {
+                riskText = riskItems[0];
+            } else if (riskItems.length > 1) {
+                riskText = riskItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+            }
+
+            riskCell.value = riskText;
             riskCell.alignment = { vertical: 'top', wrapText: true };
 
             // Apply background color and borders to all cells in row
