@@ -21,9 +21,9 @@ docker-compose up -d
 ```
 
 `setup.sh` 脚本会自动创建：
-- 数据库用户 `plugcamp`
-- 数据库 `workos`
-- 管理员账户（用户名: `admin`, 密码: `admin123`）
+- 数据库用户 `kanban_user`
+- 数据库 `kanban_db`
+- 管理员账户（用户名: `admin`, 密码: `admin123` ⚠️ **请立即修改**）
 - Backlog迭代（id: -1）
 
 ### 2. 后端启动
@@ -48,14 +48,17 @@ npm run dev
 
 ## 默认账户
 
+⚠️ **安全警告**: 以下为开发环境默认凭证，生产环境请务必修改！
+
 - **用户名**: `admin`
-- **密码**: `admin123`
+- **密码**: `admin123` （**请在首次登录后立即修改**）
 - **角色**: 系统管理员
 
 ## 数据库连接
 
+默认连接字符串（请根据实际配置修改）：
 ```
-postgresql://plugcamp:Qwert12345@localhost:5432/workos
+postgresql://kanban_user:your_password@localhost:5432/kanban_db
 ```
 
 ## 常用命令

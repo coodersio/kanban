@@ -6,6 +6,16 @@
 > **更新日期:** 2025-12-30
 > **面向对象:** 后续开发人员、系统运维人员
 
+> ⚠️ **安全警告**
+>
+> 本文档中的数据库凭证、密码等敏感信息均为示例值，仅用于开发环境。
+>
+> **生产环境部署前务必修改以下内容：**
+> - 数据库用户名和密码
+> - 默认管理员密码 (admin123)
+> - SESSION_SECRET 环境变量
+> - 所有示例凭证
+
 ---
 
 ## 📋 目录
@@ -192,9 +202,9 @@ cd /your/workspace
 ```bash
 docker-compose up -d
 # 数据库会运行在 localhost:5432
-# 用户名: plugcamp
-# 密码: Qwert12345
-# 数据库名: workos
+# 用户名: kanban_user
+# 密码: your_password
+# 数据库名: kanban_db
 ```
 
 **选项B - 使用本地PostgreSQL:**
@@ -250,7 +260,7 @@ curl http://localhost:4004/health
 
 **测试数据库:**
 ```bash
-psql -U plugcamp -d workos -c "SELECT COUNT(*) FROM users;"
+psql -U kanban_user -d kanban_db -c "SELECT COUNT(*) FROM users;"
 # 预期返回至少1条(admin账户)
 ```
 
@@ -483,7 +493,7 @@ npm run migrate:down   # 回滚最后一次迁移
 
 **手动执行迁移:**
 ```bash
-psql -U plugcamp -d workos -f migrations/001_initial_schema.sql
+psql -U kanban_user -d kanban_db -f migrations/001_initial_schema.sql
 ```
 
 ---
@@ -1855,9 +1865,9 @@ services:
     image: postgres:16
     container_name: kanban_postgres
     environment:
-      POSTGRES_USER: plugcamp
-      POSTGRES_PASSWORD: Qwert12345
-      POSTGRES_DB: workos
+      POSTGRES_USER: kanban_user
+      POSTGRES_PASSWORD: your_password
+      POSTGRES_DB: kanban_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/migrations:/docker-entrypoint-initdb.d
@@ -1869,7 +1879,7 @@ services:
     build: ./backend
     container_name: kanban_backend
     environment:
-      DATABASE_URL: postgresql://plugcamp:Qwert12345@postgres:5432/workos
+      DATABASE_URL: postgresql://kanban_user:your_password@postgres:5432/kanban_db
       SESSION_SECRET: CHANGE_THIS_TO_RANDOM_STRING_IN_PRODUCTION
       NODE_ENV: production
       PORT: 4004
@@ -2075,8 +2085,8 @@ sudo systemctl enable postgresql
 ```bash
 sudo -u postgres psql
 
-CREATE USER plugcamp WITH PASSWORD 'Qwert12345';
-CREATE DATABASE workos OWNER plugcamp;
+CREATE USER kanban_user WITH PASSWORD 'your_password';
+CREATE DATABASE kanban_db OWNER kanban_user;
 \q
 ```
 
@@ -2138,7 +2148,7 @@ sudo systemctl reload nginx
 **backend/.env (生产环境)**
 ```bash
 # 数据库连接
-DATABASE_URL=postgresql://plugcamp:Qwert12345@localhost:5432/workos
+DATABASE_URL=postgresql://kanban_user:your_password@localhost:5432/kanban_db
 
 # 会话密钥(必须更换为随机字符串)
 SESSION_SECRET=your-super-secret-random-key-change-this-in-production
@@ -2168,12 +2178,12 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 BACKUP_DIR="/backups/kanban"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$BACKUP_DIR/workos_$TIMESTAMP.sql"
+BACKUP_FILE="$BACKUP_DIR/kanban_db_$TIMESTAMP.sql"
 
 mkdir -p $BACKUP_DIR
 
 # 备份
-pg_dump -U plugcamp -h localhost workos > $BACKUP_FILE
+pg_dump -U kanban_user -h localhost kanban_db > $BACKUP_FILE
 
 # 压缩
 gzip $BACKUP_FILE
@@ -2194,8 +2204,8 @@ crontab -e
 
 **恢复备份:**
 ```bash
-gunzip workos_20250130_020000.sql.gz
-psql -U plugcamp -d workos < workos_20250130_020000.sql
+gunzip kanban_db_20250130_020000.sql.gz
+psql -U kanban_user -d kanban_db < kanban_db_20250130_020000.sql
 ```
 
 ### 9.6 监控和日志
@@ -2274,7 +2284,7 @@ sudo systemctl status postgresql
 sudo netstat -tunlp | grep 5432
 
 # 3. 检查连接配置
-psql -U plugcamp -d workos -h localhost
+psql -U kanban_user -d kanban_db -h localhost
 
 # 4. 检查pg_hba.conf
 sudo nano /etc/postgresql/16/main/pg_hba.conf
@@ -2303,15 +2313,15 @@ console.log('Permissions:', rolePermissions[user.role]);
 **解决:**
 ```bash
 # 1. 检查迁移表
-psql -U plugcamp -d workos
+psql -U kanban_user -d kanban_db
 SELECT * FROM schema_migrations;
 
 # 2. 手动运行迁移
-psql -U plugcamp -d workos -f migrations/001_initial_schema.sql
+psql -U kanban_user -d kanban_db -f migrations/001_initial_schema.sql
 
 # 3. 重置数据库(慎用)
-dropdb workos
-createdb workos
+dropdb kanban_db
+createdb kanban_db
 ./setup.sh
 ```
 

@@ -1,9 +1,12 @@
 #!/bin/bash
 
+# ⚠️  WARNING: This script contains default credentials for development only
+# For production use, please change these values before running!
+
 # Configuration
-DB_User="plugcamp"
-DB_PASS="Qwert12345"
-DB_NAME="workos"
+DB_User="kanban_user"
+DB_PASS="your_password_here"
+DB_NAME="kanban_db"
 CONN_STRING="postgresql://$DB_User:$DB_PASS@localhost:5432/$DB_NAME"
 
 echo "🚀 Starting Database Setup..."
@@ -46,11 +49,12 @@ psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_User;"
 echo "🌱 Initializing database with default data..."
 PGPASSWORD=$DB_PASS psql -h localhost -U $DB_User -d $DB_NAME << 'EOF'
 -- 创建admin账户
+-- ⚠️  默认密码: admin123 (请在首次登录后立即修改!)
 INSERT INTO users (user_name, display_name, password_hash, role)
 VALUES (
     'admin',
     '系统管理员',
-    '$2b$10$qPmSyPB9C2J8qwivwnFyseMz.s2bKQEhsycDA3GcGBu6e7jc7OvYa',
+    '$2b$10$qPmSyPB9C2J8qwivwnFyseMz.s2bKQEhsycDA3GcGBu6e7jc7OvYa',  -- bcrypt hash of 'admin123'
     'admin'
 )
 ON CONFLICT (user_name) DO NOTHING;
@@ -65,8 +69,12 @@ SELECT setval('sprints_id_seq', (SELECT COALESCE(MAX(id), 0) + 1 FROM sprints WH
 EOF
 
 if [ $? -eq 0 ]; then
-    echo "✅ Admin user created (admin / admin123)"
+    echo "✅ Admin user created (username: admin)"
     echo "✅ Backlog sprint created (id: -1)"
+    echo ""
+    echo "⚠️  SECURITY WARNING:"
+    echo "   Default password is 'admin123'"
+    echo "   Please change it immediately after first login!"
 else
     echo "⚠️  Failed to initialize data (tables might not exist yet - run migrations first)"
 fi

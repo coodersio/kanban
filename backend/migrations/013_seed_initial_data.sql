@@ -1,14 +1,15 @@
 -- 初始化数据：创建admin账户和backlog迭代
 
 -- 1. 创建admin账户
--- 用户名: admin
--- 密码: admin123
--- 角色: admin
+-- ⚠️  WARNING: Default credentials for development only!
+-- Username: admin
+-- Password: admin123 (CHANGE THIS IMMEDIATELY IN PRODUCTION!)
+-- Role: admin
 INSERT INTO users (user_name, display_name, password_hash, role)
 VALUES (
     'admin',
     '系统管理员',
-    '$2b$10$qPmSyPB9C2J8qwivwnFyseMz.s2bKQEhsycDA3GcGBu6e7jc7OvYa',
+    '$2b$10$qPmSyPB9C2J8qwivwnFyseMz.s2bKQEhsycDA3GcGBu6e7jc7OvYa',  -- bcrypt hash of 'admin123'
     'admin'
 )
 ON CONFLICT (user_name) DO NOTHING;

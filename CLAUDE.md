@@ -37,16 +37,16 @@ npm run migrate:down # Rollback database migrations
 docker-compose up -d
 
 # Option 2: Local PostgreSQL
-./setup.sh  # Creates user 'plugcamp', database 'workos', and initializes with:
-            # - Admin account (username: admin, password: admin123)
+./setup.sh  # Creates user 'kanban_user', database 'kanban_db', and initializes with:
+            # - Admin account (username: admin, password: admin123 - CHANGE THIS!)
             # - Backlog sprint (id: -1)
 ```
 
-Database connection defaults: `postgresql://plugcamp:Qwert12345@localhost:5432/workos`
+Database connection defaults: `postgresql://kanban_user:your_password@localhost:5432/kanban_db`
 
-**Initial Credentials:**
+**Initial Credentials (⚠️ Development Only):**
 - Username: `admin`
-- Password: `admin123`
+- Password: `admin123` (**Change immediately in production!**)
 - Role: Administrator
 
 ## Critical Architecture Patterns
