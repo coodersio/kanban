@@ -261,6 +261,7 @@ function generateNextWeekPlan(nextSprint: any): string {
 /**
  * Parse work items from task description
  * Format: "1) xxx\n2) yyy\n3) zzz"
+ * Returns: ["xxx", "yyy", "zzz"] (without numbering)
  */
 function parseWorkItems(description: string | null): string[] {
     if (!description) return [];
@@ -269,9 +270,11 @@ function parseWorkItems(description: string | null): string[] {
     const workItems: string[] = [];
 
     for (const line of lines) {
-        // Match patterns like "1)", "1.", "a)", "a.", etc.
-        if (/^[\d]+[\)\.]\s*/.test(line) || /^[a-z][\)\.]\s*/.test(line)) {
-            workItems.push(line);
+        // Match patterns like "1)", "1.", "a)", "a.", etc. and extract content
+        const match = line.match(/^[\d]+[\)\.]\s*(.+)$/) || line.match(/^[a-z][\)\.]\s*(.+)$/);
+        if (match) {
+            // Extract content without numbering
+            workItems.push(match[1]);
         } else if (workItems.length > 0) {
             // Continuation of previous item
             workItems[workItems.length - 1] += ' ' + line;
@@ -286,27 +289,51 @@ function parseWorkItems(description: string | null): string[] {
 
 /**
  * Format key milestones (关键节点计划)
- * Multiple stories: numbered "1. xxx\n2. yyy"
- * Single story: no numbering "xxx"
- * No stories: "暂无"
+ * Returns Rich Text format for Excel
  */
-function formatKeyMilestones(stories: any[]): string {
+function formatKeyMilestones(stories: any[]): any {
     if (!stories || stories.length === 0) {
-        return '暂无';
+        return { richText: [{ text: '暂无' }] };
     }
 
-    if (stories.length === 1) {
-        const story = stories[0];
+    const richText: any[] = [];
+    const hasMultipleStories = stories.length > 1;
+
+    for (let i = 0; i < stories.length; i++) {
+        const story = stories[i];
+
+        // Add blank line between stories
+        if (i > 0) {
+            richText.push({ text: '\n' });
+        }
+
+        // Story title - bold
+        const storyPrefix = hasMultipleStories ? `${i + 1}. ` : '';
+        richText.push({
+            font: { bold: true, name: '微软雅黑', size: 10 },
+            text: `${storyPrefix}${story.title}`
+        });
+
+        // Assignee - regular
         const assignee = story.assigned_user_name || '';
+        if (assignee) {
+            richText.push({
+                font: { name: '微软雅黑', size: 10 },
+                text: `-${assignee}`
+            });
+        }
+
+        // Date - orange
         const date = story.planned_completion_date ? formatDate(story.planned_completion_date) : '';
-        return `${story.title}${assignee ? '-' + assignee : ''}${date ? '-' + date : ''}`;
+        if (date) {
+            richText.push({
+                font: { name: '微软雅黑', size: 10, color: { argb: 'FFFF6600' } },
+                text: `-${date}`
+            });
+        }
     }
 
-    return stories.map((story, index) => {
-        const assignee = story.assigned_user_name || '';
-        const date = story.planned_completion_date ? formatDate(story.planned_completion_date) : '';
-        return `${index + 1}. ${story.title}${assignee ? '-' + assignee : ''}${date ? '-' + date : ''}`;
-    }).join('\n');
+    return { richText };
 }
 
 /**
@@ -318,15 +345,15 @@ function formatDate(dateStr: string): string {
 }
 
 /**
- * Format weekly summary (周总结)
- * Shows all tasks from current sprint grouped by story
+ * Format weekly summary (周总结) with Rich Text formatting
+ * Returns Rich Text array for Excel cell
  */
-function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): string {
+function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
     if (!stories || stories.length === 0) {
-        return '暂无';
+        return { richText: [{ text: '暂无' }] };
     }
 
-    const result: string[] = [];
+    const richText: any[] = [];
     const hasMultipleStories = stories.length > 1;
 
     for (let i = 0; i < stories.length; i++) {
@@ -335,46 +362,102 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): string {
 
         if (storyTasks.length === 0) continue;
 
-        // Story title line
+        // Add blank line between stories (except first)
+        if (i > 0) {
+            richText.push({ text: '\n\n' });
+        }
+
+        // Story title line with Rich Text
         const storyPrefix = hasMultipleStories ? `${i + 1}. ` : '';
-        const assignee = story.assigned_user_name || '';
+        richText.push({
+            font: { bold: true, name: '微软雅黑', size: 11 },
+            text: `${storyPrefix}${story.title}`
+        });
+
+        // Story date in orange
         const date = story.planned_completion_date ? formatDate(story.planned_completion_date) : '';
-        const storyTitle = `${storyPrefix}${story.title}${date ? '-' + date : ''} ${assignee}`;
-        result.push(storyTitle);
+        if (date) {
+            richText.push({
+                font: { bold: true, name: '微软雅黑', size: 11, color: { argb: 'FFFF6600' } },
+                text: `-${date}`
+            });
+        }
+
+        // Story assignee
+        const assignee = story.assigned_user_name || '';
+        if (assignee) {
+            richText.push({
+                font: { name: '微软雅黑', size: 11 },
+                text: `-${assignee}`
+            });
+        }
 
         // Tasks under this story
         for (const task of storyTasks) {
+            richText.push({ text: '\n  ▪ ' });
+
             const taskAssignee = task.assigned_user_name || '';
             const taskDate = task.planned_completion_date ? formatDate(task.planned_completion_date) : '';
             const statusText = task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '未开始';
 
-            // Task title line
-            const taskLine = `  ${task.title}${taskAssignee ? '-' + taskAssignee : ''}${taskDate ? '-' + taskDate : ''}-${statusText}`;
-            result.push(taskLine);
+            // Task title
+            richText.push({
+                font: { name: '微软雅黑', size: 10 },
+                text: task.title
+            });
+
+            // Task assignee
+            if (taskAssignee) {
+                richText.push({
+                    font: { name: '微软雅黑', size: 10 },
+                    text: `-${taskAssignee}`
+                });
+            }
+
+            // Task date in orange
+            if (taskDate) {
+                richText.push({
+                    font: { name: '微软雅黑', size: 10, color: { argb: 'FFFF6600' } },
+                    text: `-${taskDate}`
+                });
+            }
+
+            // Task status with color coding
+            const statusColors: any = {
+                'completed': { argb: 'FF008000' },    // Green
+                'in_progress': { argb: 'FF0066CC' },  // Blue
+                'not_started': { argb: 'FF666666' }   // Gray
+            };
+            richText.push({
+                font: { name: '微软雅黑', size: 10, color: statusColors[task.status] || { argb: 'FF000000' } },
+                text: `-${statusText}`
+            });
 
             // Work items from task description
             const workItems = parseWorkItems(task.description);
             workItems.forEach((item, idx) => {
-                result.push(`  ${idx + 1}) ${item}`);
+                richText.push({
+                    font: { name: '微软雅黑', size: 10 },
+                    text: `\n    ${idx + 1}) ${item}`
+                });
             });
         }
-
-        result.push(''); // Empty line between stories
     }
 
-    return result.join('\n').trim() || '暂无';
+    return { richText };
 }
 
 /**
  * Format next week plan (下周计划)
  * Shows all tasks from next sprint grouped by story
+ * Returns Rich Text format for Excel
  */
-function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): string {
+function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): any {
     if (!stories || stories.length === 0) {
-        return '暂无';
+        return { richText: [{ text: '暂无' }] };
     }
 
-    const result: string[] = [];
+    const richText: any[] = [];
     const hasMultipleStories = stories.length > 1;
 
     for (let i = 0; i < stories.length; i++) {
@@ -383,32 +466,69 @@ function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): string {
 
         if (storyTasks.length === 0) continue;
 
-        // Story title line
+        // Add blank line between stories
+        if (i > 0) {
+            richText.push({ text: '\n\n' });
+        }
+
+        // Story title - bold, size 11
         const storyPrefix = hasMultipleStories ? `${i + 1}. ` : '';
+        richText.push({
+            font: { bold: true, name: '微软雅黑', size: 11 },
+            text: `${storyPrefix}${story.title}`
+        });
+
+        // Story assignee - regular
         const assignee = story.assigned_user_name || '';
-        const storyTitle = `${storyPrefix}${story.title}${assignee ? '-' + assignee : ''}`;
-        result.push(storyTitle);
-
-        // Tasks under this story
-        for (const task of storyTasks) {
-            const taskAssignee = task.assigned_user_name || '';
-            const taskDate = task.planned_completion_date ? formatDate(task.planned_completion_date) : '';
-
-            // Task title line (no status for next week plan)
-            const taskLine = `  ${task.title}${taskAssignee ? '-' + taskAssignee : ''}${taskDate ? '-' + taskDate : ''}`;
-            result.push(taskLine);
-
-            // Work items from task description
-            const workItems = parseWorkItems(task.description);
-            workItems.forEach((item, idx) => {
-                result.push(`    ${String.fromCharCode(97 + idx)}) ${item}`); // a) b) c)
+        if (assignee) {
+            richText.push({
+                font: { name: '微软雅黑', size: 11 },
+                text: `-${assignee}`
             });
         }
 
-        result.push(''); // Empty line between stories
+        // Tasks under this story
+        for (const task of storyTasks) {
+            // Bullet point
+            richText.push({ text: '\n  ▪ ' });
+
+            const taskAssignee = task.assigned_user_name || '';
+            const taskDate = task.planned_completion_date ? formatDate(task.planned_completion_date) : '';
+
+            // Task title
+            richText.push({
+                font: { name: '微软雅黑', size: 10 },
+                text: task.title
+            });
+
+            // Task assignee
+            if (taskAssignee) {
+                richText.push({
+                    font: { name: '微软雅黑', size: 10 },
+                    text: `-${taskAssignee}`
+                });
+            }
+
+            // Task date in orange
+            if (taskDate) {
+                richText.push({
+                    font: { name: '微软雅黑', size: 10, color: { argb: 'FFFF6600' } },
+                    text: `-${taskDate}`
+                });
+            }
+
+            // Work items from task description - 4 space indent with a) b) c) numbering
+            const workItems = parseWorkItems(task.description);
+            workItems.forEach((item, idx) => {
+                richText.push({
+                    font: { name: '微软雅黑', size: 10 },
+                    text: `\n    ${String.fromCharCode(97 + idx)}) ${item}`
+                });
+            });
+        }
     }
 
-    return result.join('\n').trim() || '暂无';
+    return { richText };
 }
 
 /**
@@ -920,14 +1040,15 @@ router.get('/weekly', async (req: Request, res: Response) => {
             { width: 6 },   // A: 序号
             { width: 25 },  // B: 项目名称
             { width: 12 },  // C: 类型
-            { width: 12 },  // D: 部门
-            { width: 10 },  // E: 负责人
-            { width: 18 },  // F: 项目组成员 (NEW)
-            { width: 30 },  // G: 关键节点计划
-            { width: 45 },  // H: 本周总结 (wider for work items)
-            { width: 8 },   // I: 完成率
-            { width: 45 },  // J: 下周计划 (wider for work items)
-            { width: 30 },  // K: 风险及应对
+            { width: 15 },  // D: 需求来源 (NEW)
+            { width: 12 },  // E: 部门
+            { width: 10 },  // F: 负责人
+            { width: 18 },  // G: 项目组成员
+            { width: 30 },  // H: 关键节点计划
+            { width: 45 },  // I: 本周总结 (wider for work items)
+            { width: 8 },   // J: 完成率
+            { width: 45 },  // K: 下周计划 (wider for work items)
+            { width: 30 },  // L: 风险及应对
         ];
 
         // Add header row
@@ -935,6 +1056,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
             '序号',
             '项目名称',
             '类型',
+            '需求来源',
             '部门',
             '负责人',
             '项目组成员',
@@ -947,7 +1069,14 @@ router.get('/weekly', async (req: Request, res: Response) => {
 
         // Style header row
         headerRow.eachCell((cell, colNumber) => {
-            cell.font = { bold: true, size: 11 };
+            // Set red font for specific columns: 负责人(6), 关键节点计划(8), 风险及应对(12)
+            const isRedColumn = [6, 8, 12].includes(colNumber);
+            cell.font = {
+                bold: true,
+                size: 11,
+                name: '微软雅黑',
+                color: isRedColumn ? { argb: 'FFFF0000' } : undefined
+            };
             cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cell.border = {
                 top: { style: 'thin' },
@@ -956,8 +1085,8 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 right: { style: 'thin' }
             };
 
-            // Yellow background for summary column (H)
-            if (colNumber === 8) {
+            // Yellow background for summary column (I)
+            if (colNumber === 9) {
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
@@ -996,7 +1125,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
             // B: 项目名称
             const nameCell = worksheet.getCell(`B${startRow}`);
             nameCell.value = project.name || '';
-            nameCell.font = { color: { argb: 'FFFF0000' }, bold: true }; // Red
+            nameCell.font = { color: { argb: 'FFFF0000' }, bold: true, name: '微软雅黑' }; // Red
             nameCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
             // C: 类型
@@ -1004,42 +1133,48 @@ router.get('/weekly', async (req: Request, res: Response) => {
             typeCell.value = project.project_type || '';
             typeCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
-            // D: 部门
-            const deptCell = worksheet.getCell(`D${startRow}`);
+            // D: 需求来源 (NEW)
+            const sourceCell = worksheet.getCell(`D${startRow}`);
+            sourceCell.value = project.requirement_source || '';
+            sourceCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            // E: 部门
+            const deptCell = worksheet.getCell(`E${startRow}`);
             deptCell.value = project.department || '';
             deptCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
-            // E: 负责人
-            const ownerCell = worksheet.getCell(`E${startRow}`);
+            // F: 负责人
+            const ownerCell = worksheet.getCell(`F${startRow}`);
             ownerCell.value = project.owner_name || '';
             ownerCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
-            // F: 项目组成员 (NEW)
-            const membersCell = worksheet.getCell(`F${startRow}`);
+            // G: 项目组成员
+            const membersCell = worksheet.getCell(`G${startRow}`);
             membersCell.value = extractTeamMembers(project.stories, project.tasks);
             membersCell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
 
-            // G: 关键节点计划
-            const planCell = worksheet.getCell(`G${startRow}`);
+            // H: 关键节点计划
+            const planCell = worksheet.getCell(`H${startRow}`);
             planCell.value = formatKeyMilestones(project.stories);
             planCell.alignment = { vertical: 'top', wrapText: true };
 
-            // H: 本周总结
-            const summaryCell = worksheet.getCell(`H${startRow}`);
+            // I: 本周总结
+            const summaryCell = worksheet.getCell(`I${startRow}`);
             summaryCell.value = formatWeeklySummaryOptimized(project.stories, project.tasks);
             summaryCell.alignment = { vertical: 'top', wrapText: true };
 
-            // I: 完成率
-            const rateCell = worksheet.getCell(`I${startRow}`);
+            // J: 完成率
+            const rateCell = worksheet.getCell(`J${startRow}`);
             rateCell.value = `${project.completion_rate}%`;
             rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
             rateCell.font = {
                 bold: true,
+                name: '微软雅黑',
                 color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
             };
 
-            // J: 下周计划
-            const nextPlanCell = worksheet.getCell(`J${startRow}`);
+            // K: 下周计划
+            const nextPlanCell = worksheet.getCell(`K${startRow}`);
             // Use next sprint data if available, otherwise show "暂无"
             if (project.next_stories && project.next_stories.length > 0) {
                 nextPlanCell.value = formatNextWeekPlanOptimized(project.next_stories, project.next_tasks);
@@ -1048,8 +1183,8 @@ router.get('/weekly', async (req: Request, res: Response) => {
             }
             nextPlanCell.alignment = { vertical: 'top', wrapText: true };
 
-            // K: 风险及应对
-            const riskCell = worksheet.getCell(`K${startRow}`);
+            // L: 风险及应对
+            const riskCell = worksheet.getCell(`L${startRow}`);
             const risks = project.stories
                 .map((s: any) => s.risk_and_countermeasure)
                 .filter((r: any) => r && r.trim())
@@ -1058,7 +1193,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
             riskCell.alignment = { vertical: 'top', wrapText: true };
 
             // Apply background color and borders to all cells in row
-            for (let col = 1; col <= 11; col++) {
+            for (let col = 1; col <= 12; col++) {
                 const cell = worksheet.getCell(startRow, col);
                 cell.fill = {
                     type: 'pattern',
@@ -1077,9 +1212,9 @@ router.get('/weekly', async (req: Request, res: Response) => {
         }
 
         // Set response headers
-        const filename = `weekly-report-${currentSprint.sprint_number}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        const filename = `周报-${currentSprint.sprint_number}-${new Date().toISOString().split('T')[0]}.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
 
         // Write to response
         await workbook.xlsx.write(res);
