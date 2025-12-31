@@ -62,14 +62,16 @@ export default function ProjectSidebar({ projects, selectedId, onSelect, onAddCl
                         );
                     })}
 
-                    {/* <Button
-                        variant="ghost"
-                        onClick={onAddClick}
-                        className="w-full justify-start h-9 text-muted-foreground hover:text-foreground border border-dashed border-border/50 hover:bg-muted/20 gap-2 px-3 mt-2"
-                    >
-                        <Plus className="w-4 h-4" />
-                        <span className="text-sm">添加项目</span>
-                    </Button> */}
+                    {onAddClick && (
+                        <Button
+                            variant="ghost"
+                            onClick={onAddClick}
+                            className="w-full justify-start h-9 text-muted-foreground hover:text-foreground border border-dashed border-border/50 hover:bg-muted/20 gap-2 px-3 mt-2"
+                        >
+                            <Plus className="w-4 h-4" />
+                            <span className="text-sm">添加项目</span>
+                        </Button>
+                    )}
                 </div>
             </div>
 

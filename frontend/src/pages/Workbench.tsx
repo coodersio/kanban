@@ -871,7 +871,7 @@ export default function Workbench() {
                 <aside className="w-64 flex flex-col min-h-0 flex-shrink-0 border-r bg-background z-10">
                     <div className="flex items-center justify-between px-4 py-4 border-b">
                         <h3 className="text-sm font-bold text-foreground">项目列表</h3>
-                        {isAdmin && (
+                        {!isExternal && (
                             <Button variant="ghost" size="icon" onClick={openAddProjectDialog} className="w-7 h-7 hover:bg-muted/50 text-muted-foreground hover:text-foreground rounded-md">
                                 <Plus className="w-4 h-4" />
                             </Button>
@@ -891,8 +891,8 @@ export default function Workbench() {
                                     navigate(`/dashboard/workbench/PROJECT-${projectId}`);
                                 }
                             }}
-                            onAddClick={openAddProjectDialog}
-                            onEditClick={openEditProjectDialog}
+                            onAddClick={!isExternal ? openAddProjectDialog : undefined}
+                            onEditClick={!isExternal ? openEditProjectDialog : undefined}
                         />
                     </div>
                 </aside>

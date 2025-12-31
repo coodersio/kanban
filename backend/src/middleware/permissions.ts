@@ -100,16 +100,28 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     [UserRole.DEVELOPER]: [
         Permission.VIEW_USERS,
 
+        // Full project permissions
         Permission.VIEW_PROJECTS,
+        Permission.CREATE_PROJECT,
+        Permission.EDIT_PROJECT,
         Permission.EDIT_OWN_PROJECT,
+        Permission.DELETE_PROJECT,
 
+        // Full story permissions
         Permission.VIEW_STORIES,
         Permission.CREATE_STORY,
+        Permission.EDIT_STORY,
         Permission.EDIT_OWN_STORY,
+        Permission.DELETE_STORY,
+        Permission.ASSIGN_STORY,
 
+        // Full task permissions
         Permission.VIEW_TASKS,
         Permission.CREATE_TASK,
+        Permission.EDIT_TASK,
         Permission.EDIT_ASSIGNED_TASK,
+        Permission.DELETE_TASK,
+        Permission.ASSIGN_TASK,
         Permission.UPDATE_TASK_STATUS,
 
         Permission.VIEW_SPRINTS,
