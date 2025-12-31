@@ -40,6 +40,7 @@ interface Props {
     open: boolean;
     onClose: () => void;
     onSave: (updatedStory: any) => void;
+    onDelete?: () => void;
     members: Member[];
     currentUser?: { id: number, role: string, displayName: string };
     sprintId?: number;
@@ -52,6 +53,7 @@ export default function StoryDetailsDrawer({
     open,
     onClose,
     onSave,
+    onDelete,
     members,
     currentUser,
     sprintId,
@@ -380,6 +382,9 @@ export default function StoryDetailsDrawer({
 
             if (res.ok) {
                 toast({ title: "删除成功" });
+                if (onDelete) {
+                    onDelete(); // 触发父组件刷新
+                }
                 onClose();
             } else {
                 toast({ title: "删除失败，请重试", variant: "destructive" });
