@@ -1,0 +1,340 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1800" width="1600" height="1800">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .entity-table { fill: #f0f0f0; stroke: #333; stroke-width: 2; }
+      .reference-table { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
+      .snapshot-table { fill: #e8f5e9; stroke: #388e3c; stroke-width: 2; }
+      .core-table { fill: #fff3e0; stroke: #f57c00; stroke-width: 2; }
+      .table-header { fill: #333; }
+      .table-header-text { fill: white; font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; }
+      .field-text { font-family: 'Courier New', monospace; font-size: 11px; fill: #333; }
+      .field-pk { font-weight: bold; fill: #d32f2f; }
+      .field-fk { fill: #1976d2; }
+      .field-reference { fill: #388e3c; }
+      .field-snapshot { fill: #f57c00; }
+      .relationship { stroke: #666; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .relationship-cascade { stroke: #d32f2f; stroke-width: 2; stroke-dasharray: 5,5; fill: none; marker-end: url(#arrowhead-red); }
+      .label { font-family: Arial, sans-serif; font-size: 10px; fill: #666; }
+      .legend-text { font-family: Arial, sans-serif; font-size: 12px; fill: #333; }
+      .title-text { font-family: Arial, sans-serif; font-size: 20px; font-weight: bold; fill: #333; }
+      .subtitle-text { font-family: Arial, sans-serif; font-size: 14px; fill: #666; }
+      .layer-label { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; fill: #666; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#666" />
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#d32f2f" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="800" y="30" text-anchor="middle" class="title-text">v3.1 流转模型 + RBAC ER 图</text>
+  <text x="800" y="50" text-anchor="middle" class="subtitle-text">Weekly Report System - Flow Model + RBAC Architecture</text>
+
+  <!-- Layer 1 Label: 辅助表 -->
+  <text x="20" y="105" class="layer-label">辅助表 →</text>
+
+  <!-- Layer 1: Support Tables (辅助表) -->
+
+  <!-- Users Table -->
+  <rect x="180" y="80" width="220" height="160" class="entity-table" rx="5"/>
+  <rect x="180" y="80" width="220" height="30" class="table-header" rx="5"/>
+  <text x="290" y="100" text-anchor="middle" class="table-header-text">users</text>
+  <text x="190" y="130" class="field-text field-pk">● id (PK)</text>
+  <text x="190" y="150" class="field-text">username</text>
+  <text x="190" y="170" class="field-text">email</text>
+  <text x="190" y="190" class="field-text">role (admin/developer/external)</text>
+  <text x="190" y="210" class="field-text">display_name</text>
+  <text x="190" y="230" class="field-text">created_at</text>
+
+  <!-- Departments Table -->
+  <rect x="450" y="80" width="220" height="140" class="entity-table" rx="5"/>
+  <rect x="450" y="80" width="220" height="30" class="table-header" rx="5"/>
+  <text x="560" y="100" text-anchor="middle" class="table-header-text">departments</text>
+  <text x="460" y="130" class="field-text field-pk">● id (PK)</text>
+  <text x="460" y="150" class="field-text">name</text>
+  <text x="460" y="170" class="field-text">created_at</text>
+  <text x="460" y="190" class="field-text">updated_at</text>
+  <text x="460" y="210" class="field-text">deleted_at</text>
+
+  <!-- Project Types Table -->
+  <rect x="720" y="80" width="220" height="140" class="entity-table" rx="5"/>
+  <rect x="720" y="80" width="220" height="30" class="table-header" rx="5"/>
+  <text x="830" y="100" text-anchor="middle" class="table-header-text">project_types</text>
+  <text x="730" y="130" class="field-text field-pk">● id (PK)</text>
+  <text x="730" y="150" class="field-text">name</text>
+  <text x="730" y="170" class="field-text">created_at</text>
+  <text x="730" y="190" class="field-text">updated_at</text>
+  <text x="730" y="210" class="field-text">deleted_at</text>
+
+  <!-- Layer 2 Label: 引用表 (核心实体) -->
+  <text x="20" y="305" class="layer-label">引用表 →</text>
+
+  <!-- Layer 2: Reference Tables (引用表 + 核心表) -->
+
+  <!-- Projects Table (Core) -->
+  <rect x="50" y="280" width="270" height="240" class="core-table" rx="5"/>
+  <rect x="50" y="280" width="270" height="30" class="table-header" rx="5"/>
+  <text x="185" y="300" text-anchor="middle" class="table-header-text">projects (项目)</text>
+  <text x="60" y="330" class="field-text field-pk">● id (PK)</text>
+  <text x="60" y="350" class="field-text">software_name</text>
+  <text x="60" y="370" class="field-text field-fk">○ project_type_id (FK)</text>
+  <text x="60" y="390" class="field-text field-fk">○ department_id (FK)</text>
+  <text x="60" y="410" class="field-text field-reference">⭐ source (需求来源) [v3.1]</text>
+  <text x="60" y="430" class="field-text">is_critical</text>
+  <text x="60" y="450" class="field-text">created_at</text>
+  <text x="60" y="470" class="field-text">updated_at</text>
+  <text x="60" y="490" class="field-text">deleted_at</text>
+  <text x="60" y="510" class="field-text">created_by (FK)</text>
+
+  <!-- Sprints Table (Core) -->
+  <rect x="370" y="280" width="270" height="220" class="core-table" rx="5"/>
+  <rect x="370" y="280" width="270" height="30" class="table-header" rx="5"/>
+  <text x="505" y="300" text-anchor="middle" class="table-header-text">sprints (迭代)</text>
+  <text x="380" y="330" class="field-text field-pk">● id (PK)</text>
+  <text x="380" y="350" class="field-text">sprint_number (UQ)</text>
+  <text x="380" y="370" class="field-text">start_date</text>
+  <text x="380" y="390" class="field-text">end_date</text>
+  <text x="380" y="410" class="field-text">status (current/archived/planned)</text>
+  <text x="380" y="430" class="field-text">created_at</text>
+  <text x="380" y="450" class="field-text">updated_at</text>
+  <text x="380" y="470" class="field-text">deleted_at</text>
+  <text x="380" y="490" class="field-text">created_by (FK)</text>
+
+  <!-- Stories Table (Reference) -->
+  <rect x="690" y="280" width="270" height="260" class="reference-table" rx="5"/>
+  <rect x="690" y="280" width="270" height="30" class="table-header" rx="5"/>
+  <text x="825" y="300" text-anchor="middle" class="table-header-text">stories (计划 - 引用表)</text>
+  <text x="700" y="330" class="field-text field-pk">● id (PK)</text>
+  <text x="700" y="350" class="field-text field-fk">○ project_id (FK)</text>
+  <text x="700" y="375" class="field-text field-reference">⭐ title (引用字段)</text>
+  <text x="700" y="395" class="field-text field-reference">⭐ description</text>
+  <text x="700" y="415" class="field-text field-reference">⭐ planned_start_date</text>
+  <text x="700" y="435" class="field-text field-reference">⭐ planned_end_date</text>
+  <text x="700" y="455" class="field-text field-reference">⭐ is_critical</text>
+  <text x="700" y="475" class="field-text field-fk">○ created_by (FK)</text>
+  <text x="700" y="495" class="field-text">created_at</text>
+  <text x="700" y="515" class="field-text">updated_at</text>
+  <text x="700" y="535" class="field-text">deleted_at</text>
+
+  <!-- Tasks Table (Reference) -->
+  <rect x="1010" y="280" width="270" height="240" class="reference-table" rx="5"/>
+  <rect x="1010" y="280" width="270" height="30" class="table-header" rx="5"/>
+  <text x="1145" y="300" text-anchor="middle" class="table-header-text">tasks (任务 - 引用表)</text>
+  <text x="1020" y="330" class="field-text field-pk">● id (PK)</text>
+  <text x="1020" y="350" class="field-text field-fk">○ project_id (FK)</text>
+  <text x="1020" y="370" class="field-text field-fk">○ story_id (FK, nullable)</text>
+  <text x="1020" y="395" class="field-text field-reference">⭐ title (引用字段)</text>
+  <text x="1020" y="415" class="field-text field-reference">⭐ description</text>
+  <text x="1020" y="435" class="field-text field-fk">○ created_by (FK)</text>
+  <text x="1020" y="455" class="field-text">created_at</text>
+  <text x="1020" y="475" class="field-text">updated_at</text>
+  <text x="1020" y="495" class="field-text">deleted_at</text>
+
+  <!-- Layer 3 Label: 快照表 -->
+  <text x="20" y="605" class="layer-label">快照表 →</text>
+
+  <!-- Layer 3: Snapshot Tables (快照表) -->
+
+  <!-- Sprint_Projects Table (Snapshot) -->
+  <rect x="50" y="580" width="320" height="240" class="snapshot-table" rx="5"/>
+  <rect x="50" y="580" width="320" height="30" class="table-header" rx="5"/>
+  <text x="210" y="600" text-anchor="middle" class="table-header-text">sprint_projects (项目快照表)</text>
+  <text x="60" y="630" class="field-text field-pk">● id (PK)</text>
+  <text x="60" y="650" class="field-text field-fk">○ sprint_id (FK)</text>
+  <text x="60" y="670" class="field-text field-fk">○ project_id (FK)</text>
+  <text x="60" y="690" class="field-text">UNIQUE(sprint_id, project_id)</text>
+  <text x="60" y="715" class="field-text field-snapshot">⭐ priority (快照字段)</text>
+  <text x="60" y="735" class="field-text field-snapshot">⭐ notes</text>
+  <text x="60" y="755" class="field-text">added_at</text>
+  <text x="60" y="775" class="field-text">updated_at</text>
+  <text x="60" y="795" class="field-text">deleted_at</text>
+  <text x="60" y="815" class="field-text">added_by (FK)</text>
+
+  <!-- Sprint_Stories Table (Snapshot) -->
+  <rect x="420" y="580" width="320" height="300" class="snapshot-table" rx="5"/>
+  <rect x="420" y="580" width="320" height="30" class="table-header" rx="5"/>
+  <text x="580" y="600" text-anchor="middle" class="table-header-text">sprint_stories (快照表)</text>
+  <text x="430" y="630" class="field-text field-pk">● id (PK)</text>
+  <text x="430" y="650" class="field-text field-fk">○ project_id (FK)</text>
+  <text x="430" y="670" class="field-text field-fk">○ sprint_id (FK)</text>
+  <text x="430" y="690" class="field-text field-fk">○ story_id (FK)</text>
+  <text x="430" y="710" class="field-text">UNIQUE(sprint_id, story_id)</text>
+  <text x="430" y="735" class="field-text field-snapshot">⭐ status (快照字段)</text>
+  <text x="430" y="755" class="field-text field-snapshot">⭐ progress</text>
+  <text x="430" y="775" class="field-text field-snapshot">⭐ assigned_to (FK)</text>
+  <text x="430" y="795" class="field-text field-snapshot">⭐ notes</text>
+  <text x="430" y="815" class="field-text">added_at</text>
+  <text x="430" y="835" class="field-text">updated_at</text>
+  <text x="430" y="855" class="field-text">deleted_at</text>
+  <text x="430" y="875" class="field-text">added_by (FK)</text>
+
+  <!-- Sprint_Tasks Table (Snapshot) -->
+  <rect x="790" y="580" width="340" height="320" class="snapshot-table" rx="5"/>
+  <rect x="790" y="580" width="340" height="30" class="table-header" rx="5"/>
+  <text x="960" y="600" text-anchor="middle" class="table-header-text">sprint_tasks (快照表)</text>
+  <text x="800" y="630" class="field-text field-pk">● id (PK)</text>
+  <text x="800" y="650" class="field-text field-fk">○ project_id (FK)</text>
+  <text x="800" y="670" class="field-text field-fk">○ sprint_id (FK)</text>
+  <text x="800" y="690" class="field-text field-fk">○ task_id (FK)</text>
+  <text x="800" y="710" class="field-text field-fk">○ story_id (FK, nullable)</text>
+  <text x="800" y="730" class="field-text">UNIQUE(sprint_id, task_id)</text>
+  <text x="800" y="755" class="field-text field-snapshot">⭐ status (快照字段)</text>
+  <text x="800" y="775" class="field-text field-snapshot">⭐ progress</text>
+  <text x="800" y="795" class="field-text field-snapshot">⭐ assigned_to (FK)</text>
+  <text x="800" y="815" class="field-text field-snapshot">⭐ risk_and_countermeasure</text>
+  <text x="800" y="835" class="field-text field-snapshot">⭐ notes</text>
+  <text x="800" y="855" class="field-text">added_at</text>
+  <text x="800" y="875" class="field-text">updated_at</text>
+  <text x="800" y="895" class="field-text">deleted_at</text>
+
+  <!-- Relationships -->
+
+  <!-- Layer 1 to Layer 2 connections -->
+
+  <!-- projects -> departments -->
+  <path d="M 185 280 L 185 260 L 560 260 L 560 220" class="relationship"/>
+
+  <!-- projects -> project_types -->
+  <path d="M 250 280 L 250 260 L 830 260 L 830 220" class="relationship"/>
+
+  <!-- projects -> users (created_by) -->
+  <path d="M 50 510 L 30 510 L 30 160 L 180 160" class="relationship"/>
+
+  <!-- sprints -> users (created_by) -->
+  <path d="M 370 490 L 350 490 L 350 250 L 290 250 L 290 240" class="relationship"/>
+
+  <!-- stories -> projects -->
+  <path d="M 690 350 L 650 350 L 650 400 L 320 400" class="relationship"/>
+
+  <!-- stories -> users (created_by) -->
+  <path d="M 690 475 L 670 475 L 670 250 L 290 250" class="relationship"/>
+
+  <!-- tasks -> projects -->
+  <path d="M 1010 350 L 990 350 L 990 250 L 185 250 L 185 280" class="relationship"/>
+
+  <!-- tasks -> stories (nullable, SET NULL) -->
+  <path d="M 1010 370 L 990 370 L 990 540 L 825 540" class="relationship"/>
+  <text x="900" y="535" class="label">SET NULL</text>
+
+  <!-- tasks -> users (created_by) -->
+  <path d="M 1145 280 L 1145 240 L 290 240" class="relationship"/>
+
+  <!-- Layer 2 to Layer 3 connections -->
+
+  <!-- sprint_projects -> sprints (CASCADE DELETE) -->
+  <path d="M 210 580 L 210 560 L 505 560 L 505 500" class="relationship-cascade"/>
+  <text x="350" y="550" class="label">CASCADE DELETE</text>
+
+  <!-- sprint_projects -> projects (CASCADE DELETE) -->
+  <path d="M 185 580 L 185 520" class="relationship-cascade"/>
+  <text x="190" y="540" class="label">CASCADE</text>
+
+  <!-- sprint_projects -> users (added_by) -->
+  <path d="M 50 815 L 20 815 L 20 160 L 180 160" class="relationship"/>
+
+  <!-- sprint_stories -> sprints (CASCADE DELETE) -->
+  <path d="M 580 580 L 580 560 L 505 560" class="relationship-cascade"/>
+  <text x="520" y="550" class="label">CASCADE</text>
+
+  <!-- sprint_stories -> stories (CASCADE DELETE) -->
+  <path d="M 580 580 L 580 555 L 825 555 L 825 540" class="relationship-cascade"/>
+  <text x="680" y="545" class="label">CASCADE</text>
+
+  <!-- sprint_stories -> projects -->
+  <path d="M 420 650 L 400 650 L 400 400 L 320 400" class="relationship"/>
+
+  <!-- sprint_stories -> users (assigned_to) -->
+  <path d="M 420 775 L 350 775 L 350 930 L 20 930 L 20 160 L 180 160" class="relationship"/>
+
+  <!-- sprint_stories -> users (added_by) -->
+  <path d="M 420 875 L 340 875 L 340 940 L 15 940 L 15 160 L 180 160" class="relationship"/>
+
+  <!-- sprint_tasks -> sprints (CASCADE DELETE) -->
+  <path d="M 960 580 L 960 560 L 505 560" class="relationship-cascade"/>
+  <text x="710" y="550" class="label">CASCADE</text>
+
+  <!-- sprint_tasks -> tasks (CASCADE DELETE) -->
+  <path d="M 960 580 L 960 555 L 1145 555 L 1145 520" class="relationship-cascade"/>
+  <text x="1000" y="545" class="label">CASCADE</text>
+
+  <!-- sprint_tasks -> projects -->
+  <path d="M 790 650 L 770 650 L 770 400 L 320 400" class="relationship"/>
+
+  <!-- sprint_tasks -> stories (nullable) -->
+  <path d="M 790 710 L 760 710 L 760 540 L 825 540" class="relationship"/>
+  <text x="765" y="630" class="label">nullable</text>
+
+  <!-- sprint_tasks -> users (assigned_to) -->
+  <path d="M 790 795 L 360 795 L 360 930 L 20 930" class="relationship"/>
+
+  <!-- Legend -->
+  <rect x="50" y="980" width="1500" height="740" fill="none" stroke="#ccc" stroke-width="2" rx="5"/>
+  <text x="70" y="1020" class="legend-text" font-weight="bold" font-size="16">图例 (Legend):</text>
+
+  <!-- Table Types -->
+  <text x="70" y="1060" class="legend-text" font-weight="bold">表类型:</text>
+  <rect x="70" y="1075" width="150" height="35" class="entity-table" rx="3"/>
+  <text x="80" y="1098" class="legend-text">辅助表 (Support)</text>
+
+  <rect x="250" y="1075" width="150" height="35" class="core-table" rx="3"/>
+  <text x="260" y="1098" class="legend-text">核心实体表 (Core)</text>
+
+  <rect x="430" y="1075" width="150" height="35" class="reference-table" rx="3"/>
+  <text x="440" y="1098" class="legend-text">引用表 (Reference)</text>
+
+  <rect x="610" y="1075" width="150" height="35" class="snapshot-table" rx="3"/>
+  <text x="620" y="1098" class="legend-text">快照表 (Snapshot)</text>
+
+  <!-- Field Types -->
+  <text x="70" y="1160" class="legend-text" font-weight="bold">字段类型:</text>
+  <text x="70" y="1190" class="field-text field-pk">● PK = 主键 (Primary Key)</text>
+  <text x="70" y="1220" class="field-text field-fk">○ FK = 外键 (Foreign Key)</text>
+  <text x="70" y="1250" class="field-text field-reference">⭐ 引用字段 = 全局共享，所有迭代相同 (Reference Fields - Global)</text>
+  <text x="70" y="1280" class="field-text field-snapshot">⭐ 快照字段 = 迭代特定，每个迭代可能不同 (Snapshot Fields - Sprint-Specific)</text>
+
+  <!-- Relationship Types -->
+  <text x="800" y="1160" class="legend-text" font-weight="bold">关系类型:</text>
+  <line x1="800" y1="1185" x2="950" y2="1185" class="relationship"/>
+  <text x="960" y="1190" class="legend-text">普通外键关系</text>
+
+  <line x1="800" y1="1215" x2="950" y2="1215" class="relationship-cascade"/>
+  <text x="960" y="1220" class="legend-text">级联删除 (CASCADE DELETE)</text>
+
+  <!-- Architecture Overview -->
+  <text x="70" y="1340" class="legend-text" font-weight="bold" font-size="14">三层架构 (Three-Layer Architecture):</text>
+
+  <text x="90" y="1375" class="legend-text" font-weight="bold">第一层 - 辅助表 (Support Tables):</text>
+  <text x="110" y="1400" class="legend-text">• 存储基础配置数据：用户、部门、项目类型</text>
+  <text x="110" y="1420" class="legend-text">• 为其他表提供引用数据</text>
+
+  <text x="90" y="1460" class="legend-text" font-weight="bold">第二层 - 引用表 (Reference Tables):</text>
+  <text x="110" y="1485" class="legend-text">• 存储全局共享属性（title, description 等）</text>
+  <text x="110" y="1505" class="legend-text">• projects, sprints: 核心实体表</text>
+  <text x="110" y="1525" class="legend-text">• stories, tasks: 引用表</text>
+  <text x="110" y="1545" class="legend-text">• ID 在所有迭代中保持不变</text>
+
+  <text x="90" y="1585" class="legend-text" font-weight="bold">第三层 - 快照表 (Snapshot Tables):</text>
+  <text x="110" y="1610" class="legend-text">• 存储迭代特定状态（status, progress, assigned_to 等）</text>
+  <text x="110" y="1630" class="legend-text">• 通过 UNIQUE 约束防止重复快照</text>
+  <text x="110" y="1650" class="legend-text">• 通过 CASCADE DELETE 保证数据一致性</text>
+
+  <!-- Key Concepts -->
+  <text x="800" y="1340" class="legend-text" font-weight="bold" font-size="14">核心概念 (Key Concepts):</text>
+
+  <text x="820" y="1375" class="legend-text" font-weight="bold">1. 流转模型 (Flow Model):</text>
+  <text x="840" y="1400" class="legend-text">• Story/Task ID 跨迭代保持不变</text>
+  <text x="840" y="1420" class="legend-text">• 避免数据重复，单一数据源</text>
+
+  <text x="820" y="1460" class="legend-text" font-weight="bold">2. RBAC 权限 (v3.1):</text>
+  <text x="840" y="1485" class="legend-text">• admin: 完整权限</text>
+  <text x="840" y="1505" class="legend-text">• developer: 标准权限</text>
+  <text x="840" y="1525" class="legend-text">• external: 只读权限</text>
+
+  <text x="820" y="1565" class="legend-text" font-weight="bold">3. 数据一致性:</text>
+  <text x="840" y="1590" class="legend-text">• UNIQUE 约束防止重复</text>
+  <text x="840" y="1610" class="legend-text">• CASCADE 保证完整性</text>
+  <text x="840" y="1630" class="legend-text">• Soft Delete 支持恢复</text>
+</svg>

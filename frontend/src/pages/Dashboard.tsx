@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, CheckCircle, Clock, TrendingUp, AlertTriangle, Package, Users, BarChart3, ListTodo } from "lucide-react";
+import { CheckCircle, Clock, Package, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 
 interface DashboardStats {
