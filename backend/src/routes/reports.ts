@@ -640,8 +640,6 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
         const story = stories[i];
         const storyTasks = tasks.filter(t => t.story_id === story.id);
 
-        if (storyTasks.length === 0) continue;
-
         // Add blank line between stories (except first)
         if (i > 0) {
             richText.push({ text: '\n\n' });
@@ -696,6 +694,19 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
             },
             text: `-${calculatedProgress}%`
         });
+
+        // If story has no tasks, show hint
+        if (storyTasks.length === 0) {
+            richText.push({
+                font: {
+                    name: EXCEL_STYLES.FONTS.TASK.name,
+                    size: EXCEL_STYLES.FONTS.TASK.size,
+                    color: { argb: EXCEL_STYLES.COLORS.SLATE_GRAY }
+                },
+                text: '\n  （暂无任务）'
+            });
+            continue;
+        }
 
         // Task Layer
         for (const task of storyTasks) {
@@ -790,8 +801,6 @@ function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): any {
         const story = stories[i];
         const storyTasks = tasks.filter(t => t.story_id === story.id);
 
-        if (storyTasks.length === 0) continue;
-
         // Add blank line between stories
         if (i > 0) {
             richText.push({ text: '\n\n' });
@@ -808,6 +817,19 @@ function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): any {
             },
             text: `${storyPrefix}${story.title}`
         });
+
+        // If story has no tasks, show hint
+        if (storyTasks.length === 0) {
+            richText.push({
+                font: {
+                    name: EXCEL_STYLES.FONTS.TASK.name,
+                    size: EXCEL_STYLES.FONTS.TASK.size,
+                    color: { argb: EXCEL_STYLES.COLORS.SLATE_GRAY }
+                },
+                text: '\n  （暂无任务）'
+            });
+            continue;
+        }
 
         // Task Layer
         for (const task of storyTasks) {
