@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import type { Task, Member, Sprint } from "@/types";
-import { User, Tag, Hash, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock, GitBranch } from 'lucide-react';
+import { User, Tag, Hash, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock, GitBranch, FileText, Info } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -115,6 +115,13 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
             estimated_hours: estimatedHours || null
         });
         onClose();
+    };
+
+    const insertTemplate = () => {
+        const template = `1) 第一项工作内容
+2) 第二项工作内容
+3) 第三项工作内容`;
+        setDescription(description ? description + '\n\n' + template : template);
     };
 
     if (!task) return null;
@@ -316,16 +323,35 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                         />
                     </div>
 
-                    {/* Description */}
+                    {/* Work Items */}
                     <div className="space-y-2 pt-2 border-t">
-                        <Label className="text-sm font-semibold text-foreground">详细信息</Label>
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                <FileText className="w-4 h-4" />
+                                工作项列表
+                            </Label>
+                            {canEdit && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={insertTemplate}
+                                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    插入模板
+                                </Button>
+                            )}
+                        </div>
                         <Textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             disabled={!canEdit}
-                            placeholder="添加描述..."
-                            className="min-h-[120px] border-none bg-secondary/20 focus:bg-secondary/40 focus:ring-0 resize-none p-4 text-sm"
+                            placeholder="请输入工作项，每行一项，例如：&#10;1) 需求分析和方案设计&#10;2) 核心功能开发实现&#10;3) 测试验证和文档整理"
+                            className="min-h-[140px] border-none bg-secondary/20 focus:bg-secondary/40 focus:ring-0 resize-none p-4 text-sm font-mono leading-relaxed"
                         />
+                        <p className="text-xs text-muted-foreground">
+                            推荐格式：每行一项，使用 <code className="text-[11px] px-1 py-0.5 bg-muted rounded">1) 2) 3)</code> 编号
+                        </p>
                     </div>
                 </div>
 

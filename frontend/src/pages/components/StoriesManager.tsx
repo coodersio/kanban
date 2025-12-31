@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Trash2, AlertTriangle } from 'lucide-react';
 import {
     Dialog,
@@ -36,6 +37,14 @@ export default function StoriesManager({ project, onUpdate }: StoriesManagerProp
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    // Create/Edit dialog state
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingStory, setEditingStory] = useState<StoryWithStats | null>(null);
+    const [formData, setFormData] = useState({
+        title: '',
+        description: ''
+    });
+
     // Delete confirmation dialog state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [storyToDelete, setStoryToDelete] = useState<StoryWithStats | null>(null);
@@ -57,6 +66,46 @@ export default function StoriesManager({ project, onUpdate }: StoriesManagerProp
             console.error('Error fetching stories:', err);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleCreateClick = () => {
+        setEditingStory(null);
+        setFormData({ title: '', description: '' });
+        setIsFormOpen(true);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!formData.title.trim()) {
+            alert('请输入节点标题');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/projects/stories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: project.id,
+                    title: formData.title,
+                    description: formData.description
+                })
+            });
+
+            if (res.ok) {
+                setIsFormOpen(false);
+                setFormData({ title: '', description: '' });
+                fetchStories();
+                onUpdate();
+            } else {
+                const error = await res.text();
+                alert(`创建失败: ${error}`);
+            }
+        } catch (err) {
+            console.error('Error creating story:', err);
+            alert('创建失败，请重试');
         }
     };
 
@@ -111,7 +160,7 @@ export default function StoriesManager({ project, onUpdate }: StoriesManagerProp
                             关键节点管理 ({stories.length} 个节点)
                         </p>
                     </div>
-                    <Button size="sm" className="gap-2">
+                    <Button size="sm" className="gap-2" onClick={handleCreateClick}>
                         <Plus className="w-4 h-4" />
                         新建节点
                     </Button>
@@ -140,7 +189,7 @@ export default function StoriesManager({ project, onUpdate }: StoriesManagerProp
                         <p className="text-muted-foreground mb-2">
                             {searchQuery ? '没有找到匹配的关键节点' : '该项目还没有关键节点'}
                         </p>
-                        <Button size="sm" variant="outline" className="gap-2">
+                        <Button size="sm" variant="outline" className="gap-2" onClick={handleCreateClick}>
                             <Plus className="w-4 h-4" />
                             创建第一个节点
                         </Button>
@@ -208,6 +257,50 @@ export default function StoriesManager({ project, onUpdate }: StoriesManagerProp
                     </Table>
                 )}
             </div>
+
+            {/* Create/Edit Story Dialog */}
+            <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingStory ? '编辑关键节点' : '新建关键节点'}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="story-title">节点标题 *</Label>
+                            <Input
+                                id="story-title"
+                                value={formData.title}
+                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                placeholder="例如：用户认证功能"
+                                required
+                                autoFocus
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="story-description">节点描述</Label>
+                            <Textarea
+                                id="story-description"
+                                value={formData.description}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                placeholder="简要描述该关键节点的内容..."
+                                rows={4}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsFormOpen(false)}
+                            >
+                                取消
+                            </Button>
+                            <Button type="submit">
+                                {editingStory ? '保存' : '创建'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             {/* Delete Confirmation Dialog */}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

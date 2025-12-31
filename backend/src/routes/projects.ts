@@ -93,6 +93,27 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// Create a new story
+router.post('/stories', async (req, res) => {
+    const { project_id, title, description } = req.body;
+
+    if (!project_id || !title) {
+        return res.status(400).json({ message: 'project_id and title are required' });
+    }
+
+    try {
+        const result = await pool.query(
+            'INSERT INTO stories (project_id, title, description) VALUES ($1, $2, $3) RETURNING *',
+            [project_id, title.trim(), description?.trim() || null]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating story:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 // Get stories for a specific project with statistics
 router.get('/:id/stories', async (req, res) => {
     const { id } = req.params;
