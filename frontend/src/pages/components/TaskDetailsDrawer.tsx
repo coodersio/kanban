@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,11 +7,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import type { Task, Member, Sprint } from "@/types";
-import { User, Tag, Hash, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock, GitBranch, FileText, Info } from 'lucide-react';
+import { User, Tag, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock, GitBranch, FileText, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -39,11 +47,11 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
     const [risk, setRisk] = useState('');
     const [estimatedHours, setEstimatedHours] = useState<number | undefined>(undefined);
     const [taskSprintId, setTaskSprintId] = useState<number>(-1);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     // Permission Logic
     const isAdmin = currentUser?.role === 'admin';
     const isDeveloper = currentUser?.role === 'developer';
-    const isExternal = currentUser?.role === 'external';
 
     const canEdit = isAdmin || isDeveloper; // Admin and Developer can edit, External cannot
 
@@ -115,6 +123,35 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
             estimated_hours: estimatedHours || null
         });
         onClose();
+    };
+
+    const handleDelete = async () => {
+        if (!task) return;
+
+        try {
+            const res = await fetch('/api/workbench/task/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    taskId: task.id,
+                    sprintId,
+                    projectId,
+                    storyId: task.story_id
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to delete task');
+            }
+
+            setIsDeleteDialogOpen(false);
+            onClose();
+            // Trigger parent to refresh
+            window.location.reload();
+        } catch (err) {
+            console.error('Error deleting task:', err);
+            alert('删除任务失败，请重试');
+        }
     };
 
     const insertTemplate = () => {
@@ -355,17 +392,63 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, members
                     </div>
                 </div>
 
-                <div className="p-4 border-t bg-slate-50 flex justify-end gap-2">
+                <div className="p-4 border-t bg-slate-50 flex justify-between items-center gap-2">
                     {canEdit ? (
                         <>
-                            <Button variant="outline" onClick={onClose} size="sm">取消</Button>
-                            <Button onClick={handleSave} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">保存修改</Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsDeleteDialogOpen(true)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                删除任务
+                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="outline" onClick={onClose} size="sm">取消</Button>
+                                <Button onClick={handleSave} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">保存修改</Button>
+                            </div>
                         </>
                     ) : (
-                        <span className="text-xs text-muted-foreground self-center">仅查看</span>
+                        <>
+                            <div></div>
+                            <span className="text-xs text-muted-foreground self-center">仅查看</span>
+                        </>
                     )}
                 </div>
             </SheetContent>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <AlertTriangle className="w-5 h-5" />
+                            确认删除任务
+                        </DialogTitle>
+                        <DialogDescription className="space-y-2 pt-2">
+                            <p>您确定要删除任务 <strong>"{task?.title}"</strong> 吗？</p>
+                            <p className="text-sm text-muted-foreground">
+                                此操作将从当前迭代中移除该任务。如果任务在其他迭代中也存在，不会受影响。
+                            </p>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} size="sm">
+                            取消
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            size="sm"
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            确认删除
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Sheet>
     );
 }

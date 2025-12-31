@@ -255,6 +255,190 @@ function generateNextWeekPlan(nextSprint: any): string {
 }
 
 // ============================================================
+// OPTIMIZED Helper Functions for New Excel Format
+// ============================================================
+
+/**
+ * Parse work items from task description
+ * Format: "1) xxx\n2) yyy\n3) zzz"
+ */
+function parseWorkItems(description: string | null): string[] {
+    if (!description) return [];
+
+    const lines = description.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const workItems: string[] = [];
+
+    for (const line of lines) {
+        // Match patterns like "1)", "1.", "a)", "a.", etc.
+        if (/^[\d]+[\)\.]\s*/.test(line) || /^[a-z][\)\.]\s*/.test(line)) {
+            workItems.push(line);
+        } else if (workItems.length > 0) {
+            // Continuation of previous item
+            workItems[workItems.length - 1] += ' ' + line;
+        } else {
+            // No numbering, treat as a work item
+            workItems.push(line);
+        }
+    }
+
+    return workItems;
+}
+
+/**
+ * Format key milestones (关键节点计划)
+ * Multiple stories: numbered "1. xxx\n2. yyy"
+ * Single story: no numbering "xxx"
+ * No stories: "暂无"
+ */
+function formatKeyMilestones(stories: any[]): string {
+    if (!stories || stories.length === 0) {
+        return '暂无';
+    }
+
+    if (stories.length === 1) {
+        const story = stories[0];
+        const assignee = story.assigned_user_name || '';
+        const date = story.planned_completion_date ? formatDate(story.planned_completion_date) : '';
+        return `${story.title}${assignee ? '-' + assignee : ''}${date ? '-' + date : ''}`;
+    }
+
+    return stories.map((story, index) => {
+        const assignee = story.assigned_user_name || '';
+        const date = story.planned_completion_date ? formatDate(story.planned_completion_date) : '';
+        return `${index + 1}. ${story.title}${assignee ? '-' + assignee : ''}${date ? '-' + date : ''}`;
+    }).join('\n');
+}
+
+/**
+ * Format date to M/d format
+ */
+function formatDate(dateStr: string): string {
+    const date = new Date(dateStr);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+/**
+ * Format weekly summary (周总结)
+ * Shows all tasks from current sprint grouped by story
+ */
+function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): string {
+    if (!stories || stories.length === 0) {
+        return '暂无';
+    }
+
+    const result: string[] = [];
+    const hasMultipleStories = stories.length > 1;
+
+    for (let i = 0; i < stories.length; i++) {
+        const story = stories[i];
+        const storyTasks = tasks.filter(t => t.story_id === story.id);
+
+        if (storyTasks.length === 0) continue;
+
+        // Story title line
+        const storyPrefix = hasMultipleStories ? `${i + 1}. ` : '';
+        const assignee = story.assigned_user_name || '';
+        const date = story.planned_completion_date ? formatDate(story.planned_completion_date) : '';
+        const storyTitle = `${storyPrefix}${story.title}${date ? '-' + date : ''} ${assignee}`;
+        result.push(storyTitle);
+
+        // Tasks under this story
+        for (const task of storyTasks) {
+            const taskAssignee = task.assigned_user_name || '';
+            const taskDate = task.planned_completion_date ? formatDate(task.planned_completion_date) : '';
+            const statusText = task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '未开始';
+
+            // Task title line
+            const taskLine = `  ${task.title}${taskAssignee ? '-' + taskAssignee : ''}${taskDate ? '-' + taskDate : ''}-${statusText}`;
+            result.push(taskLine);
+
+            // Work items from task description
+            const workItems = parseWorkItems(task.description);
+            workItems.forEach((item, idx) => {
+                result.push(`  ${idx + 1}) ${item}`);
+            });
+        }
+
+        result.push(''); // Empty line between stories
+    }
+
+    return result.join('\n').trim() || '暂无';
+}
+
+/**
+ * Format next week plan (下周计划)
+ * Shows all tasks from next sprint grouped by story
+ */
+function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): string {
+    if (!stories || stories.length === 0) {
+        return '暂无';
+    }
+
+    const result: string[] = [];
+    const hasMultipleStories = stories.length > 1;
+
+    for (let i = 0; i < stories.length; i++) {
+        const story = stories[i];
+        const storyTasks = tasks.filter(t => t.story_id === story.id);
+
+        if (storyTasks.length === 0) continue;
+
+        // Story title line
+        const storyPrefix = hasMultipleStories ? `${i + 1}. ` : '';
+        const assignee = story.assigned_user_name || '';
+        const storyTitle = `${storyPrefix}${story.title}${assignee ? '-' + assignee : ''}`;
+        result.push(storyTitle);
+
+        // Tasks under this story
+        for (const task of storyTasks) {
+            const taskAssignee = task.assigned_user_name || '';
+            const taskDate = task.planned_completion_date ? formatDate(task.planned_completion_date) : '';
+
+            // Task title line (no status for next week plan)
+            const taskLine = `  ${task.title}${taskAssignee ? '-' + taskAssignee : ''}${taskDate ? '-' + taskDate : ''}`;
+            result.push(taskLine);
+
+            // Work items from task description
+            const workItems = parseWorkItems(task.description);
+            workItems.forEach((item, idx) => {
+                result.push(`    ${String.fromCharCode(97 + idx)}) ${item}`); // a) b) c)
+            });
+        }
+
+        result.push(''); // Empty line between stories
+    }
+
+    return result.join('\n').trim() || '暂无';
+}
+
+/**
+ * Extract all unique team members involved in a project
+ */
+function extractTeamMembers(stories: any[], tasks: any[]): string {
+    const members = new Set<string>();
+
+    // From stories
+    stories.forEach(story => {
+        if (story.assigned_user_name) {
+            members.add(story.assigned_user_name);
+        }
+    });
+
+    // From tasks
+    tasks.forEach(task => {
+        if (task.assigned_user_name) {
+            members.add(task.assigned_user_name);
+        }
+    });
+
+    if (members.size === 0) {
+        return '暂无';
+    }
+
+    return Array.from(members).sort().join('、');
+}
+
+// ============================================================
 // POST /api/reports/sprint/:sprintId/export
 // Export weekly report as Excel file
 // ============================================================
@@ -575,7 +759,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
         const projectsResult = await pool.query(projectsQuery, [sprintId]);
         const projects = [];
 
-        // 4. For each project, get stories with multi-sprint data
+        // 4. For each project, get stories and tasks with multi-sprint data
         for (const project of projectsResult.rows) {
             // Get stories in current sprint
             const storiesQuery = `
@@ -636,6 +820,81 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 });
             }
 
+            // Get all tasks for current sprint and project
+            const tasksQuery = `
+                SELECT
+                    t.id,
+                    t.title,
+                    t.description,
+                    st.story_id,
+                    st.status,
+                    st.progress,
+                    st.priority,
+                    st.size,
+                    st.risk_and_countermeasure,
+                    st.estimated_hours,
+                    st.planned_completion_date,
+                    u.display_name AS assigned_user_name
+                FROM tasks t
+                JOIN sprint_tasks st ON t.id = st.task_id
+                LEFT JOIN users u ON st.assigned_to = u.id
+                WHERE st.sprint_id = $1 AND st.project_id = $2
+                ORDER BY st.story_id, t.id
+            `;
+
+            const tasksResult = await pool.query(tasksQuery, [sprintId, project.id]);
+            const tasks = tasksResult.rows;
+
+            // Get stories and tasks for next sprint if exists
+            let nextStories: any[] = [];
+            let nextTasks: any[] = [];
+            if (nextSprint) {
+                // Get all stories in next sprint
+                const nextStoriesQuery = `
+                    SELECT
+                        s.id,
+                        s.title,
+                        s.description,
+                        ss.status,
+                        ss.progress,
+                        ss.priority,
+                        ss.planned_completion_date,
+                        ss.actual_completion_date,
+                        u.display_name AS assigned_user_name
+                    FROM stories s
+                    JOIN sprint_stories ss ON s.id = ss.story_id
+                    LEFT JOIN users u ON ss.assigned_to = u.id
+                    WHERE ss.sprint_id = $1 AND ss.project_id = $2
+                    ORDER BY s.id
+                `;
+
+                const nextStoriesResult = await pool.query(nextStoriesQuery, [nextSprint.id, project.id]);
+                nextStories = nextStoriesResult.rows;
+
+                // Get all tasks in next sprint
+                const nextTasksQuery = `
+                    SELECT
+                        t.id,
+                        t.title,
+                        t.description,
+                        st.story_id,
+                        st.status,
+                        st.progress,
+                        st.priority,
+                        st.size,
+                        st.planned_completion_date,
+                        u.display_name AS assigned_user_name
+                    FROM tasks t
+                    JOIN sprint_tasks st ON t.id = st.task_id
+                    LEFT JOIN users u ON st.assigned_to = u.id
+                    WHERE st.sprint_id = $1 AND st.project_id = $2
+                    ORDER BY st.story_id, t.id
+                `;
+
+                const nextTasksResult = await pool.query(nextTasksQuery, [nextSprint.id, project.id]);
+                nextTasks = nextTasksResult.rows;
+            }
+
             // Calculate completion rate
             const completedStories = stories.filter(s => s.status === 'completed').length;
             const completionRate = stories.length > 0
@@ -645,6 +904,9 @@ router.get('/weekly', async (req: Request, res: Response) => {
             projects.push({
                 ...project,
                 stories,
+                tasks,
+                next_stories: nextStories,
+                next_tasks: nextTasks,
                 completion_rate: completionRate
             });
         }
@@ -658,13 +920,14 @@ router.get('/weekly', async (req: Request, res: Response) => {
             { width: 6 },   // A: 序号
             { width: 25 },  // B: 项目名称
             { width: 12 },  // C: 类型
-            { width: 12 },  // D: 需求来源
+            { width: 12 },  // D: 部门
             { width: 10 },  // E: 负责人
-            { width: 30 },  // F: 关键节点计划
-            { width: 40 },  // G: 本周总结
-            { width: 8 },   // H: 完成率
-            { width: 30 },  // I: 下周计划
-            { width: 30 },  // J: 风险及应对
+            { width: 18 },  // F: 项目组成员 (NEW)
+            { width: 30 },  // G: 关键节点计划
+            { width: 45 },  // H: 本周总结 (wider for work items)
+            { width: 8 },   // I: 完成率
+            { width: 45 },  // J: 下周计划 (wider for work items)
+            { width: 30 },  // K: 风险及应对
         ];
 
         // Add header row
@@ -672,8 +935,9 @@ router.get('/weekly', async (req: Request, res: Response) => {
             '序号',
             '项目名称',
             '类型',
-            '需求来源',
+            '部门',
             '负责人',
+            '项目组成员',
             '关键节点计划',
             `${currentSprint.sprint_number}周总结`,
             '完成率',
@@ -692,8 +956,8 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 right: { style: 'thin' }
             };
 
-            // Yellow background for summary columns
-            if (colNumber === 7) {
+            // Yellow background for summary column (H)
+            if (colNumber === 8) {
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
@@ -719,37 +983,54 @@ router.get('/weekly', async (req: Request, res: Response) => {
             if (project.stories.length === 0) continue;
 
             const startRow = currentRow;
-            const rowCount = project.stories.length;
+            const rowCount = 1; // Now each project is one row
 
             // Alternating background colors
             const bgColor = projIdx % 2 === 0 ? 'FFE7F3FF' : 'FFE2EFDA';
 
-            // Merge cells for project info
-            worksheet.mergeCells(`A${startRow}:A${startRow + rowCount - 1}`);
-            worksheet.mergeCells(`B${startRow}:B${startRow + rowCount - 1}`);
-            worksheet.mergeCells(`C${startRow}:C${startRow + rowCount - 1}`);
-            worksheet.mergeCells(`D${startRow}:D${startRow + rowCount - 1}`);
-            worksheet.mergeCells(`H${startRow}:H${startRow + rowCount - 1}`);
-
-            // Fill project info
+            // A: 序号
             const seqCell = worksheet.getCell(`A${startRow}`);
             seqCell.value = rowNum++;
             seqCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
+            // B: 项目名称
             const nameCell = worksheet.getCell(`B${startRow}`);
             nameCell.value = project.name || '';
             nameCell.font = { color: { argb: 'FFFF0000' }, bold: true }; // Red
             nameCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
+            // C: 类型
             const typeCell = worksheet.getCell(`C${startRow}`);
             typeCell.value = project.project_type || '';
             typeCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
-            const sourceCell = worksheet.getCell(`D${startRow}`);
-            sourceCell.value = project.source || '';
-            sourceCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            // D: 部门
+            const deptCell = worksheet.getCell(`D${startRow}`);
+            deptCell.value = project.department || '';
+            deptCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
-            const rateCell = worksheet.getCell(`H${startRow}`);
+            // E: 负责人
+            const ownerCell = worksheet.getCell(`E${startRow}`);
+            ownerCell.value = project.owner_name || '';
+            ownerCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            // F: 项目组成员 (NEW)
+            const membersCell = worksheet.getCell(`F${startRow}`);
+            membersCell.value = extractTeamMembers(project.stories, project.tasks);
+            membersCell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+
+            // G: 关键节点计划
+            const planCell = worksheet.getCell(`G${startRow}`);
+            planCell.value = formatKeyMilestones(project.stories);
+            planCell.alignment = { vertical: 'top', wrapText: true };
+
+            // H: 本周总结
+            const summaryCell = worksheet.getCell(`H${startRow}`);
+            summaryCell.value = formatWeeklySummaryOptimized(project.stories, project.tasks);
+            summaryCell.alignment = { vertical: 'top', wrapText: true };
+
+            // I: 完成率
+            const rateCell = worksheet.getCell(`I${startRow}`);
             rateCell.value = `${project.completion_rate}%`;
             rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
             rateCell.font = {
@@ -757,67 +1038,39 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
             };
 
-            // Fill story rows
-            for (let i = 0; i < project.stories.length; i++) {
-                const story = project.stories[i];
-                const row = startRow + i;
+            // J: 下周计划
+            const nextPlanCell = worksheet.getCell(`J${startRow}`);
+            // Use next sprint data if available, otherwise show "暂无"
+            if (project.next_stories && project.next_stories.length > 0) {
+                nextPlanCell.value = formatNextWeekPlanOptimized(project.next_stories, project.next_tasks);
+            } else {
+                nextPlanCell.value = '暂无';
+            }
+            nextPlanCell.alignment = { vertical: 'top', wrapText: true };
 
-                // E: 负责人
-                const assigneeCell = worksheet.getCell(`E${row}`);
-                assigneeCell.value = story.assigned_user_name || '';
-                assigneeCell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+            // K: 风险及应对
+            const riskCell = worksheet.getCell(`K${startRow}`);
+            const risks = project.stories
+                .map((s: any) => s.risk_and_countermeasure)
+                .filter((r: any) => r && r.trim())
+                .join('\n\n');
+            riskCell.value = risks || '无';
+            riskCell.alignment = { vertical: 'top', wrapText: true };
 
-                // F: 关键节点计划
-                const planCell = worksheet.getCell(`F${row}`);
-                let planText = story.title;
-                if (story.planned_completion_date) {
-                    const date = new Date(story.planned_completion_date);
-                    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
-                    planText += `\n计划: ${dateStr}`;
-                }
-                planCell.value = planText;
-                planCell.alignment = { vertical: 'top', wrapText: true };
-
-                // G: 本周总结
-                const summaryCell = worksheet.getCell(`G${row}`);
-                let summaryText = `【${story.title}】\n`;
-                summaryText += `状态: ${story.status === 'completed' ? '已完成' : story.status === 'in_progress' ? '进行中' : '未开始'}\n`;
-                summaryText += `进度: ${story.progress || 0}%`;
-                if (story.description) {
-                    summaryText += `\n说明: ${story.description}`;
-                }
-                summaryCell.value = summaryText;
-                summaryCell.alignment = { vertical: 'top', wrapText: true };
-
-                // I: 下周计划
-                const nextPlanCell = worksheet.getCell(`I${row}`);
-                if (story.next_sprint_data) {
-                    nextPlanCell.value = `继续推进\n${story.title}`;
-                } else {
-                    nextPlanCell.value = '';
-                }
-                nextPlanCell.alignment = { vertical: 'top', wrapText: true };
-
-                // J: 风险及应对
-                const riskCell = worksheet.getCell(`J${row}`);
-                riskCell.value = story.risk_and_countermeasure || '';
-                riskCell.alignment = { vertical: 'top', wrapText: true };
-
-                // Apply background color and borders to all cells in row
-                for (let col = 1; col <= 10; col++) {
-                    const cell = worksheet.getCell(row, col);
-                    cell.fill = {
-                        type: 'pattern',
-                        pattern: 'solid',
-                        fgColor: { argb: bgColor }
-                    };
-                    cell.border = {
-                        top: { style: 'thin' },
-                        left: { style: 'thin' },
-                        bottom: { style: 'thin' },
-                        right: { style: 'thin' }
-                    };
-                }
+            // Apply background color and borders to all cells in row
+            for (let col = 1; col <= 11; col++) {
+                const cell = worksheet.getCell(startRow, col);
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: bgColor }
+                };
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
             }
 
             currentRow += rowCount;

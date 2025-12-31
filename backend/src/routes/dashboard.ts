@@ -125,7 +125,7 @@ router.get('/stats', requireAuth, async (req, res) => {
                 s.title as story_title
             FROM sprint_tasks st
             JOIN tasks t ON st.task_id = t.id
-            LEFT JOIN users u ON st.assigned_to = u.id
+            LEFT JOIN users u ON st.updated_by = u.id
             LEFT JOIN projects p ON st.project_id = p.id
             LEFT JOIN stories s ON st.story_id = s.id
             WHERE st.sprint_id = $1
@@ -143,7 +143,7 @@ router.get('/stats', requireAuth, async (req, res) => {
                 NULL as story_title
             FROM sprint_stories ss
             JOIN stories s ON ss.story_id = s.id
-            LEFT JOIN users u ON ss.assigned_to = u.id
+            LEFT JOIN users u ON ss.updated_by = u.id
             LEFT JOIN projects p ON ss.project_id = p.id
             WHERE ss.sprint_id = $1
 

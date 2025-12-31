@@ -330,14 +330,14 @@ router.post('/task/status', blockExternal, async (req, res) => {
         if (check.rows.length > 0) {
             // Update
             await pool.query(
-                'UPDATE sprint_tasks SET status = $1, updated_at = NOW() WHERE sprint_id = $2 AND task_id = $3',
-                [status, sprintId, taskId]
+                'UPDATE sprint_tasks SET status = $1, updated_by = $2, updated_at = NOW() WHERE sprint_id = $3 AND task_id = $4',
+                [status, userId, sprintId, taskId]
             );
         } else {
             // Insert (Project ID required)
             await pool.query(
-                'INSERT INTO sprint_tasks (sprint_id, task_id, project_id, story_id, status) VALUES ($1, $2, $3, $4, $5)',
-                [sprintId, taskId, projectId, storyId, status]
+                'INSERT INTO sprint_tasks (sprint_id, task_id, project_id, story_id, status, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $6)',
+                [sprintId, taskId, projectId, storyId, status, userId]
             );
         }
         res.json({ success: true });
@@ -357,6 +357,7 @@ router.post('/task/assign', blockExternal, async (req, res) => {
 
     const user = (req.session as any).user;
     const role = user?.role;
+    const userId = user?.id;
 
     if (role === 'external') {
         return res.status(403).json({ message: 'External users cannot assign tasks' });
@@ -372,14 +373,14 @@ router.post('/task/assign', blockExternal, async (req, res) => {
         if (check.rows.length > 0) {
             // Update existing snapshot
             await pool.query(
-                'UPDATE sprint_tasks SET assigned_to = $1, updated_at = NOW() WHERE sprint_id = $2 AND task_id = $3',
-                [assignedTo || null, sprintId, taskId]
+                'UPDATE sprint_tasks SET assigned_to = $1, updated_by = $2, updated_at = NOW() WHERE sprint_id = $3 AND task_id = $4',
+                [assignedTo || null, userId, sprintId, taskId]
             );
         } else {
             // Insert new snapshot (shouldn't normally happen, but handle it)
             await pool.query(
-                'INSERT INTO sprint_tasks (sprint_id, task_id, project_id, assigned_to, status) VALUES ($1, $2, $3, $4, $5)',
-                [sprintId, taskId, projectId, assignedTo || null, 'not_started']
+                'INSERT INTO sprint_tasks (sprint_id, task_id, project_id, assigned_to, status, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $6)',
+                [sprintId, taskId, projectId, assignedTo || null, 'not_started', userId]
             );
         }
 
@@ -421,17 +422,17 @@ router.post('/story/status', blockExternal, async (req, res) => {
 
             // Update existing snapshot with auto-set actual_completion_date if needed
             const updateQuery = shouldSetActualDate
-                ? 'UPDATE sprint_stories SET status = $1, actual_completion_date = NOW(), updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3'
-                : 'UPDATE sprint_stories SET status = $1, updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3';
+                ? 'UPDATE sprint_stories SET status = $1, updated_by = $2, actual_completion_date = NOW(), updated_at = NOW() WHERE sprint_id = $3 AND story_id = $4'
+                : 'UPDATE sprint_stories SET status = $1, updated_by = $2, updated_at = NOW() WHERE sprint_id = $3 AND story_id = $4';
 
-            await pool.query(updateQuery, [status, sprintId, storyId]);
+            await pool.query(updateQuery, [status, userId, sprintId, storyId]);
         } else {
             // Insert new snapshot (shouldn't normally happen with drag-drop, but handle it)
             const insertQuery = status === 'completed'
-                ? 'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, actual_completion_date) VALUES ($1, $2, $3, $4, NOW())'
-                : 'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status) VALUES ($1, $2, $3, $4)';
+                ? 'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, created_by, updated_by, actual_completion_date) VALUES ($1, $2, $3, $4, $5, $5, NOW())'
+                : 'INSERT INTO sprint_stories (sprint_id, project_id, story_id, status, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $5)';
 
-            await pool.query(insertQuery, [sprintId, projectId, storyId, status]);
+            await pool.query(insertQuery, [sprintId, projectId, storyId, status, userId]);
         }
         res.json({ success: true });
     } catch (err) {
@@ -450,6 +451,7 @@ router.post('/story/assign', blockExternal, async (req, res) => {
 
     const user = (req.session as any).user;
     const role = user?.role;
+    const userId = user?.id;
 
     if (role === 'external') {
         return res.status(403).json({ message: 'External users cannot assign stories' });
@@ -465,14 +467,14 @@ router.post('/story/assign', blockExternal, async (req, res) => {
         if (check.rows.length > 0) {
             // Update existing snapshot
             await pool.query(
-                'UPDATE sprint_stories SET assigned_to = $1, updated_at = NOW() WHERE sprint_id = $2 AND story_id = $3',
-                [assignedTo || null, sprintId, storyId]
+                'UPDATE sprint_stories SET assigned_to = $1, updated_by = $2, updated_at = NOW() WHERE sprint_id = $3 AND story_id = $4',
+                [assignedTo || null, userId, sprintId, storyId]
             );
         } else {
             // Insert new snapshot (shouldn't normally happen, but handle it)
             await pool.query(
-                'INSERT INTO sprint_stories (sprint_id, story_id, project_id, assigned_to, status) VALUES ($1, $2, $3, $4, $5)',
-                [sprintId, storyId, projectId, assignedTo || null, 'not_started']
+                'INSERT INTO sprint_stories (sprint_id, story_id, project_id, assigned_to, status, created_by, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $6)',
+                [sprintId, storyId, projectId, assignedTo || null, 'not_started', userId]
             );
         }
 
@@ -932,6 +934,52 @@ router.post('/story/delete', blockExternal, async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error deleting story:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
+
+// Delete Task (from sprint or permanently)
+// Delete task - Block external users
+router.post('/task/delete', blockExternal, async (req, res) => {
+    const { sprintId, projectId, storyId, taskId } = req.body;
+
+    // Validate required fields
+    if (!projectId || !storyId || !taskId) {
+        return res.status(400).json({ message: 'Missing required fields: projectId, storyId, and taskId' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        if (sprintId) {
+            // Mode 1: Delete from specific sprint only
+            await client.query(
+                'DELETE FROM sprint_tasks WHERE sprint_id = $1 AND project_id = $2 AND story_id = $3 AND task_id = $4',
+                [sprintId, projectId, storyId, taskId]
+            );
+        } else {
+            // Mode 2: Permanent delete from all sprints and reference table
+            // 1. Delete all sprint_tasks for this task (across all sprints)
+            await client.query(
+                'DELETE FROM sprint_tasks WHERE task_id = $1',
+                [taskId]
+            );
+
+            // 2. Delete the task from reference table
+            await client.query(
+                'DELETE FROM tasks WHERE id = $1',
+                [taskId]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, mode: sprintId ? 'sprint' : 'permanent' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error deleting task:', err);
         res.status(500).json({ message: 'Internal server error' });
     } finally {
         client.release();
