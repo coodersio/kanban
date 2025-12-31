@@ -424,7 +424,7 @@ export default function Dashboard() {
                 {stats.teamPerformance && stats.teamPerformance.length > 0 && (
                     <Card className="shadow-sm">
                         <CardHeader className="flex flex-row items-center justify-between pb-3">
-                            <CardTitle className="text-base font-semibold">团队绩效 (当前迭代)</CardTitle>
+                            <CardTitle className="text-base font-semibold">团队进度 (当前迭代)</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {stats.teamPerformance.map((member, i) => (

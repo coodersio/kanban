@@ -125,13 +125,19 @@ export function AtRiskAlert({ data, loading, onItemClick }: AtRiskAlertProps) {
 
   if (totalRisks === 0) {
     return (
-      <Alert className="border-green-200 bg-green-50">
-        <CheckCircle className="h-4 w-4 text-green-600" />
-        <AlertTitle className="text-green-900">一切正常</AlertTitle>
-        <AlertDescription className="text-green-700">
-          当前迭代无风险项，所有任务进展顺利
-        </AlertDescription>
-      </Alert>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-green-600">
+            <CheckCircle className="h-5 w-5" />
+            <span>一切正常</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            当前迭代无风险项，所有任务进展顺利
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
