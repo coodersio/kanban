@@ -6,6 +6,32 @@ import ExcelJS from 'exceljs';
 const router = express.Router();
 
 // ============================================================
+// Excel Professional Style Configuration
+// Navy/Slate/Emerald Color Scheme for Executive Reports
+// ============================================================
+const EXCEL_STYLES = {
+    COLORS: {
+        NAVY: 'FF1E293B',           // Deep Navy - Headers & Stories
+        OCEAN_BLUE: 'FF3B82F6',     // Ocean Blue - Tasks
+        SLATE_GRAY: 'FF64748B',     // Slate Gray - Work Items
+        EMERALD: 'FF10B981',        // Emerald Green - Success Status
+        ROSE_RED: 'FFF43F5E',       // Rose Red - Warning/Risk
+        ORANGE: 'FFFF6600',         // Orange - Dates (preserved for emphasis)
+        WHITE: 'FFFFFFFF'
+    },
+    FONTS: {
+        STORY: { bold: true, size: 11, name: '微软雅黑' },
+        TASK: { bold: false, size: 10, name: '微软雅黑' },
+        WORK_ITEM: { bold: false, size: 9, name: '微软雅黑' }
+    },
+    INDENT: {
+        STORY: 0,
+        TASK: 2,      // 2 spaces
+        WORK_ITEM: 6  // 6 spaces (4 more than task)
+    }
+};
+
+// ============================================================
 // GET /api/reports/sprint/:sprintId/data
 // Get weekly report data for a specific sprint
 // ============================================================
@@ -345,8 +371,8 @@ function formatDate(dateStr: string): string {
 }
 
 /**
- * Format weekly summary (周总结) with Rich Text formatting
- * Returns Rich Text array for Excel cell
+ * Format weekly summary (周总结) with Professional Rich Text styling
+ * Navy/Ocean Blue/Slate color scheme for executive reports
  */
 function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
     if (!stories || stories.length === 0) {
@@ -367,32 +393,19 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
             richText.push({ text: '\n\n' });
         }
 
-        // Story title line with Rich Text
+        // Story Layer - Navy color, bold, 11pt with numbered list
         const storyPrefix = hasMultipleStories ? `${i + 1}. ` : '';
         richText.push({
-            font: { bold: true, name: '微软雅黑', size: 11 },
+            font: {
+                bold: true,
+                name: EXCEL_STYLES.FONTS.STORY.name,
+                size: EXCEL_STYLES.FONTS.STORY.size,
+                color: { argb: EXCEL_STYLES.COLORS.NAVY }
+            },
             text: `${storyPrefix}${story.title}`
         });
 
-        // Story date in orange
-        const date = story.planned_completion_date ? formatDate(story.planned_completion_date) : '';
-        if (date) {
-            richText.push({
-                font: { bold: true, name: '微软雅黑', size: 11, color: { argb: 'FFFF6600' } },
-                text: `-${date}`
-            });
-        }
-
-        // Story assignee
-        const assignee = story.assigned_user_name || '';
-        if (assignee) {
-            richText.push({
-                font: { name: '微软雅黑', size: 11 },
-                text: `-${assignee}`
-            });
-        }
-
-        // Tasks under this story
+        // Task Layer
         for (const task of storyTasks) {
             richText.push({ text: '\n  ▪ ' });
 
@@ -400,47 +413,69 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
             const taskDate = task.planned_completion_date ? formatDate(task.planned_completion_date) : '';
             const statusText = task.status === 'completed' ? '已完成' : task.status === 'in_progress' ? '进行中' : '未开始';
 
-            // Task title
+            // Task title - Ocean Blue
             richText.push({
-                font: { name: '微软雅黑', size: 10 },
+                font: {
+                    name: EXCEL_STYLES.FONTS.TASK.name,
+                    size: EXCEL_STYLES.FONTS.TASK.size,
+                    color: { argb: EXCEL_STYLES.COLORS.OCEAN_BLUE }
+                },
                 text: task.title
             });
 
-            // Task assignee
+            // Task assignee - Ocean Blue
             if (taskAssignee) {
                 richText.push({
-                    font: { name: '微软雅黑', size: 10 },
+                    font: {
+                        name: EXCEL_STYLES.FONTS.TASK.name,
+                        size: EXCEL_STYLES.FONTS.TASK.size,
+                        color: { argb: EXCEL_STYLES.COLORS.OCEAN_BLUE }
+                    },
                     text: `-${taskAssignee}`
                 });
             }
 
-            // Task date in orange
+            // Task date - Orange (preserved for emphasis)
             if (taskDate) {
                 richText.push({
-                    font: { name: '微软雅黑', size: 10, color: { argb: 'FFFF6600' } },
+                    font: {
+                        name: EXCEL_STYLES.FONTS.TASK.name,
+                        size: EXCEL_STYLES.FONTS.TASK.size,
+                        color: { argb: EXCEL_STYLES.COLORS.ORANGE }
+                    },
                     text: `-${taskDate}`
                 });
             }
 
-            // Task status with color coding
+            // Task status with professional color coding
             const statusColors: any = {
-                'completed': { argb: 'FF008000' },    // Green
-                'in_progress': { argb: 'FF0066CC' },  // Blue
-                'not_started': { argb: 'FF666666' }   // Gray
+                'completed': { argb: EXCEL_STYLES.COLORS.EMERALD },      // Emerald Green
+                'in_progress': { argb: EXCEL_STYLES.COLORS.OCEAN_BLUE }, // Ocean Blue
+                'not_started': { argb: EXCEL_STYLES.COLORS.SLATE_GRAY }  // Slate Gray
             };
             richText.push({
-                font: { name: '微软雅黑', size: 10, color: statusColors[task.status] || { argb: 'FF000000' } },
+                font: {
+                    name: EXCEL_STYLES.FONTS.TASK.name,
+                    size: EXCEL_STYLES.FONTS.TASK.size,
+                    color: statusColors[task.status] || { argb: 'FF000000' }
+                },
                 text: `-${statusText}`
             });
 
-            // Work items from task description
+            // Work Items Layer - Pure indentation, no symbols, Slate Gray
             const workItems = parseWorkItems(task.description);
-            workItems.forEach((item, idx) => {
-                richText.push({
-                    font: { name: '微软雅黑', size: 10 },
-                    text: `\n    ${idx + 1}) ${item}`
+            if (workItems.length > 0) {
+                workItems.forEach((item) => {
+                    richText.push({
+                        font: {
+                            name: EXCEL_STYLES.FONTS.WORK_ITEM.name,
+                            size: EXCEL_STYLES.FONTS.WORK_ITEM.size,
+                            color: { argb: EXCEL_STYLES.COLORS.SLATE_GRAY }
+                        },
+                        text: `\n${' '.repeat(EXCEL_STYLES.INDENT.WORK_ITEM)}${item}`
+                    });
                 });
-            });
+            }
         }
     }
 
@@ -448,9 +483,8 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
 }
 
 /**
- * Format next week plan (下周计划)
- * Shows all tasks from next sprint grouped by story
- * Returns Rich Text format for Excel
+ * Format next week plan (下周计划) with Professional Rich Text styling
+ * Navy/Ocean Blue/Slate color scheme for executive reports
  */
 function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): any {
     if (!stories || stories.length === 0) {
@@ -471,23 +505,19 @@ function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): any {
             richText.push({ text: '\n\n' });
         }
 
-        // Story title - bold, size 11
+        // Story Layer - Navy color, bold, 11pt with numbered list
         const storyPrefix = hasMultipleStories ? `${i + 1}. ` : '';
         richText.push({
-            font: { bold: true, name: '微软雅黑', size: 11 },
+            font: {
+                bold: true,
+                name: EXCEL_STYLES.FONTS.STORY.name,
+                size: EXCEL_STYLES.FONTS.STORY.size,
+                color: { argb: EXCEL_STYLES.COLORS.NAVY }
+            },
             text: `${storyPrefix}${story.title}`
         });
 
-        // Story assignee - regular
-        const assignee = story.assigned_user_name || '';
-        if (assignee) {
-            richText.push({
-                font: { name: '微软雅黑', size: 11 },
-                text: `-${assignee}`
-            });
-        }
-
-        // Tasks under this story
+        // Task Layer
         for (const task of storyTasks) {
             // Bullet point
             richText.push({ text: '\n  ▪ ' });
@@ -495,36 +525,54 @@ function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): any {
             const taskAssignee = task.assigned_user_name || '';
             const taskDate = task.planned_completion_date ? formatDate(task.planned_completion_date) : '';
 
-            // Task title
+            // Task title - Ocean Blue
             richText.push({
-                font: { name: '微软雅黑', size: 10 },
+                font: {
+                    name: EXCEL_STYLES.FONTS.TASK.name,
+                    size: EXCEL_STYLES.FONTS.TASK.size,
+                    color: { argb: EXCEL_STYLES.COLORS.OCEAN_BLUE }
+                },
                 text: task.title
             });
 
-            // Task assignee
+            // Task assignee - Ocean Blue
             if (taskAssignee) {
                 richText.push({
-                    font: { name: '微软雅黑', size: 10 },
+                    font: {
+                        name: EXCEL_STYLES.FONTS.TASK.name,
+                        size: EXCEL_STYLES.FONTS.TASK.size,
+                        color: { argb: EXCEL_STYLES.COLORS.OCEAN_BLUE }
+                    },
                     text: `-${taskAssignee}`
                 });
             }
 
-            // Task date in orange
+            // Task date - Orange (preserved for emphasis)
             if (taskDate) {
                 richText.push({
-                    font: { name: '微软雅黑', size: 10, color: { argb: 'FFFF6600' } },
+                    font: {
+                        name: EXCEL_STYLES.FONTS.TASK.name,
+                        size: EXCEL_STYLES.FONTS.TASK.size,
+                        color: { argb: EXCEL_STYLES.COLORS.ORANGE }
+                    },
                     text: `-${taskDate}`
                 });
             }
 
-            // Work items from task description - 4 space indent with a) b) c) numbering
+            // Work Items Layer - Pure indentation, no symbols, Slate Gray
             const workItems = parseWorkItems(task.description);
-            workItems.forEach((item, idx) => {
-                richText.push({
-                    font: { name: '微软雅黑', size: 10 },
-                    text: `\n    ${String.fromCharCode(97 + idx)}) ${item}`
+            if (workItems.length > 0) {
+                workItems.forEach((item) => {
+                    richText.push({
+                        font: {
+                            name: EXCEL_STYLES.FONTS.WORK_ITEM.name,
+                            size: EXCEL_STYLES.FONTS.WORK_ITEM.size,
+                            color: { argb: EXCEL_STYLES.COLORS.SLATE_GRAY }
+                        },
+                        text: `\n${' '.repeat(EXCEL_STYLES.INDENT.WORK_ITEM)}${item}`
+                    });
                 });
-            });
+            }
         }
     }
 
@@ -1067,7 +1115,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
             '风险及应对'
         ]);
 
-        // Style header row
+        // Style header row - Light blue background with red emphasis columns
         headerRow.eachCell((cell, colNumber) => {
             // Set red font for specific columns: 负责人(6), 关键节点计划(8), 风险及应对(12)
             const isRedColumn = [6, 8, 12].includes(colNumber);
@@ -1085,22 +1133,31 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 right: { style: 'thin' }
             };
 
-            // Yellow background for summary column (I)
+            // Yellow background for summary column (I: 本周总结)
             if (colNumber === 9) {
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: 'FFFFC000' }
+                    fgColor: { argb: 'FFFFC000' }  // Yellow
                 };
             } else {
                 cell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: 'FFD9E1F2' }
+                    fgColor: { argb: 'FFD9E1F2' }  // Light blue
                 };
             }
         });
         headerRow.height = 25;
+
+        // Freeze panes - freeze first row (header) and first two columns
+        worksheet.views = [
+            {
+                state: 'frozen',
+                xSplit: 2,  // Freeze first 2 columns (序号, 项目名称)
+                ySplit: 1   // Freeze first row (header)
+            }
+        ];
 
         // Add data rows
         let rowNum = 1;
