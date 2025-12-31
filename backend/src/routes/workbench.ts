@@ -1495,10 +1495,13 @@ router.get('/task/:taskId/comments', requireAuth, async (req, res) => {
 
 /**
  * POST /api/workbench/task/:taskId/comments
- * Add a new comment to a task
+ * Add a new comment to a task (with @mention support and notifications)
  */
 router.post('/task/:taskId/comments', blockExternal, async (req, res) => {
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN');
+
         const { taskId } = req.params;
         const { content } = req.body;
         const userId = (req as any).session?.user?.id;
@@ -1511,24 +1514,79 @@ router.post('/task/:taskId/comments', blockExternal, async (req, res) => {
             return res.status(401).json({ message: 'User not authenticated' });
         }
 
-        const result = await pool.query(
+        // Insert comment
+        const result = await client.query(
             `INSERT INTO task_comments (task_id, user_id, content)
              VALUES ($1, $2, $3)
-             RETURNING
-                id,
-                task_id,
-                user_id,
-                content,
-                created_at,
-                updated_at`,
+             RETURNING id, task_id, user_id, content, created_at, updated_at`,
             [taskId, userId, content.trim()]
         );
 
+        const commentId = result.rows[0].id;
+
+        // Parse @mentions from content (support @username format)
+        const mentionRegex = /@(\w+)/g;
+        const mentions = [];
+        let match;
+        while ((match = mentionRegex.exec(content)) !== null) {
+            mentions.push(match[1]);
+        }
+
+        if (mentions.length > 0) {
+            // Find user IDs for mentioned usernames
+            const mentionedUsersResult = await client.query(
+                'SELECT id, user_name FROM users WHERE user_name = ANY($1::text[])',
+                [mentions]
+            );
+
+            // Insert comment_mentions and create notifications
+            for (const user of mentionedUsersResult.rows) {
+                // Skip if user mentions themselves
+                if (user.id === userId) continue;
+
+                // Insert mention record
+                await client.query(
+                    `INSERT INTO comment_mentions (comment_id, mentioned_user_id)
+                     VALUES ($1, $2)
+                     ON CONFLICT (comment_id, mentioned_user_id) DO NOTHING`,
+                    [commentId, user.id]
+                );
+
+                // Create mention notification
+                await client.query(
+                    `INSERT INTO notifications (user_id, type, related_task_id, related_comment_id, actor_id)
+                     VALUES ($1, 'mention_in_comment', $2, $3, $4)`,
+                    [user.id, taskId, commentId, userId]
+                );
+            }
+        }
+
+        // Get task assignee to send comment notification
+        const taskResult = await client.query(
+            'SELECT assigned_to FROM sprint_tasks WHERE task_id = $1 LIMIT 1',
+            [taskId]
+        );
+
+        if (taskResult.rows.length > 0 && taskResult.rows[0].assigned_to) {
+            const assigneeId = taskResult.rows[0].assigned_to;
+
+            // Create comment notification for task assignee (if not commenting on own task)
+            if (assigneeId !== userId) {
+                await client.query(
+                    `INSERT INTO notifications (user_id, type, related_task_id, related_comment_id, actor_id)
+                     VALUES ($1, 'comment_on_assigned_task', $2, $3, $4)`,
+                    [assigneeId, taskId, commentId, userId]
+                );
+            }
+        }
+
         // Fetch user info to return complete comment
-        const userResult = await pool.query(
+        const userResult = await client.query(
             'SELECT display_name as user_name FROM users WHERE id = $1',
             [userId]
         );
+
+        await client.query('COMMIT');
 
         const comment = {
             ...result.rows[0],
@@ -1537,8 +1595,11 @@ router.post('/task/:taskId/comments', blockExternal, async (req, res) => {
 
         res.status(201).json(comment);
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error adding task comment:', err);
         res.status(500).json({ message: 'Failed to add comment' });
+    } finally {
+        client.release();
     }
 });
 

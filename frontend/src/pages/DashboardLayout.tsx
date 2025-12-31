@@ -27,11 +27,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NotificationPanel } from "@/components/NotificationPanel";
 
 export default function DashboardLayout() {
     const location = useLocation();
     const navigate = useNavigate();
     const [currentUser, setCurrentUser] = useState<{ id: number, displayName: string, role: string } | null>(null);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
         fetch('/api/auth/me', { credentials: 'include' })
@@ -42,6 +44,26 @@ export default function DashboardLayout() {
             .then(data => setCurrentUser(data.user))
             .catch(() => navigate('/login'));
     }, [navigate]);
+
+    // Fetch unread notification count
+    useEffect(() => {
+        const fetchUnreadCount = async () => {
+            try {
+                const res = await fetch('/api/notifications/unread-count');
+                if (res.ok) {
+                    const data = await res.json();
+                    setUnreadCount(data.count);
+                }
+            } catch (err) {
+                console.error('Error fetching unread count:', err);
+            }
+        };
+
+        fetchUnreadCount();
+        // Poll every 30 seconds
+        const interval = setInterval(fetchUnreadCount, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -155,10 +177,10 @@ export default function DashboardLayout() {
                         >
                             <HelpCircle className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground relative">
-                            <Bell className="w-4 h-4" />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
-                        </Button>
+                        <NotificationPanel
+                            unreadCount={unreadCount}
+                            onUnreadCountChange={setUnreadCount}
+                        />
 
                         {/* User Avatar with Dropdown */}
                         <DropdownMenu>

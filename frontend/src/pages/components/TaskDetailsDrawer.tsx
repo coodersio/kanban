@@ -22,6 +22,38 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { MentionTextarea } from "@/components/MentionTextarea";
+
+// Helper function to render comment content with @mention highlighting
+function renderCommentWithMentions(content: string) {
+    const parts = [];
+    const regex = /@(\w+)/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(content)) !== null) {
+        // Add text before the mention
+        if (match.index > lastIndex) {
+            parts.push(content.substring(lastIndex, match.index));
+        }
+
+        // Add the highlighted mention
+        parts.push(
+            <span key={match.index} className="text-blue-600 font-medium bg-blue-50 px-1 rounded">
+                @{match[1]}
+            </span>
+        );
+
+        lastIndex = regex.lastIndex;
+    }
+
+    // Add remaining text
+    if (lastIndex < content.length) {
+        parts.push(content.substring(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : content;
+}
 
 interface Props {
     task: Task | null;
@@ -502,7 +534,9 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, onDelet
                                                     )}
                                                 </div>
                                             </div>
-                                            <p className="text-sm text-foreground whitespace-pre-wrap break-words">{comment.content}</p>
+                                            <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                                                {renderCommentWithMentions(comment.content)}
+                                            </p>
                                         </div>
                                     </div>
                                 ))
@@ -512,30 +546,30 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, onDelet
                         {/* Add Comment Input */}
                         {canEdit && (
                             <div className="flex gap-2">
-                                <Textarea
-                                    value={newComment}
-                                    onChange={(e) => setNewComment(e.target.value)}
-                                    placeholder="添加评论..."
-                                    className="min-h-[60px] resize-none text-sm"
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                            handleAddComment();
-                                        }
-                                    }}
-                                />
+                                <div className="flex-1">
+                                    <MentionTextarea
+                                        value={newComment}
+                                        onChange={setNewComment}
+                                        placeholder="添加评论 (输入 @ 提及用户)..."
+                                        members={members}
+                                        className="min-h-[60px] resize-none text-sm w-full"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                                handleAddComment();
+                                            }
+                                        }}
+                                    />
+                                </div>
                                 <Button
                                     onClick={handleAddComment}
                                     disabled={!newComment.trim() || isSubmittingComment}
                                     size="sm"
-                                    className="self-end"
+                                    className="self-end flex-shrink-0"
                                 >
                                     <Send className="w-4 h-4" />
                                 </Button>
                             </div>
                         )}
-                        <p className="text-xs text-muted-foreground">
-                            提示：使用 <code className="text-[11px] px-1 py-0.5 bg-muted rounded">Ctrl/Cmd + Enter</code> 快速发送
-                        </p>
                     </div>
                 </div>
 

@@ -94,3 +94,18 @@ export interface TaskComment {
     created_at: string;
     updated_at: string;
 }
+
+export interface Notification {
+    id: number;
+    type: 'comment_on_assigned_task' | 'mention_in_comment';
+    related_task_id: number;
+    related_comment_id: number;
+    is_read: boolean;
+    created_at: string;
+    actor_id: number;
+    actor_name: string;
+    task_title: string;
+    comment_content?: string;
+    task_snapshot_id?: number;
+    sprint_id?: number;
+}
