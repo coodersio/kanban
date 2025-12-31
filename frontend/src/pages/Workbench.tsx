@@ -125,12 +125,6 @@ export default function Workbench() {
     const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
     const [selectedReuseProjectIds, setSelectedReuseProjectIds] = useState<number[]>([]);
 
-    // Sprint Manager State
-    const [isSprintManagerOpen, setIsSprintManagerOpen] = useState(false);
-    const [newSprintName, setNewSprintName] = useState('');
-    const [newSprintStart, setNewSprintStart] = useState('');
-    const [newSprintEnd, setNewSprintEnd] = useState('');
-
     const handleCloseSprint = async (sprintId: number) => {
         try {
             const res = await fetch(`/api/sprints/${sprintId}/close`, { method: 'POST' });
@@ -784,15 +778,6 @@ export default function Workbench() {
                                 ))}
                             </SelectContent>
                         </Select>
-
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setIsSprintManagerOpen(true)}
-                            className="w-9 h-9 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md"
-                        >
-                            <Settings className="w-4 h-4" />
-                        </Button>
                     </div>
 
                     {/* Member Filter */}
@@ -1183,88 +1168,6 @@ export default function Workbench() {
                                 选用节点 {selectedReuseStoryIds.length > 0 && `(${selectedReuseStoryIds.length})`}
                             </Button>
                         )}
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Sprint Manager Dialog */}
-            <Dialog open={isSprintManagerOpen} onOpenChange={setIsSprintManagerOpen}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle className="text-lg font-semibold">迭代管理</DialogTitle>
-                    </DialogHeader>
-
-                    <div className="space-y-3 py-2">
-                        {sprints.map(s => (
-                            <div key={s.id} className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-muted/50 transition-all">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center font-semibold text-muted-foreground text-sm">
-                                        {s.name.replace(/\D/g, '')}
-                                    </div>
-                                    <div>
-                                        <div className="font-medium text-foreground">{s.name}</div>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <Badge
-                                                variant={s.status === 'active' ? 'default' : s.status === 'archived' ? 'secondary' : 'outline'}
-                                                className="text-xs px-2 py-0.5"
-                                            >
-                                                {s.status === 'active' ? '进行中' : s.status === 'archived' ? '已归档' : '计划中'}
-                                            </Badge>
-                                            <span className="text-xs text-muted-foreground">
-                                                {s.start_date && s.end_date ? (
-                                                    `${format(new Date(s.start_date), 'M/d', { locale: zhCN })} - ${format(new Date(s.end_date), 'M/d', { locale: zhCN })}`
-                                                ) : (
-                                                    '未设置日期'
-                                                )}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2">
-                                    {isAdmin && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => window.open(`/api/reports/weekly?sprintId=${s.id}`, '_blank')}
-                                            className="h-8 text-xs"
-                                            title="导出周报"
-                                        >
-                                            <Layout className="w-3.5 h-3.5 mr-1.5" />
-                                            导出
-                                        </Button>
-                                    )}
-                                    {s.status === 'planning' && isAdmin && (
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleActivateSprint(s.id)}
-                                            className="h-8 text-xs"
-                                        >
-                                            立即启动
-                                        </Button>
-                                    )}
-                                    {s.status === 'active' && isAdmin && (
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => handleCloseSprint(s.id)}
-                                            className="h-8 text-xs"
-                                        >
-                                            归档结算
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <DialogFooter className="mt-4">
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsSprintManagerOpen(false)}
-                        >
-                            关闭
-                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
