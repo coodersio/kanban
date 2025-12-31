@@ -96,6 +96,7 @@ export default function Workbench() {
     const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
     const [priorityNotes, setPriorityNotes] = useState('');
     const [projectPriority, setProjectPriority] = useState<string>('中');
+    const [projectSource, setProjectSource] = useState('');
 
 
     // Edit Task Drawer State
@@ -547,6 +548,7 @@ export default function Workbench() {
                 department_id: selectedDeptId,
                 project_type_id: selectedTypeId,
                 owner_id: selectedOwnerId,
+                source: projectSource,
                 priority: projectPriority,
                 notes: priorityNotes
             };
@@ -632,6 +634,7 @@ export default function Workbench() {
         setSelectedDeptId(null);
         setSelectedTypeId(null);
         setSelectedOwnerId(null);
+        setProjectSource('');
         setPriorityNotes('');
         setProjectPriority('中');
         setIsEditMode(false);
@@ -651,6 +654,7 @@ export default function Workbench() {
         setSelectedDeptId(project.department_id || null);
         setSelectedTypeId(project.project_type_id || null);
         setSelectedOwnerId(project.owner_id || null);
+        setProjectSource(project.source || '');
         setPriorityNotes(project.notes || '');
         setProjectPriority(normalizePriority(project.priority));
         setIsEditMode(true);
@@ -1542,6 +1546,16 @@ export default function Workbench() {
                                 />
                             </div>
                             <div className="grid gap-2">
+                                <Label htmlFor="project-desc" className="text-sm font-medium">项目描述</Label>
+                                <Textarea
+                                    id="project-desc"
+                                    placeholder="输入项目描述..."
+                                    value={newDesc}
+                                    onChange={(e) => setNewDesc(e.target.value)}
+                                    className="min-h-[80px]"
+                                />
+                            </div>
+                            <div className="grid gap-2">
                                 <Label className="text-sm font-medium">所属部门</Label>
                                 <Select value={selectedDeptId?.toString() || ''} onValueChange={(v) => setSelectedDeptId(parseInt(v))}>
                                     <SelectTrigger>
@@ -1575,7 +1589,7 @@ export default function Workbench() {
                                 <Label className="text-sm font-medium">项目负责人</Label>
                                 <Select value={selectedOwnerId?.toString() || '0'} onValueChange={(v) => setSelectedOwnerId(v === '0' ? null : parseInt(v))}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="选择负责人" />
+                                        <SelectValue placeholder="选择项目负责人" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="0">未分配</SelectItem>
@@ -1586,6 +1600,15 @@ export default function Workbench() {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="project-source" className="text-sm font-medium">需求来源/项目对接人</Label>
+                                <Input
+                                    id="project-source"
+                                    placeholder="例如：张三 / XX部门"
+                                    value={projectSource}
+                                    onChange={(e) => setProjectSource(e.target.value)}
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
@@ -1609,16 +1632,6 @@ export default function Workbench() {
                                         placeholder="例如：本迭代关口"
                                     />
                                 </div>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="project-desc" className="text-sm font-medium">项目描述</Label>
-                                <Textarea
-                                    id="project-desc"
-                                    placeholder="输入项目描述..."
-                                    value={newDesc}
-                                    onChange={(e) => setNewDesc(e.target.value)}
-                                    className="min-h-[80px]"
-                                />
                             </div>
                         </div>
                     ) : (

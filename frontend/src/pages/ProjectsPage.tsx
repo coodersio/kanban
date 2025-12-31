@@ -373,7 +373,7 @@ export default function ProjectsPage() {
                                 onValueChange={(v) => setFormData({ ...formData, owner_id: v })}
                             >
                                 <SelectTrigger id="owner">
-                                    <SelectValue placeholder="选择负责人" />
+                                    <SelectValue placeholder="选择项目负责人" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="0">未分配</SelectItem>

@@ -123,7 +123,7 @@ router.post('/sprint/project/delete', blockExternal, async (req, res) => {
 
 // Update Project (Reference + Snapshot) - Block external users
 router.post('/project/update', blockExternal, async (req, res) => {
-    const { sprintId, projectId, name, description, department_id, project_type_id, owner_id, priority, notes } = req.body;
+    const { sprintId, projectId, name, description, department_id, project_type_id, owner_id, source, priority, notes } = req.body;
     if (!projectId) return res.status(400).json({ message: 'Missing projectId' });
 
     const client = await pool.connect();
@@ -132,8 +132,8 @@ router.post('/project/update', blockExternal, async (req, res) => {
 
         // 1. Update Reference Table
         await client.query(
-            'UPDATE projects SET software_name = $1, description = $2, department_id = $3, project_type_id = $4, owner_id = $5, updated_at = NOW() WHERE id = $6',
-            [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null, projectId]
+            'UPDATE projects SET software_name = $1, description = $2, department_id = $3, project_type_id = $4, owner_id = $5, source = $6, updated_at = NOW() WHERE id = $7',
+            [name, description, department_id, project_type_id, (owner_id && owner_id !== '0') ? owner_id : null, source || null, projectId]
         );
 
         // 2. Upsert Snapshot Table
