@@ -959,7 +959,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 JOIN sprint_tasks st ON t.id = st.task_id
                 LEFT JOIN users u ON st.assigned_to = u.id
                 WHERE st.sprint_id = $1 AND st.project_id = $2
-                ORDER BY st.story_id, t.id
+                ORDER BY st.order_index ASC, t.id ASC
             `;
 
             const tasksResult = await pool.query(tasksQuery, [sprintId, project.id]);
@@ -1008,7 +1008,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
                     JOIN sprint_tasks st ON t.id = st.task_id
                     LEFT JOIN users u ON st.assigned_to = u.id
                     WHERE st.sprint_id = $1 AND st.project_id = $2
-                    ORDER BY st.story_id, t.id
+                    ORDER BY st.order_index ASC, t.id ASC
                 `;
 
                 const nextTasksResult = await pool.query(nextTasksQuery, [nextSprint.id, project.id]);
