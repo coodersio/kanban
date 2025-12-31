@@ -169,6 +169,8 @@ npm run lint         # 运行ESLint检查
 
 ## 📖 文档
 
+- **用户手册:** [docs/用户操作手册.md](./docs/用户操作手册.md) - 5分钟快速上手 ⭐
+- **快速参考:** [docs/快速参考.md](./docs/快速参考.md) - 常用操作速查
 - **开发指南:** [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) - 完整的开发者文档
 - **部署指南:** [deploy/README.md](./deploy/README.md) - 生产环境部署
 - **架构设计:** [方案/architecture-design-final.md](./方案/architecture-design-final.md) - 系统架构设计
