@@ -1645,4 +1645,493 @@ router.get('/weekly', async (req: Request, res: Response) => {
     }
 });
 
+// ============================================================
+// PERSONAL WEEKLY REPORT EXPORT
+// GET /api/reports/personal?sprintId=X&userId=Y
+// ============================================================
+router.get('/personal', async (req: Request, res: Response) => {
+    const { sprintId, userId } = req.query;
+
+    if (!sprintId || !userId) {
+        return res.status(400).json({ message: 'sprintId and userId are required' });
+    }
+
+    try {
+        // 1. Get user info
+        const userResult = await pool.query(
+            `SELECT u.id, u.display_name, u.role
+             FROM users u
+             WHERE u.id = $1`,
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = userResult.rows[0];
+
+        // 2. Get current sprint info
+        const currentSprintResult = await pool.query(
+            'SELECT id, sprint_number, start_date, end_date FROM sprints WHERE id = $1',
+            [sprintId]
+        );
+
+        if (currentSprintResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Sprint not found' });
+        }
+
+        const currentSprint = currentSprintResult.rows[0];
+        const currentSprintNum = parseInt(sprintId as string);
+
+        // 3. Get previous and next sprint info
+        let previousSprint = null;
+        let nextSprint = null;
+
+        if (currentSprintNum > 0) {
+            const prevResult = await pool.query(
+                'SELECT id, sprint_number FROM sprints WHERE id = $1',
+                [currentSprintNum - 1]
+            );
+            if (prevResult.rows.length > 0) {
+                previousSprint = prevResult.rows[0];
+            }
+        }
+
+        const nextResult = await pool.query(
+            `SELECT id, sprint_number FROM sprints
+             WHERE id > $1 AND id > 0
+             ORDER BY id ASC
+             LIMIT 1`,
+            [currentSprintNum]
+        );
+        if (nextResult.rows.length > 0) {
+            nextSprint = nextResult.rows[0];
+        }
+
+        // 4. Get projects where user has assigned stories or tasks
+        const projectsQuery = `
+            SELECT DISTINCT
+                p.id,
+                p.software_name AS name,
+                p.source,
+                p.description,
+                pt.name AS project_type,
+                d.name AS department,
+                u.display_name AS owner_name
+            FROM projects p
+            LEFT JOIN project_types pt ON p.project_type_id = pt.id
+            LEFT JOIN departments d ON p.department_id = d.id
+            LEFT JOIN users u ON p.owner_id = u.id
+            WHERE p.id IN (
+                SELECT DISTINCT project_id FROM sprint_stories
+                WHERE sprint_id = $1 AND assigned_to = $2
+                UNION
+                SELECT DISTINCT project_id FROM sprint_tasks
+                WHERE sprint_id = $1 AND assigned_to = $2
+            )
+            ORDER BY p.id
+        `;
+
+        const projectsResult = await pool.query(projectsQuery, [sprintId, userId]);
+        const projects = [];
+
+        // 5. For each project, get user's assigned stories and tasks
+        for (const project of projectsResult.rows) {
+            // Get stories assigned to this user in current sprint
+            const storiesQuery = `
+                SELECT
+                    s.id,
+                    s.title,
+                    s.description,
+                    ss.status,
+                    ss.progress,
+                    ss.priority,
+                    ss.planned_completion_date,
+                    ss.actual_completion_date,
+                    ss.risk_and_countermeasure,
+                    u.display_name AS assigned_user_name
+                FROM stories s
+                JOIN sprint_stories ss ON s.id = ss.story_id
+                LEFT JOIN users u ON ss.assigned_to = u.id
+                WHERE ss.sprint_id = $1 AND ss.project_id = $2 AND ss.assigned_to = $3
+                ORDER BY s.id
+            `;
+
+            const storiesResult = await pool.query(storiesQuery, [sprintId, project.id, userId]);
+            const stories = [];
+
+            for (const story of storiesResult.rows) {
+                // Get story data from previous sprint if exists
+                let prevStoryData = null;
+                if (previousSprint) {
+                    const prevQuery = await pool.query(`
+                        SELECT status, progress, notes
+                        FROM sprint_stories
+                        WHERE sprint_id = $1 AND story_id = $2
+                    `, [previousSprint.id, story.id]);
+
+                    if (prevQuery.rows.length > 0) {
+                        prevStoryData = prevQuery.rows[0];
+                    }
+                }
+
+                // Get story data from next sprint if exists
+                let nextStoryData = null;
+                if (nextSprint) {
+                    const nextQuery = await pool.query(`
+                        SELECT status, planned_completion_date, notes
+                        FROM sprint_stories
+                        WHERE sprint_id = $1 AND story_id = $2 AND assigned_to = $3
+                    `, [nextSprint.id, story.id, userId]);
+
+                    if (nextQuery.rows.length > 0) {
+                        nextStoryData = nextQuery.rows[0];
+                    }
+                }
+
+                stories.push({
+                    ...story,
+                    prev_sprint_data: prevStoryData,
+                    next_sprint_data: nextStoryData
+                });
+            }
+
+            // Get all tasks assigned to this user for current sprint and project
+            const tasksQuery = `
+                SELECT
+                    t.id,
+                    t.title,
+                    t.description,
+                    st.story_id,
+                    st.status,
+                    st.progress,
+                    st.priority,
+                    st.size,
+                    st.risk_and_countermeasure,
+                    st.estimated_hours,
+                    st.planned_completion_date,
+                    u.display_name AS assigned_user_name
+                FROM tasks t
+                JOIN sprint_tasks st ON t.id = st.task_id
+                LEFT JOIN users u ON st.assigned_to = u.id
+                WHERE st.sprint_id = $1 AND st.project_id = $2 AND st.assigned_to = $3
+                ORDER BY st.order_index ASC, t.id ASC
+            `;
+
+            const tasksResult = await pool.query(tasksQuery, [sprintId, project.id, userId]);
+            const tasks = tasksResult.rows;
+
+            // Get user's assigned stories and tasks for next sprint if exists
+            let nextStories: any[] = [];
+            let nextTasks: any[] = [];
+            if (nextSprint) {
+                const nextStoriesQuery = `
+                    SELECT
+                        s.id,
+                        s.title,
+                        s.description,
+                        ss.status,
+                        ss.progress,
+                        ss.priority,
+                        ss.planned_completion_date,
+                        ss.actual_completion_date,
+                        u.display_name AS assigned_user_name
+                    FROM stories s
+                    JOIN sprint_stories ss ON s.id = ss.story_id
+                    LEFT JOIN users u ON ss.assigned_to = u.id
+                    WHERE ss.sprint_id = $1
+                        AND ss.project_id = $2
+                        AND ss.assigned_to = $3
+                        AND EXISTS (
+                            SELECT 1 FROM sprint_projects sp
+                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
+                        )
+                    ORDER BY s.id
+                `;
+
+                const nextStoriesResult = await pool.query(nextStoriesQuery, [nextSprint.id, project.id, userId]);
+                nextStories = nextStoriesResult.rows;
+
+                const nextTasksQuery = `
+                    SELECT
+                        t.id,
+                        t.title,
+                        t.description,
+                        st.story_id,
+                        st.status,
+                        st.progress,
+                        st.priority,
+                        st.size,
+                        st.risk_and_countermeasure,
+                        st.estimated_hours,
+                        st.planned_completion_date,
+                        u.display_name AS assigned_user_name
+                    FROM tasks t
+                    JOIN sprint_tasks st ON t.id = st.task_id
+                    LEFT JOIN users u ON st.assigned_to = u.id
+                    WHERE st.sprint_id = $1
+                        AND st.project_id = $2
+                        AND st.assigned_to = $3
+                        AND EXISTS (
+                            SELECT 1 FROM sprint_projects sp
+                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
+                        )
+                    ORDER BY st.order_index ASC, t.id ASC
+                `;
+
+                const nextTasksResult = await pool.query(nextTasksQuery, [nextSprint.id, project.id, userId]);
+                nextTasks = nextTasksResult.rows;
+            }
+
+            // Calculate completion rate
+            const completedStories = stories.filter(s => s.status === 'completed').length;
+            const completionRate = stories.length > 0
+                ? Math.round((completedStories / stories.length) * 100)
+                : 0;
+
+            projects.push({
+                ...project,
+                stories,
+                tasks,
+                next_stories: nextStories,
+                next_tasks: nextTasks,
+                completion_rate: completionRate
+            });
+        }
+
+        // 6. Generate Excel using the same format as team weekly report
+        // (Reuse the existing formatWeeklySummaryOptimized and formatNextWeekPlanOptimized functions)
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet(`个人周报-${user.display_name}`);
+
+        // Set column widths (same as team report)
+        worksheet.columns = [
+            { width: 6 },   // A: 序号
+            { width: 25 },  // B: 项目名称
+            { width: 12 },  // C: 类型
+            { width: 15 },  // D: 需求来源
+            { width: 12 },  // E: 部门
+            { width: 10 },  // F: 负责人
+            { width: 18 },  // G: 项目组成员
+            { width: 30 },  // H: 关键节点计划
+            { width: 45 },  // I: 本周总结
+            { width: 8 },   // J: 完成率
+            { width: 45 },  // K: 下周计划
+            { width: 30 },  // L: 风险及应对
+        ];
+
+        // Add header row
+        const headerRow = worksheet.addRow([
+            '序号',
+            '项目名称',
+            '类型',
+            '需求来源',
+            '部门',
+            '负责人',
+            '项目组成员',
+            '关键节点计划',
+            `${currentSprint.sprint_number}周总结`,
+            '完成率',
+            nextSprint ? `${nextSprint.sprint_number}周计划` : '下周计划',
+            '风险及应对'
+        ]);
+
+        // Style header row (same as team report)
+        headerRow.eachCell((cell, colNumber) => {
+            const isRedColumn = [6, 8, 12].includes(colNumber);
+            cell.font = {
+                bold: true,
+                size: 11,
+                name: '微软雅黑',
+                color: isRedColumn ? { argb: 'FFFF0000' } : undefined
+            };
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+            // Yellow background for summary column (I: 本周总结)
+            if (colNumber === 9) {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFFFC000' }  // Yellow
+                };
+            } else {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFD9E1F2' }  // Light blue
+                };
+            }
+        });
+
+        headerRow.height = 30;
+
+        // Freeze panes - freeze first row (header) and first two columns
+        worksheet.views = [
+            {
+                state: 'frozen',
+                xSplit: 2,  // Freeze first 2 columns (序号, 项目名称)
+                ySplit: 1   // Freeze first row (header)
+            }
+        ];
+
+        // Add data rows
+        let rowNum = 1;
+        let currentRow = 2;
+
+        for (let projIdx = 0; projIdx < projects.length; projIdx++) {
+            const project = projects[projIdx];
+
+            if (project.stories.length === 0) continue;
+
+            const startRow = currentRow;
+
+            // Alternating background colors
+            const bgColor = projIdx % 2 === 0 ? 'FFE7F3FF' : 'FFE2EFDA';
+
+            // A: 序号
+            const seqCell = worksheet.getCell(`A${startRow}`);
+            seqCell.value = rowNum++;
+            seqCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            // B: 项目名称
+            const nameCell = worksheet.getCell(`B${startRow}`);
+            nameCell.value = project.name || '';
+            nameCell.font = { color: { argb: 'FFFF0000' }, bold: true, name: '微软雅黑' }; // Red
+            nameCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            // C: 类型
+            const typeCell = worksheet.getCell(`C${startRow}`);
+            typeCell.value = project.project_type || '';
+            typeCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            // D: 需求来源
+            const sourceCell = worksheet.getCell(`D${startRow}`);
+            sourceCell.value = project.source || '';
+            sourceCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            // E: 部门
+            const deptCell = worksheet.getCell(`E${startRow}`);
+            deptCell.value = project.department || '';
+            deptCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            // F: 负责人
+            const ownerCell = worksheet.getCell(`F${startRow}`);
+            ownerCell.value = project.owner_name || '';
+            ownerCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+            // G: 项目组成员 (for personal report, show the user's name)
+            const membersCell = worksheet.getCell(`G${startRow}`);
+            membersCell.value = user.display_name;
+            membersCell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+
+            // H: 关键节点计划
+            const planCell = worksheet.getCell(`H${startRow}`);
+            planCell.value = formatKeyMilestones(project.stories);
+            planCell.alignment = { vertical: 'top', wrapText: true };
+
+            // I: 本周总结
+            const summaryCell = worksheet.getCell(`I${startRow}`);
+            summaryCell.value = formatWeeklySummaryOptimized(project.stories, project.tasks);
+            summaryCell.alignment = { vertical: 'top', wrapText: true };
+
+            // J: 完成率
+            const rateCell = worksheet.getCell(`J${startRow}`);
+            rateCell.value = `${project.completion_rate}%`;
+            rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            rateCell.font = {
+                bold: true,
+                name: '微软雅黑',
+                color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
+            };
+
+            // K: 下周计划
+            const nextPlanCell = worksheet.getCell(`K${startRow}`);
+            if (project.next_stories && project.next_stories.length > 0) {
+                nextPlanCell.value = formatNextWeekPlanOptimized(project.next_stories, project.next_tasks);
+            } else {
+                nextPlanCell.value = '暂无';
+            }
+            nextPlanCell.alignment = { vertical: 'top', wrapText: true };
+
+            // L: 风险及应对
+            const riskCell = worksheet.getCell(`L${startRow}`);
+            const riskItems: string[] = [];
+            const seenRisks = new Set<string>();
+
+            // Collect risks from stories and tasks
+            for (const story of project.stories) {
+                if (story.risk_and_countermeasure && story.risk_and_countermeasure.trim()) {
+                    const text = story.risk_and_countermeasure.trim();
+                    const fullText = `【${story.title}】${text}`;
+                    if (!seenRisks.has(text)) {
+                        riskItems.push(fullText);
+                        seenRisks.add(text);
+                    }
+                }
+            }
+
+            // Also collect from tasks
+            for (const task of project.tasks) {
+                if (task.risk_and_countermeasure && task.risk_and_countermeasure.trim()) {
+                    const text = task.risk_and_countermeasure.trim();
+                    const fullText = `【任务】${text}`;
+                    if (!seenRisks.has(text)) {
+                        riskItems.push(fullText);
+                        seenRisks.add(text);
+                    }
+                }
+            }
+
+            // Format with numbered list if multiple items
+            let riskText = '暂无';
+            if (riskItems.length === 1) {
+                riskText = riskItems[0];
+            } else if (riskItems.length > 1) {
+                riskText = riskItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+            }
+
+            riskCell.value = riskText;
+            riskCell.alignment = { vertical: 'top', wrapText: true };
+
+            // Apply background color and borders to all cells in row
+            for (let col = 1; col <= 12; col++) {
+                const cell = worksheet.getCell(startRow, col);
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: bgColor }
+                };
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            }
+
+            currentRow++;
+        }
+
+        // Set response headers
+        const filename = `个人周报-${user.display_name}-${currentSprint.sprint_number}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+
+        // Write to response
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (error) {
+        console.error('Error generating personal report:', error);
+        res.status(500).json({ message: 'Failed to generate personal report' });
+    }
+});
+
 export default router;

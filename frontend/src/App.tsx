@@ -7,6 +7,7 @@ import UsersPage from '@/pages/UsersPage';
 import SettingsPage from '@/pages/SettingsPage';
 import SprintsPage from '@/pages/SprintsPage';
 import ProjectsPage from '@/pages/ProjectsPage';
+import RootRedirect from '@/components/RootRedirect';
 
 function App() {
   return (
@@ -24,7 +25,7 @@ function App() {
           {/* Add other routes here */}
         </Route>
 
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>
   )

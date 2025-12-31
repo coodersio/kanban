@@ -163,8 +163,13 @@ export default function SprintsPage() {
             const userRes = await fetch('/api/auth/me');
             const userData = await userRes.json();
 
-            // Use new weekly report API
-            const res = await fetch(`/api/reports/weekly?sprintId=${sprintId}&reportType=personal&userId=${userData.id}`);
+            if (!userData.user || !userData.user.id) {
+                alert('请先登录');
+                return;
+            }
+
+            // Use personal report API
+            const res = await fetch(`/api/reports/personal?sprintId=${sprintId}&userId=${userData.user.id}`);
 
             if (res.ok) {
                 const blob = await res.blob();

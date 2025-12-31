@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import path from 'path';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -15,6 +16,8 @@ import dashboardRoutes from './routes/dashboard';
 import pool from './db/connection';
 
 dotenv.config();
+
+const PgSession = connectPgSimple(session);
 
 const app = express();
 const port = process.env.PORT || 4004;
@@ -34,8 +37,13 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Session Config
+// Session Config with PostgreSQL Store
 app.use(session({
+    store: new PgSession({
+        pool: pool,                // Use existing connection pool
+        tableName: 'session',      // Table name for storing sessions
+        createTableIfMissing: true // Auto-create table if it doesn't exist
+    }),
     secret: process.env.SESSION_SECRET || 'secret_key_change_me',
     resave: false,
     saveUninitialized: false,
