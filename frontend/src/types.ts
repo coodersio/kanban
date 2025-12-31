@@ -83,3 +83,14 @@ export interface BoardData {
     tasks: Task[];
     members: Member[];
 }
+
+export interface TaskComment {
+    id: number;
+    task_id: number;
+    user_id: number;
+    user_name: string;
+    avatar_url?: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+}

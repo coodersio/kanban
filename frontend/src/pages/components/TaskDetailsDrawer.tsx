@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import type { Task, Member, Sprint } from "@/types";
-import { User, Tag, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock, GitBranch, FileText, Trash2 } from 'lucide-react';
+import type { Task, Member, Sprint, TaskComment } from "@/types";
+import { User, Tag, Flag, Calendar as CalendarIcon, AlertTriangle, Percent, Clock, GitBranch, FileText, Trash2, MessageSquare, Send, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -49,6 +49,11 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, onDelet
     const [estimatedHours, setEstimatedHours] = useState<number | undefined>(undefined);
     const [taskSprintId, setTaskSprintId] = useState<number>(-1);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+    // Comments state
+    const [comments, setComments] = useState<TaskComment[]>([]);
+    const [newComment, setNewComment] = useState('');
+    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
     // Permission Logic
     const isAdmin = currentUser?.role === 'admin';
@@ -160,6 +165,72 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, onDelet
 2) 第二项工作内容
 3) 第三项工作内容`;
         setDescription(description ? description + '\n\n' + template : template);
+    };
+
+    // Fetch comments when task changes
+    useEffect(() => {
+        if (task?.id && open) {
+            fetchComments();
+        }
+    }, [task?.id, open]);
+
+    const fetchComments = async () => {
+        if (!task?.id) return;
+        try {
+            const res = await fetch(`/api/workbench/task/${task.id}/comments`);
+            if (res.ok) {
+                const data = await res.json();
+                setComments(data);
+            }
+        } catch (err) {
+            console.error('Error fetching comments:', err);
+        }
+    };
+
+    const handleAddComment = async () => {
+        if (!task?.id || !newComment.trim()) return;
+
+        setIsSubmittingComment(true);
+        try {
+            const res = await fetch(`/api/workbench/task/${task.id}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newComment.trim() })
+            });
+
+            if (res.ok) {
+                const comment = await res.json();
+                setComments([...comments, comment]);
+                setNewComment('');
+            } else {
+                alert('添加评论失败，请重试');
+            }
+        } catch (err) {
+            console.error('Error adding comment:', err);
+            alert('添加评论失败，请重试');
+        } finally {
+            setIsSubmittingComment(false);
+        }
+    };
+
+    const handleDeleteComment = async (commentId: number) => {
+        if (!confirm('确定要删除这条评论吗？')) return;
+
+        try {
+            const res = await fetch(`/api/workbench/task/comment/${commentId}`, {
+                method: 'DELETE'
+            });
+
+            if (res.ok) {
+                setComments(comments.filter(c => c.id !== commentId));
+            } else {
+                const data = await res.json();
+                alert(data.message || '删除评论失败');
+            }
+        } catch (err) {
+            console.error('Error deleting comment:', err);
+            alert('删除评论失败，请重试');
+        }
     };
 
     if (!task) return null;
@@ -389,6 +460,81 @@ export default function TaskDetailsDrawer({ task, open, onClose, onSave, onDelet
                         />
                         <p className="text-xs text-muted-foreground">
                             推荐格式：每行一项，使用 <code className="text-[11px] px-1 py-0.5 bg-muted rounded">1) 2) 3)</code> 编号
+                        </p>
+                    </div>
+
+                    {/* Comments Section */}
+                    <div className="space-y-3 pt-2 border-t">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                <MessageSquare className="w-4 h-4" />
+                                评论 ({comments.length})
+                            </Label>
+                        </div>
+
+                        {/* Comments List */}
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                            {comments.length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-4">暂无评论</p>
+                            ) : (
+                                comments.map((comment) => (
+                                    <div key={comment.id} className="flex gap-3 p-3 rounded-lg bg-secondary/20 hover:bg-secondary/30 transition-colors">
+                                        <Avatar className="w-8 h-8 flex-shrink-0">
+                                            <AvatarImage src={comment.avatar_url} />
+                                            <AvatarFallback className="text-xs">{comment.user_name.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2 mb-1">
+                                                <span className="text-xs font-medium text-foreground">{comment.user_name}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {format(new Date(comment.created_at), 'PPp', { locale: zhCN })}
+                                                    </span>
+                                                    {(currentUser?.id === comment.user_id || isAdmin) && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDeleteComment(comment.id)}
+                                                            className="h-5 w-5 p-0 hover:bg-red-50 hover:text-red-600"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <p className="text-sm text-foreground whitespace-pre-wrap break-words">{comment.content}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Add Comment Input */}
+                        {canEdit && (
+                            <div className="flex gap-2">
+                                <Textarea
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder="添加评论..."
+                                    className="min-h-[60px] resize-none text-sm"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                            handleAddComment();
+                                        }
+                                    }}
+                                />
+                                <Button
+                                    onClick={handleAddComment}
+                                    disabled={!newComment.trim() || isSubmittingComment}
+                                    size="sm"
+                                    className="self-end"
+                                >
+                                    <Send className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                            提示：使用 <code className="text-[11px] px-1 py-0.5 bg-muted rounded">Ctrl/Cmd + Enter</code> 快速发送
                         </p>
                     </div>
                 </div>

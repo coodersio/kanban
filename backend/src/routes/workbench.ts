@@ -1458,4 +1458,124 @@ router.get('/sprint-project/:snapshotId', async (req, res) => {
     }
 });
 
+// ============================================================
+// Task Comments APIs
+// ============================================================
+
+/**
+ * GET /api/workbench/task/:taskId/comments
+ * Get all comments for a task (ordered by creation time)
+ */
+router.get('/task/:taskId/comments', requireAuth, async (req, res) => {
+    try {
+        const { taskId } = req.params;
+
+        const result = await pool.query(
+            `SELECT
+                tc.id,
+                tc.task_id,
+                tc.user_id,
+                tc.content,
+                tc.created_at,
+                tc.updated_at,
+                u.display_name as user_name
+             FROM task_comments tc
+             JOIN users u ON tc.user_id = u.id
+             WHERE tc.task_id = $1
+             ORDER BY tc.created_at ASC`,
+            [taskId]
+        );
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching task comments:', err);
+        res.status(500).json({ message: 'Failed to fetch comments' });
+    }
+});
+
+/**
+ * POST /api/workbench/task/:taskId/comments
+ * Add a new comment to a task
+ */
+router.post('/task/:taskId/comments', blockExternal, async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { content } = req.body;
+        const userId = (req as any).session?.user?.id;
+
+        if (!content || content.trim().length === 0) {
+            return res.status(400).json({ message: 'Comment content is required' });
+        }
+
+        if (!userId) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO task_comments (task_id, user_id, content)
+             VALUES ($1, $2, $3)
+             RETURNING
+                id,
+                task_id,
+                user_id,
+                content,
+                created_at,
+                updated_at`,
+            [taskId, userId, content.trim()]
+        );
+
+        // Fetch user info to return complete comment
+        const userResult = await pool.query(
+            'SELECT display_name as user_name FROM users WHERE id = $1',
+            [userId]
+        );
+
+        const comment = {
+            ...result.rows[0],
+            user_name: userResult.rows[0].user_name
+        };
+
+        res.status(201).json(comment);
+    } catch (err) {
+        console.error('Error adding task comment:', err);
+        res.status(500).json({ message: 'Failed to add comment' });
+    }
+});
+
+/**
+ * DELETE /api/workbench/task/comment/:commentId
+ * Delete a comment (only by comment author or admin)
+ */
+router.delete('/task/comment/:commentId', blockExternal, async (req, res) => {
+    try {
+        const { commentId } = req.params;
+        const userId = (req as any).session?.user?.id;
+        const userRole = (req as any).session?.user?.role;
+
+        // Check if comment exists and user has permission
+        const commentCheck = await pool.query(
+            'SELECT user_id FROM task_comments WHERE id = $1',
+            [commentId]
+        );
+
+        if (commentCheck.rows.length === 0) {
+            return res.status(404).json({ message: 'Comment not found' });
+        }
+
+        const commentOwnerId = commentCheck.rows[0].user_id;
+
+        // Only comment owner or admin can delete
+        if (commentOwnerId !== userId && userRole !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized to delete this comment' });
+        }
+
+        await pool.query('DELETE FROM task_comments WHERE id = $1', [commentId]);
+
+        res.json({ message: 'Comment deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting task comment:', err);
+        res.status(500).json({ message: 'Failed to delete comment' });
+    }
+});
+
 export default router;
