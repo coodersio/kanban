@@ -133,7 +133,18 @@ export default function SprintsPage() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `weekly-report-sprint-${sprintId}-summary-${new Date().toISOString().split('T')[0]}.xlsx`;
+
+                // Extract filename from Content-Disposition header
+                const disposition = res.headers.get('Content-Disposition');
+                let filename = `周报-汇总-${new Date().toISOString().split('T')[0]}.xlsx`;
+                if (disposition) {
+                    const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (filenameMatch && filenameMatch[1]) {
+                        filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''));
+                    }
+                }
+
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -160,7 +171,18 @@ export default function SprintsPage() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `weekly-report-sprint-${sprintId}-personal-${new Date().toISOString().split('T')[0]}.xlsx`;
+
+                // Extract filename from Content-Disposition header
+                const disposition = res.headers.get('Content-Disposition');
+                let filename = `周报-个人-${new Date().toISOString().split('T')[0]}.xlsx`;
+                if (disposition) {
+                    const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (filenameMatch && filenameMatch[1]) {
+                        filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''));
+                    }
+                }
+
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);

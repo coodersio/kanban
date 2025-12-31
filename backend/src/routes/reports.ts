@@ -658,10 +658,10 @@ router.post('/sprint/:sprintId/export', async (req: Request, res: Response) => {
             currentRow += project.stories.length;
         }
         const filename = reportType === 'personal'
-            ? `weekly-report-sprint-${sprintId}-personal-${new Date().toISOString().split('T')[0]}.xlsx`
-            : `weekly-report-sprint-${sprintId}-summary-${new Date().toISOString().split('T')[0]}.xlsx`;
+            ? `周报-Sprint${sprintId}-个人-${new Date().toISOString().split('T')[0]}.xlsx`
+            : `周报-Sprint${sprintId}-汇总-${new Date().toISOString().split('T')[0]}.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         await workbook.xlsx.write(res);
         res.end();
     } catch (error) {
@@ -1212,7 +1212,8 @@ router.get('/weekly', async (req: Request, res: Response) => {
         }
 
         // Set response headers
-        const filename = `周报-${currentSprint.sprint_number}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        const reportTypeSuffix = reportType === 'personal' ? '个人' : '汇总';
+        const filename = `周报-${currentSprint.sprint_number}-${reportTypeSuffix}.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
 
