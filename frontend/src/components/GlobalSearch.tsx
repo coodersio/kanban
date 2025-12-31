@@ -178,9 +178,8 @@ export function GlobalSearch() {
             <div
                 key={`${result.result_type}-${result.id}`}
                 onClick={() => handleResultClick(result)}
-                className={`px-4 py-3 cursor-pointer transition-colors border-b last:border-b-0 ${
-                    isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
+                className={`px-4 py-3 cursor-pointer transition-colors border-b last:border-b-0 ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
             >
                 <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 mt-1">
@@ -217,7 +216,7 @@ export function GlobalSearch() {
                     <input
                         ref={inputRef}
                         type="text"
-                        placeholder="搜索项目、迭代、Story、Task..."
+                        placeholder="搜索项目、迭代、关键节点、任务..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={handleKeyDown}
