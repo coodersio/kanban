@@ -11,7 +11,6 @@ import {
     Users,
     Settings,
     BarChart3,
-    Search,
     Grid3x3,
     HelpCircle,
     Bell,
@@ -28,6 +27,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NotificationPanel } from "@/components/NotificationPanel";
+import { GlobalSearch } from "@/components/GlobalSearch";
 
 export default function DashboardLayout() {
     const location = useLocation();
@@ -154,14 +154,7 @@ export default function DashboardLayout() {
 
                     {/* Center: Search Bar */}
                     <div className="flex-1 max-w-md mx-8">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="搜索所有内容"
-                                className="w-full h-9 pl-10 pr-4 rounded-md bg-input-background border-0 focus:bg-background focus:ring-2 focus:ring-ring/20 transition-all outline-none text-sm placeholder:text-muted-foreground"
-                            />
-                        </div>
+                        <GlobalSearch />
                     </div>
 
                     {/* Right: Actions */}

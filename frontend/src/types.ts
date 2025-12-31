@@ -109,3 +109,13 @@ export interface Notification {
     task_snapshot_id?: number;
     sprint_id?: number;
 }
+
+export interface SearchResult {
+    result_type: 'project' | 'sprint' | 'story' | 'task';
+    id: number;
+    title: string;
+    description?: string;
+    snapshot_id?: number;
+    sprint_id?: number;
+    sprint_number?: string;
+}

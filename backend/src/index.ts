@@ -14,6 +14,7 @@ import workbenchRoutes from './routes/workbench';
 import reportRoutes from './routes/reports';
 import dashboardRoutes from './routes/dashboard';
 import notificationRoutes from './routes/notifications';
+import searchRoutes from './routes/search';
 import pool from './db/connection';
 
 dotenv.config();
@@ -66,6 +67,7 @@ app.use('/api/workbench', workbenchRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/search', searchRoutes);
 const publicDir = path.join(__dirname, 'public');
 if (isProduction) {
     app.use(express.static(publicDir));
