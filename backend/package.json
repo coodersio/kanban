@@ -7,7 +7,7 @@
         "start": "node dist/index.js",
         "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
         "build": "tsc",
-        "migrate:up": "node dist/scripts/migrate.js up",
+        "migrate:up": "node dist/scripts/migrate.js all",
         "migrate:down": "node dist/scripts/migrate.js down",
         "seed": "ts-node src/scripts/seed.ts"
     },
