@@ -18,11 +18,7 @@ jobs:
       - name: Setup environment
         run: |
           cd deploy
-          cat > .env << EOF
-POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-EOF
-        env:
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" > .env
 
       # 部署
       - name: Deploy with Docker Compose
