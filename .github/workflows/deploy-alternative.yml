@@ -1,0 +1,56 @@
+name: Deploy to VPS (Alternative)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      # 自动 checkout 代码到 runner 工作目录
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 创建环境变量文件（如果不存在）
+      - name: Setup environment
+        run: |
+          cd deploy
+          if [ ! -f .env ]; then
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kanban_password}" > .env
+          fi
+
+      # 部署
+      - name: Deploy with Docker Compose
+        run: |
+          echo "========================================="
+          echo "开始部署 KanBan 项目"
+          echo "========================================="
+
+          cd deploy
+
+          echo "1/4 停止旧容器..."
+          docker compose down
+
+          echo "2/4 构建新镜像..."
+          docker compose build --no-cache
+
+          echo "3/4 启动新容器..."
+          docker compose up -d
+
+          echo "等待后端启动..."
+          sleep 10
+
+          echo "4/4 运行数据库迁移..."
+          docker compose exec -T backend npm run migrate:up || echo "迁移失败或无新迁移"
+
+          echo "清理无用镜像..."
+          docker image prune -f
+
+          echo "========================================="
+          echo "部署完成！"
+          echo "========================================="
+
+          docker compose ps
