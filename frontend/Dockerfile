@@ -15,20 +15,17 @@ COPY . .
 # 构建应用
 RUN npm run build
 
-# 生产阶段
-FROM node:20-alpine
+# 生产阶段 - 使用 Nginx 提供静态文件
+FROM nginx:alpine
 
-WORKDIR /app
+# 复制构建产物到 Nginx 默认目录
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# 从构建阶段复制构建产物
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
-
-# 只安装生产依赖
-RUN npm ci --production
+# 复制 Nginx 配置（如果需要自定义）
+# COPY nginx.conf /etc/nginx/nginx.conf
 
 # 暴露端口
-EXPOSE 5001
+EXPOSE 80
 
-# 启动命令
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5001"]
+# Nginx 会自动启动
+CMD ["nginx", "-g", "daemon off;"]
