@@ -50,8 +50,9 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
+        secure: false, // Set to false for HTTP deployment (change to true when using HTTPS)
+        sameSite: 'lax', // 'lax' works for same-site requests through nginx proxy
+        httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 1 day
     }
 }));
