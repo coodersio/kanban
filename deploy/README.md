@@ -1,285 +1,198 @@
-# KanBan 周报系统 - 部署指南
+# KanBan 部署指南
 
-简单快速的部署方案，4步完成部署。
+## 🚀 一键部署（推荐）
 
----
+最简单的方式，适合任何 Linux 服务器：
 
-## 前置要求
-
-- **操作系统:** Ubuntu 20.04+ / CentOS 8+
-- **Docker:** 20.10+
-- **Node.js:** 20+
-- **端口:** 3003 (前端), 4004 (后端), 5432 (数据库)
-
----
-
-## 快速部署 (5分钟)
-
-### 1. 安装环境
-
-**Ubuntu/Debian:**
 ```bash
-# 安装 Docker
+# 1. 克隆项目
+git clone https://github.com/coodersio/kanban.git
+cd kanban/deploy
+
+# 2. 运行安装脚本
+./install.sh
+```
+
+脚本会自动完成：
+- ✅ 检测并安装 Docker
+- ✅ 检测并安装 Docker Compose
+- ✅ 配置防火墙
+- ✅ 生成安全密码
+- ✅ 构建和启动服务
+- ✅ 初始化数据库
+
+**安装时间**: 约 5-10 分钟（取决于网络速度）
+
+---
+
+## 📖 手动部署
+
+如果一键脚本不适用，参考详细的手动部署文档：
+
+👉 [查看完整部署文档](../MANUAL-DEPLOY.md)
+
+### 基本步骤
+
+```bash
+# 1. 安装 Docker 和 Docker Compose
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 
-# 安装 Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+# 2. 克隆项目
+git clone https://github.com/coodersio/kanban.git
+cd kanban/deploy
 
-# 验证安装
-docker --version
-node --version
-npm --version
-```
+# 3. 创建环境变量
+cat > .env << 'ENVEOF'
+POSTGRES_PASSWORD=your_password_here
+SESSION_SECRET=your_secret_here
+ENVEOF
 
-**CentOS/RHEL:**
-```bash
-# 安装 Docker
-sudo yum install -y yum-utils
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo yum install -y docker-ce docker-ce-cli containerd.io
-sudo systemctl start docker
-sudo systemctl enable docker
+# 4. 启动服务
+docker compose up -d
 
-# 安装 Node.js 20
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo yum install -y nodejs
-
-# 验证安装
-docker --version
-node --version
-npm --version
-```
-
-### 2. 上传代码
-
-```bash
-# 创建项目目录
-sudo mkdir -p /opt/kanban
-sudo chown -R $(whoami):$(whoami) /opt/kanban
-
-# 上传代码到 /opt/kanban
-# 使用 scp, sftp 或 git clone
-```
-
-### 3. 一键部署
-
-```bash
-# 进入部署目录
-cd /opt/kanban/deploy
-
-# 赋予执行权限
-chmod +x deploy.sh stop.sh
-
-# 创建日志目录
-mkdir -p /opt/kanban/logs
-
-# 执行部署
-./deploy.sh
-```
-
-**部署过程:**
-1. ✓ 环境检查 (Docker, Node.js)
-2. ✓ 启动数据库 (PostgreSQL)
-3. ✓ 数据初始化 (创建表, 默认账户)
-4. ✓ 启动后端 (端口 4004)
-5. ✓ 启动前端 (端口 3003)
-
-### 4. 访问应用
-
-```
-浏览器打开: http://服务器IP:3003
-
-默认账户:
-  用户名: admin
-  密码: admin123
-
-⚠️  请立即修改默认密码！
+# 5. 初始化数据库
+docker compose exec backend npm run migrate:up
+docker compose exec backend npm run seed
 ```
 
 ---
 
-## 管理命令
+## 🔧 最低系统要求
 
-### 停止服务
+### 推荐配置
+- **OS**: Ubuntu 20.04+, CentOS 8+
+- **CPU**: 2 核
+- **内存**: 2GB
+- **磁盘**: 10GB
+
+### 老旧系统支持
+- **OS**: Ubuntu 16.04+, CentOS 7+
+- **Docker**: 17.06+
+- **Docker Compose**: 1.18+
+
+**支持的系统**：
+- ✅ Ubuntu 16.04, 18.04, 20.04, 22.04
+- ✅ Debian 9, 10, 11, 12
+- ✅ CentOS 7, 8, 9
+- ✅ RHEL 7, 8, 9
+- ✅ Rocky Linux 8, 9
+- ✅ AlmaLinux 8, 9
+
+---
+
+## 📞 常见问题
+
+### Q: 老旧服务器可以运行吗？
+
+**A**: 可以！只要能安装 Docker 17.06+ 和 Docker Compose 1.18+ 即可。
+
+如果服务器是 CentOS 7 或 Ubuntu 16.04，使用 `docker-compose`（带破折号）命令：
+
 ```bash
-cd /opt/kanban/deploy
-./stop.sh
+# 安装 Docker Compose v1
+sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# 使用 docker-compose 命令
+docker-compose up -d
+docker-compose logs -f
 ```
 
-### 重启服务
+### Q: 内存不足怎么办？
+
+**A**: 如果内存少于 2GB，可以：
+
+1. 创建 Swap 分区：
 ```bash
-cd /opt/kanban/deploy
-./stop.sh
-./deploy.sh
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
 ```
 
-### 查看日志
-```bash
-# 后端日志
-tail -f /opt/kanban/logs/backend.log
-
-# 前端日志
-tail -f /opt/kanban/logs/frontend.log
-
-# 数据库日志
-docker-compose logs -f postgres
+2. 限制容器内存（编辑 `docker-compose.yml`）：
+```yaml
+services:
+  backend:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 ```
 
-### 查看运行状态
+### Q: 端口被占用怎么办？
+
+**A**: 修改 `docker-compose.yml` 中的端口映射：
+
+```yaml
+nginx:
+  ports:
+    - "8080:80"  # 改成其他端口
+```
+
+### Q: 如何查看日志？
+
 ```bash
-# 查看进程
-ps aux | grep node
+cd ~/kanban/deploy
 
-# 查看端口
-netstat -tulnp | grep -E "3003|4004|5432"
+# 所有日志
+docker compose logs -f
 
-# 查看数据库
-docker-compose ps
+# 特定服务
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+### Q: 如何更新代码？
+
+```bash
+cd ~/kanban
+git pull origin main
+cd deploy
+docker compose up -d --build
+docker compose exec backend npm run migrate:up
+```
+
+### Q: 如何备份数据？
+
+```bash
+cd ~/kanban/deploy
+
+# 导出数据库
+docker compose exec postgres pg_dump -U kanban_user kanban_db > backup_$(date +%Y%m%d).sql
+
+# 恢复数据库
+docker compose exec -T postgres psql -U kanban_user kanban_db < backup_20240115.sql
 ```
 
 ---
 
-## 数据库管理
+## 🎯 访问应用
 
-### 连接数据库
-```bash
-cd /opt/kanban/deploy
-docker-compose exec postgres psql -U kanban_user -d kanban_db
-```
+部署完成后：
 
-### 备份数据库
-```bash
-# 创建备份
-docker-compose exec postgres pg_dump -U kanban_user kanban_db > backup_$(date +%Y%m%d).sql
-
-# 压缩备份
-gzip backup_$(date +%Y%m%d).sql
-```
-
-### 恢复数据库
-```bash
-# 解压备份
-gunzip backup_20250131.sql.gz
-
-# 恢复数据
-docker-compose exec -T postgres psql -U kanban_user -d kanban_db < backup_20250131.sql
-```
+1. **打开浏览器**: `http://YOUR_SERVER_IP:5003`
+2. **使用默认账户登录**:
+   - 用户名: `admin`
+   - 密码: `admin123`
+3. **修改密码**: 登录后立即修改管理员密码
 
 ---
 
-## 更新应用
+## 📚 更多文档
 
-```bash
-# 1. 停止服务
-cd /opt/kanban/deploy
-./stop.sh
-
-# 2. 备份数据库
-docker-compose exec postgres pg_dump -U kanban_user kanban_db > backup_before_update.sql
-
-# 3. 更新代码
-cd /opt/kanban
-git pull
-# 或重新上传代码
-
-# 4. 重新部署
-cd /opt/kanban/deploy
-./deploy.sh
-```
+- [完整部署文档](../MANUAL-DEPLOY.md) - 详细的步骤和故障排查
+- [端口配置说明](../PORT-CONFIG.md) - 端口架构和修改方法
+- [GitHub Actions 部署](../.github/workflows/deploy.yml) - 自动化部署配置
 
 ---
 
-## 防火墙配置
+## 🆘 需要帮助？
 
-```bash
-# Ubuntu/Debian
-sudo ufw allow 3003/tcp
-sudo ufw allow 22/tcp  # SSH
-sudo ufw enable
+如果遇到问题：
 
-# CentOS/RHEL
-sudo firewall-cmd --permanent --add-port=3003/tcp
-sudo firewall-cmd --permanent --add-port=22/tcp
-sudo firewall-cmd --reload
-```
+1. 查看日志: `docker compose logs -f`
+2. 检查容器状态: `docker compose ps`
+3. 参考[完整文档](../MANUAL-DEPLOY.md)的故障排查章节
 
----
-
-## 常见问题
-
-### 1. 端口被占用
-```bash
-# 查看端口占用
-netstat -tulnp | grep 3003
-netstat -tulnp | grep 4004
-netstat -tulnp | grep 5432
-
-# 杀掉占用进程
-sudo kill -9 <PID>
-```
-
-### 2. 无法访问应用
-```bash
-# 检查服务是否运行
-ps aux | grep node
-
-# 检查防火墙
-sudo ufw status
-sudo firewall-cmd --list-all
-
-# 检查日志
-tail -f /opt/kanban/logs/backend.log
-tail -f /opt/kanban/logs/frontend.log
-```
-
-### 3. 数据库连接失败
-```bash
-# 检查数据库是否运行
-docker-compose ps
-
-# 重启数据库
-docker-compose restart postgres
-
-# 查看数据库日志
-docker-compose logs postgres
-```
-
----
-
-## 目录结构
-
-```
-/opt/kanban/
-├── backend/              # 后端代码
-├── frontend/             # 前端代码
-├── deploy/               # 部署文件
-│   ├── docker-compose.yml
-│   ├── deploy.sh
-│   ├── stop.sh
-│   └── README.md
-└── logs/                 # 日志目录
-    ├── backend.log
-    ├── frontend.log
-    ├── backend.pid
-    └── frontend.pid
-```
-
----
-
-## 安全建议
-
-1. **立即修改默认密码** - 首次登录后修改 admin 账户密码
-2. **修改数据库密码** - 编辑 `deploy/docker-compose.yml` 中的 `POSTGRES_PASSWORD`
-3. **配置防火墙** - 只开放必要的端口 (3003, 22)
-4. **定期备份** - 设置自动备份任务
-5. **定期更新** - 及时更新系统和应用
-
----
-
-## 技术支持
-
-- 详细文档: `/opt/kanban/DEVELOPER-GUIDE.md`
-- 架构设计: `/opt/kanban/方案/architecture-design-final.md`
-- Claude Code: `/opt/kanban/CLAUDE.md`
