@@ -257,12 +257,12 @@ Checkout 代码到工作目录
 - [ ] plugcamp 用户有 Docker 权限（`docker ps` 不报错）
 - [ ] Self-hosted Runner 已安装并运行（状态：Idle）
 - [ ] GitHub Secret `POSTGRES_PASSWORD` 已配置
-- [ ] 防火墙已开放 80 端口
+- [ ] 防火墙已开放 5003 端口
 - [ ] 已手动执行一次初始化（migrate + seed）
 
 ---
 
-**部署完成后访问地址:** `http://VPS_IP`
+**部署完成后访问地址:** `http://VPS_IP:5003`
 
 **默认账户:**
 - 用户名: `admin`

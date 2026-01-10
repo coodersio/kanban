@@ -1,39 +1,28 @@
 services:
-  # Nginx 反向代理
-  nginx:
-    image: nginx:alpine
-    container_name: kanban_nginx
-    ports:
-      - "5003:80"  # VPS 的 5003 端口映射到容器的 80 端口
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - frontend
-      - backend
-    restart: unless-stopped
-    networks:
-      - kanban_network
-
-  # 前端
+  # 前端 - 直接暴露 5001 端口
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
     image: kanban-frontend:latest
     container_name: kanban_frontend
+    ports:
+      - "5001:5001"  # ✅ 直接暴露到 VPS
     environment:
       - NODE_ENV=production
     restart: unless-stopped
     networks:
       - kanban_network
 
-  # 后端
+  # 后端 - 直接暴露 5002 端口
   backend:
     build:
       context: ../backend
       dockerfile: Dockerfile
     image: kanban-backend:latest
     container_name: kanban_backend
+    ports:
+      - "5002:5002"  # ✅ 直接暴露到 VPS
     environment:
       - PORT=5002
       - DATABASE_URL=postgresql://kanban_user:${POSTGRES_PASSWORD:-kanban_password}@postgres:5432/kanban_db

@@ -8,13 +8,13 @@
 
 ```
 VPS 服务器
-├── Nginx (80端口) - 反向代理
+├── Nginx (5003端口) - 反向代理
 ├── Frontend (5001端口) - React + Vite
 ├── Backend (5002端口) - Node.js + Express
 └── PostgreSQL (内部) - 数据库
 ```
 
-访问地址：`http://VPS_IP`
+访问地址：`http://VPS_IP:5003`
 
 ---
 
