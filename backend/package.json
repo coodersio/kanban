@@ -9,7 +9,7 @@
         "build": "tsc",
         "migrate:up": "node dist/scripts/migrate.js all",
         "migrate:down": "node dist/scripts/migrate.js down",
-        "seed": "ts-node src/scripts/seed.ts"
+        "seed": "node dist/scripts/seed.js"
     },
     "keywords": [],
     "author": "",
