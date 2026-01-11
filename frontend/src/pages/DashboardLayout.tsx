@@ -145,7 +145,7 @@ export default function DashboardLayout() {
                     <div className="flex-1">
                         <h1 className="text-lg font-semibold text-foreground">
                             {location.pathname === '/dashboard' && '主页'}
-                            {(location.pathname === '/dashboard/workbench' || location.pathname.startsWith('/dashboard/workbench/')) && '工作台'}
+                            {(location.pathname === '/dashboard/workbench' || location.pathname.startsWith('/dashboard/workbench/')) && '工作台 - 每一项工作都需要高度专注'}
                             {(location.pathname === '/dashboard/projects' || location.pathname.startsWith('/dashboard/projects/')) && '项目管理'}
                             {(location.pathname === '/dashboard/sprints' || location.pathname.startsWith('/dashboard/sprints/')) && '迭代计划'}
                             {(location.pathname === '/dashboard/users' || location.pathname.startsWith('/dashboard/users/')) && '成员管理'}
