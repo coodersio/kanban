@@ -6,10 +6,12 @@ import type { Story, Task, Project } from '@/types';
 import { useWorkbenchState } from '@/hooks/useWorkbenchState';
 import { useDialogState } from '@/hooks/useDialogState';
 import { useMemberFilter } from '@/hooks/useMemberFilter';
+import { useViewPreference } from '@/hooks/useViewPreference';
 
 // Components
 import { WorkbenchHeader } from './Workbench/components/WorkbenchHeader';
 import { BoardArea } from './Workbench/components/BoardArea';
+import { PriorityListView } from './Workbench/components/PriorityListView';
 import { StoryDialog } from './Workbench/components/StoryDialog';
 import { TaskDialog } from './Workbench/components/TaskDialog';
 import { ProjectDialog } from './Workbench/components/ProjectDialog';
@@ -41,6 +43,7 @@ export default function Workbench() {
 
     const dialogState = useDialogState();
     const { filterMemberId, setFilterMemberId } = useMemberFilter();
+    const { viewMode, setViewMode } = useViewPreference();
 
     // Additional state for stories (needed for task dialog)
     const [stories, setStories] = useState<Story[]>([]);
@@ -516,31 +519,42 @@ export default function Workbench() {
                 members={members}
                 filterMemberId={filterMemberId}
                 onMemberFilterChange={setFilterMemberId}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
                 onAddStory={openAddStoryDialog}
                 onAddTask={() => openAddTaskDialog()}
                 isExternal={isExternal}
             />
 
-            {/* Board Area */}
-            <BoardArea
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                selectedSprintId={selectedSprintId}
-                onProjectSelect={handleProjectSelect}
-                onAddProjectClick={openAddProjectDialog}
-                onEditProjectClick={openEditProjectDialog}
-                isExternal={isExternal}
-                members={members}
-                sprints={sprints}
-                filterMemberId={filterMemberId}
-                refreshTrigger={refreshTrigger}
-                onAddTask={openAddTaskDialog}
-                onEditTask={openEditTask}
-                onEditStory={openEditStory}
-                onStoryMove={triggerRefresh}
-                lastSelectedTaskId={lastSelectedTaskId}
-                lastSelectedStoryId={lastSelectedStoryId}
-            />
+            {/* Main Content Area - Switch between views */}
+            {viewMode === 'kanban' ? (
+                <BoardArea
+                    projects={projects}
+                    selectedProjectId={selectedProjectId}
+                    selectedSprintId={selectedSprintId}
+                    onProjectSelect={handleProjectSelect}
+                    onAddProjectClick={openAddProjectDialog}
+                    onEditProjectClick={openEditProjectDialog}
+                    isExternal={isExternal}
+                    members={members}
+                    sprints={sprints}
+                    filterMemberId={filterMemberId}
+                    refreshTrigger={refreshTrigger}
+                    onAddTask={openAddTaskDialog}
+                    onEditTask={openEditTask}
+                    onEditStory={openEditStory}
+                    onStoryMove={triggerRefresh}
+                    lastSelectedTaskId={lastSelectedTaskId}
+                    lastSelectedStoryId={lastSelectedStoryId}
+                />
+            ) : (
+                <PriorityListView
+                    selectedSprintId={selectedSprintId}
+                    filterMemberId={filterMemberId}
+                    onStoryClick={openEditStory}
+                    onStoryStatusChange={triggerRefresh}
+                />
+            )}
 
             {/* Dialogs */}
             <StoryDialog

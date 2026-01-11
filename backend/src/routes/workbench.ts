@@ -1639,4 +1639,98 @@ router.delete('/task/comment/:commentId', blockExternal, async (req, res) => {
     }
 });
 
+// ============================================================
+// Priority List View APIs
+// ============================================================
+
+/**
+ * GET /api/workbench/priority-list
+ * Get all stories for priority list view (across all projects in sprint)
+ * Sorted by: status (completed last) → order_index
+ */
+router.get('/priority-list', requireAuth, async (req, res) => {
+    try {
+        const { sprintId, memberId } = req.query;
+
+        if (!sprintId) {
+            return res.status(400).json({ message: 'Missing sprintId' });
+        }
+
+        let query = `
+            SELECT
+                ss.id as snapshot_id,
+                ss.story_id as id,
+                ss.sprint_id,
+                ss.project_id,
+                ss.status,
+                ss.order_index,
+                ss.assigned_to,
+                ss.planned_completion_date,
+                ss.priority,
+                s.title,
+                s.description,
+                p.software_name as project_name,
+                u.id as assigned_to_id,
+                u.display_name as assigned_to_name
+            FROM sprint_stories ss
+            JOIN stories s ON ss.story_id = s.id
+            JOIN projects p ON ss.project_id = p.id
+            LEFT JOIN users u ON ss.assigned_to = u.id
+            WHERE ss.sprint_id = $1
+        `;
+
+        const params: any[] = [sprintId];
+
+        // Optional filter by member
+        if (memberId && memberId !== '0') {
+            query += ` AND ss.assigned_to = $2`;
+            params.push(memberId);
+        }
+
+        // Sort: completed stories at bottom, others by order_index
+        query += `
+            ORDER BY
+                CASE ss.status
+                    WHEN 'completed' THEN 2
+                    ELSE 1
+                END,
+                ss.order_index ASC,
+                ss.id ASC
+        `;
+
+        const result = await pool.query(query, params);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching priority list:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * POST /api/workbench/story/reorder
+ * Update order_index for a story (drag and drop reordering)
+ */
+router.post('/story/reorder', blockExternal, async (req, res) => {
+    try {
+        const { sprintId, storyId, newOrderIndex } = req.body;
+
+        if (!sprintId || !storyId || newOrderIndex === undefined) {
+            return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        await pool.query(
+            `UPDATE sprint_stories
+             SET order_index = $1, updated_at = NOW()
+             WHERE sprint_id = $2 AND story_id = $3`,
+            [newOrderIndex, sprintId, storyId]
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error reordering story:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 export default router;

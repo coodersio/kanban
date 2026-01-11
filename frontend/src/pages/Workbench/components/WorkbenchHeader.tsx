@@ -1,7 +1,8 @@
 import type { Sprint, Member } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Plus, LayoutGrid, List } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,6 +18,10 @@ interface WorkbenchHeaderProps {
     members: Member[];
     filterMemberId: number | null;
     onMemberFilterChange: (memberId: number | null) => void;
+
+    // View mode
+    viewMode: 'kanban' | 'priority';
+    onViewModeChange: (mode: 'kanban' | 'priority') => void;
 
     // Actions
     onAddStory: () => void;
@@ -52,6 +57,8 @@ export function WorkbenchHeader({
     members,
     filterMemberId,
     onMemberFilterChange,
+    viewMode,
+    onViewModeChange,
     onAddStory,
     onAddTask,
     isExternal
@@ -86,6 +93,33 @@ export function WorkbenchHeader({
                             ))}
                         </SelectContent>
                     </Select>
+                </div>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center pl-6 border-l">
+                    <ToggleGroup
+                        type="single"
+                        value={viewMode}
+                        onValueChange={(val) => val && onViewModeChange(val as 'kanban' | 'priority')}
+                        className="border rounded-md p-0.5 bg-secondary/30"
+                    >
+                        <ToggleGroupItem
+                            value="kanban"
+                            aria-label="看板视图"
+                            className="h-8 px-3 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                        >
+                            <LayoutGrid className="h-3.5 w-3.5 mr-1.5" />
+                            看板
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                            value="priority"
+                            aria-label="优先级列表"
+                            className="h-8 px-3 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                        >
+                            <List className="h-3.5 w-3.5 mr-1.5" />
+                            优先级
+                        </ToggleGroupItem>
+                    </ToggleGroup>
                 </div>
 
                 {/* Member Filter */}
