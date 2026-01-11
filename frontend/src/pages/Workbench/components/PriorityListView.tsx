@@ -208,15 +208,22 @@ export function PriorityListView({
     const newStories = arrayMove(stories, oldIndex, newIndex);
     setStories(newStories);
 
-    // 更新后端
+    // 批量更新后端 - 重新分配所有stories的order_index
     try {
-      await fetch('/api/workbench/story/reorder', {
+      // 为每个story分配新的order_index（按新顺序0, 1, 2, 3...）
+      const orders = newStories.map((story, index) => ({
+        id: story.id,
+        order: index
+      }));
+
+      // 批量更新API
+      await fetch('/api/workbench/stories/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sprintId: selectedSprintId,
-          storyId: stories[oldIndex].id,
-          newOrderIndex: newIndex
+          projectId: newStories[0]?.project_id || null, // 取第一个story的projectId（批量API需要）
+          orders: orders
         })
       });
     } catch (err) {
@@ -278,7 +285,7 @@ export function PriorityListView({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 max-w-5xl mx-auto">
+    <div className="flex-1 overflow-y-auto p-6">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

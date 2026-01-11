@@ -1710,23 +1710,56 @@ router.get('/priority-list', requireAuth, async (req, res) => {
 /**
  * POST /api/workbench/story/reorder
  * Update order_index for a story (drag and drop reordering)
+ * Supports both single story update and batch update
  */
 router.post('/story/reorder', blockExternal, async (req, res) => {
     try {
-        const { sprintId, storyId, newOrderIndex } = req.body;
+        const { sprintId, orders } = req.body;
 
-        if (!sprintId || !storyId || newOrderIndex === undefined) {
-            return res.status(400).json({ message: 'Missing required fields' });
+        if (!sprintId) {
+            return res.status(400).json({ message: 'Missing sprintId' });
         }
 
-        await pool.query(
-            `UPDATE sprint_stories
-             SET order_index = $1, updated_at = NOW()
-             WHERE sprint_id = $2 AND story_id = $3`,
-            [newOrderIndex, sprintId, storyId]
-        );
+        // Support batch update: orders = [{ id: storyId, order: orderIndex }, ...]
+        if (orders && Array.isArray(orders)) {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
 
-        res.json({ success: true });
+                for (const item of orders) {
+                    await client.query(
+                        `UPDATE sprint_stories
+                         SET order_index = $1, updated_at = NOW()
+                         WHERE sprint_id = $2 AND story_id = $3`,
+                        [item.order, sprintId, item.id]
+                    );
+                }
+
+                await client.query('COMMIT');
+                res.json({ success: true });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+        } else {
+            // Single story update (legacy support)
+            const { storyId, newOrderIndex } = req.body;
+
+            if (storyId === undefined || newOrderIndex === undefined) {
+                return res.status(400).json({ message: 'Missing required fields' });
+            }
+
+            await pool.query(
+                `UPDATE sprint_stories
+                 SET order_index = $1, updated_at = NOW()
+                 WHERE sprint_id = $2 AND story_id = $3`,
+                [newOrderIndex, sprintId, storyId]
+            );
+
+            res.json({ success: true });
+        }
     } catch (err) {
         console.error('Error reordering story:', err);
         res.status(500).json({ message: 'Internal server error' });
