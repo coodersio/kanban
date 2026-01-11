@@ -29,9 +29,24 @@ interface PriorityStory {
 
 // 状态配置
 const STATUS_CONFIG = {
-  not_started: { label: '未开始', color: 'bg-slate-400' },
-  in_progress: { label: '进行中', color: 'bg-blue-500' },
-  completed: { label: '已完成', color: 'bg-emerald-500' }
+  not_started: {
+    label: '未开始',
+    dotColor: 'bg-slate-400',
+    borderColor: 'border-slate-400',
+    selectBg: 'bg-slate-100 text-slate-700'
+  },
+  in_progress: {
+    label: '进行中',
+    dotColor: 'bg-blue-500',
+    borderColor: 'border-blue-500',
+    selectBg: 'bg-blue-100 text-blue-700'
+  },
+  completed: {
+    label: '已完成',
+    dotColor: 'bg-emerald-500',
+    borderColor: 'border-emerald-500',
+    selectBg: 'bg-emerald-100 text-emerald-700'
+  }
 };
 
 // 可拖拽的 Story 卡片
@@ -65,7 +80,7 @@ function SortableStoryItem({
 
   return (
     <div ref={setNodeRef} style={style} className="mb-3">
-      <Card className="p-4 hover:shadow-md transition-shadow">
+      <Card className={`p-4 hover:shadow-md transition-shadow border-l-4 ${statusConfig.borderColor}`}>
         <div className="flex items-center gap-3">
           {/* 拖拽手柄 */}
           <div
@@ -87,7 +102,7 @@ function SortableStoryItem({
             </Badge>
 
             {/* 状态指示器 */}
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusConfig.color}`} />
+            <div className={`w-3 h-3 rounded-full flex-shrink-0 ${statusConfig.dotColor}`} />
 
             {/* Story 标题 */}
             <div className="font-medium text-sm flex-1 truncate">{story.title}</div>
@@ -128,7 +143,7 @@ function SortableStoryItem({
               }
             }}
           >
-            <SelectTrigger className="w-[120px] flex-shrink-0">
+            <SelectTrigger className={`w-[120px] flex-shrink-0 border-0 ${statusConfig.selectBg}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
