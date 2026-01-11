@@ -76,48 +76,46 @@ function SortableStoryItem({
             <GripVertical className="h-5 w-5 text-muted-foreground" />
           </div>
 
-          {/* Story 内容 */}
+          {/* Story 内容 - 一行显示 */}
           <div
-            className="flex-1 min-w-0 cursor-pointer"
+            className="flex-1 min-w-0 cursor-pointer flex items-center gap-3"
             onClick={() => !isDraggingAny && onClick(story as any)}
           >
-            <div className="flex items-center gap-2 mb-1">
-              {/* 项目名 */}
-              <Badge variant="outline" className="text-xs">
-                {story.project_name}
-              </Badge>
-              {/* 状态指示器 */}
-              <div className={`w-2 h-2 rounded-full ${statusConfig.color}`} />
-            </div>
+            {/* 项目名 */}
+            <Badge variant="outline" className="text-xs flex-shrink-0">
+              {story.project_name}
+            </Badge>
+
+            {/* 状态指示器 */}
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusConfig.color}`} />
 
             {/* Story 标题 */}
-            <div className="font-medium text-sm mb-2">{story.title}</div>
+            <div className="font-medium text-sm flex-1 truncate">{story.title}</div>
 
-            {/* 元信息 */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              {story.assigned_to_name && (
-                <div className="flex items-center gap-1">
-                  <Avatar className="h-5 w-5">
-                    <AvatarFallback className="text-[10px]">
-                      {story.assigned_to_name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span>{story.assigned_to_name}</span>
-                </div>
-              )}
+            {/* 分配人 */}
+            {story.assigned_to_name && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+                <Avatar className="h-5 w-5">
+                  <AvatarFallback className="text-[10px]">
+                    {story.assigned_to_name[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{story.assigned_to_name}</span>
+              </div>
+            )}
 
-              {story.planned_completion_date && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  <span>
-                    {formatDistanceToNow(new Date(story.planned_completion_date), {
-                      locale: zhCN,
-                      addSuffix: true
-                    })}
-                  </span>
-                </div>
-              )}
-            </div>
+            {/* 计划完成时间 */}
+            {story.planned_completion_date && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+                <Calendar className="h-3 w-3" />
+                <span>
+                  {formatDistanceToNow(new Date(story.planned_completion_date), {
+                    locale: zhCN,
+                    addSuffix: true
+                  })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 状态下拉框 */}
