@@ -10,15 +10,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  server: {
-    port: 5001,
-    allowedHosts: ['a0841550b1e5.ngrok-free.app'],
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5002',
-        changeOrigin: true,
-        secure: false,
-      }
-    }
-  }
+  // server: {
+  //   port: 5001,
+  //   allowedHosts: ['kanban.cowork-skills.com'],
+  //   proxy: {
+  //     '/api': {
+  //       target: 'http://localhost:5002',
+  //       changeOrigin: true,
+  //       secure: false,
+  //     }
+  //   }
+  // }
 })
