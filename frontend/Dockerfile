@@ -1,5 +1,4 @@
-# 多阶段构建 - 构建阶段
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -12,20 +11,8 @@ RUN npm ci
 # 复制所有文件
 COPY . .
 
-# 构建应用
-RUN npm run build
+# 暴露端口 3000（Vite dev server）
+EXPOSE 3000
 
-# 生产阶段 - 使用 Nginx 提供静态文件
-FROM nginx:alpine
-
-# 复制构建产物到 Nginx 默认目录
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# 复制 Nginx 配置（支持 React Router）
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# 暴露端口
-EXPOSE 80
-
-# Nginx 会自动启动
-CMD ["nginx", "-g", "daemon off;"]
+# 使用开发服务器（支持热更新，生产环境也可用）
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

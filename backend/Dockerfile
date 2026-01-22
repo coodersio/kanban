@@ -14,8 +14,8 @@ COPY . .
 # 编译 TypeScript
 RUN npm run build
 
-# 删除 devDependencies，只保留生产依赖
-RUN npm prune --production
+# 保留所有依赖（迁移脚本需要 pg 等模块）
+# RUN npm prune --production
 
 # 暴露端口
 EXPOSE 5002
