@@ -15,7 +15,7 @@ export default defineConfig({
     allowedHosts: ['kanban.cowork-skills.com'],
     proxy: {
       '/api': {
-        target: 'http://localhost:5002',
+        target: 'https://kanbanapi.cowork-skills.com',
         changeOrigin: true,
         secure: false,
       }
