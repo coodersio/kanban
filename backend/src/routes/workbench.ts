@@ -9,8 +9,10 @@ const router = express.Router();
 router.get('/sprint/:sprintId/projects', requireAuth, async (req, res) => {
     try {
         const { sprintId } = req.params;
+        const { memberId } = req.query;
+
         // INNER JOIN to only get projects that are actually in this sprint
-        const result = await pool.query(`
+        let query = `
             SELECT
                 p.*,
                 sp.id as snapshot_id,
@@ -22,8 +24,28 @@ router.get('/sprint/:sprintId/projects', requireAuth, async (req, res) => {
             FROM projects p
             INNER JOIN sprint_projects sp ON p.id = sp.project_id AND sp.sprint_id = $1
             LEFT JOIN users u ON p.owner_id = u.id
-            ORDER BY p.id ASC
-        `, [sprintId]);
+        `;
+        const params: any[] = [sprintId];
+
+        if (memberId && memberId !== '0') {
+            query += `
+            WHERE (
+                p.owner_id = $2
+                OR EXISTS (
+                    SELECT 1 FROM sprint_stories ss
+                    WHERE ss.sprint_id = $1 AND ss.project_id = p.id AND ss.assigned_to = $2
+                )
+                OR EXISTS (
+                    SELECT 1 FROM sprint_tasks st
+                    WHERE st.sprint_id = $1 AND st.project_id = p.id AND st.assigned_to = $2
+                )
+            )
+            `;
+            params.push(memberId);
+        }
+
+        query += ` ORDER BY p.id ASC`;
+        const result = await pool.query(query, params);
 
         // Map software_name to name
         const projects = result.rows.map(row => ({
@@ -218,6 +240,7 @@ router.get('/board', requireAuth, async (req, res) => {
             FROM stories s
             JOIN sprint_stories ss ON s.id = ss.story_id AND ss.sprint_id = $1
             LEFT JOIN users u ON ss.assigned_to = u.id
+            LEFT JOIN projects p ON s.project_id = p.id
             WHERE s.project_id = $2
         `;
         const storiesParams: any[] = [sprintId, projectId];
@@ -225,10 +248,14 @@ router.get('/board', requireAuth, async (req, res) => {
         // Optional filter by member (for frontend filtering)
         // All users should see the same data by default
         if (memberId && memberId !== '0') {
-            storiesQuery += ` AND (ss.assigned_to = $3 OR EXISTS (
+            storiesQuery += ` AND (
+                p.owner_id = $3
+                OR ss.assigned_to = $3
+                OR EXISTS (
                 SELECT 1 FROM sprint_tasks st
                 WHERE st.story_id = s.id AND st.sprint_id = $1 AND st.assigned_to = $3
-            ))`;
+                )
+            )`;
             storiesParams.push(memberId);
         }
 
@@ -253,6 +280,8 @@ router.get('/board', requireAuth, async (req, res) => {
             FROM tasks t
             JOIN sprint_tasks st ON t.id = st.task_id AND st.sprint_id = $1
             LEFT JOIN users u ON st.assigned_to = u.id
+            LEFT JOIN sprint_stories ss ON ss.sprint_id = $1 AND ss.story_id = st.story_id
+            LEFT JOIN projects p ON t.project_id = p.id
             WHERE t.project_id = $2
         `;
         const params: any[] = [sprintId, projectId];
@@ -260,7 +289,11 @@ router.get('/board', requireAuth, async (req, res) => {
         // Optional filter by member (for frontend filtering)
         // All users should see the same data by default
         if (memberId && memberId !== '0') {
-            tasksQuery += ` AND st.assigned_to = $3`;
+            tasksQuery += ` AND (
+                p.owner_id = $3
+                OR st.assigned_to = $3
+                OR ss.assigned_to = $3
+            )`;
             params.push(memberId);
         }
 

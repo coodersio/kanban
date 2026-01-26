@@ -26,6 +26,8 @@ export default function Workbench() {
     const navigate = useNavigate();
 
     // Use custom hooks
+    const { filterMemberId, setFilterMemberId } = useMemberFilter();
+
     const {
         sprints,
         projects,
@@ -39,10 +41,9 @@ export default function Workbench() {
         setProjects,
         triggerRefresh,
         handleSprintChange
-    } = useWorkbenchState();
+    } = useWorkbenchState(filterMemberId);
 
     const dialogState = useDialogState();
-    const { filterMemberId, setFilterMemberId } = useMemberFilter();
     const { viewMode, setViewMode } = useViewPreference();
 
     // Additional state for stories (needed for task dialog)
@@ -494,6 +495,7 @@ export default function Workbench() {
 
     const handleProjectSelect = (projectId: number) => {
         const project = projects.find(p => p.id === projectId);
+        setSelectedProjectId(projectId);
         const params = new URLSearchParams();
         params.set('sprint', selectedSprintId);
         if (project?.snapshot_id) {

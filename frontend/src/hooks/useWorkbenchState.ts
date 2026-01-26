@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 /**
  * Custom hook to manage core workbench state: sprints, projects, members, departments, and project types
  */
-export function useWorkbenchState() {
+export function useWorkbenchState(filterMemberId?: number | null) {
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -98,20 +98,31 @@ export function useWorkbenchState() {
     // Fetch projects when sprint changes
     useEffect(() => {
         if (!selectedSprintId) return;
-        fetch(`/api/workbench/sprint/${selectedSprintId}/projects`)
+        const memberParam = filterMemberId ? `?memberId=${filterMemberId}` : '';
+        fetch(`/api/workbench/sprint/${selectedSprintId}/projects${memberParam}`)
             .then(res => res.json())
             .then(data => {
                 setProjects(data);
                 // Auto-select first project if no entity in URL
-                const hasEntityInUrl = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)(-\d+)?$/);
-                if (data.length > 0 && !selectedProjectId && !hasEntityInUrl && data[0].snapshot_id) {
+                const entityMatch = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)(-\d+)?$/);
+                const entityType = entityMatch ? entityMatch[1] : null;
+                const hasSelectedProject = selectedProjectId ? data.some((p: Project) => p.id === selectedProjectId) : false;
+                if (!hasSelectedProject) {
+                    setSelectedProjectId(null);
+                }
+                if (
+                    data.length > 0
+                    && !hasSelectedProject
+                    && data[0].snapshot_id
+                    && (!entityType || entityType === 'PROJECT')
+                ) {
                     const params = new URLSearchParams();
                     params.set('sprint', selectedSprintId);
                     navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}?${params.toString()}`, { replace: true });
                 }
             })
             .catch(err => console.error('Error fetching projects:', err));
-    }, [selectedSprintId, navigate, location.pathname, selectedProjectId]);
+    }, [selectedSprintId, filterMemberId, navigate, location.pathname, selectedProjectId]);
 
     const triggerRefresh = () => setRefreshTrigger(prev => prev + 1);
 
