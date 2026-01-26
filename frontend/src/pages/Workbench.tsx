@@ -342,6 +342,12 @@ export default function Workbench() {
 
             if (res.ok) {
                 const newProjOrMsg = await res.json();
+                const shouldClearFilter = !isEditMode
+                    && filterMemberId !== null
+                    && (!data.ownerId || data.ownerId !== filterMemberId);
+                if (shouldClearFilter) {
+                    setFilterMemberId(null);
+                }
                 dialogState.closeProjectDialog();
                 setIsEditMode(false);
                 setEditingProject(null);
