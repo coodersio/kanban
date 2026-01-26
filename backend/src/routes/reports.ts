@@ -1537,12 +1537,12 @@ router.get('/weekly', async (req: Request, res: Response) => {
             // G: 项目组成员
             const membersCell = worksheet.getCell(`G${startRow}`);
             membersCell.value = extractTeamMembers(project.stories, project.tasks);
-            membersCell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+            membersCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
             // H: 关键节点计划
             const planCell = worksheet.getCell(`H${startRow}`);
             planCell.value = formatKeyMilestones(project.stories);
-            planCell.alignment = { vertical: 'top', wrapText: true };
+            planCell.alignment = { vertical: 'middle', wrapText: true };
 
             // I: 本周总结
             const summaryCell = worksheet.getCell(`I${startRow}`);
@@ -2029,12 +2029,12 @@ router.get('/personal', async (req: Request, res: Response) => {
             // G: 项目组成员 (for personal report, show the user's name)
             const membersCell = worksheet.getCell(`G${startRow}`);
             membersCell.value = user.display_name;
-            membersCell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+            membersCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
             // H: 关键节点计划
             const planCell = worksheet.getCell(`H${startRow}`);
             planCell.value = formatKeyMilestones(project.stories);
-            planCell.alignment = { vertical: 'top', wrapText: true };
+            planCell.alignment = { vertical: 'middle', wrapText: true };
 
             // I: 本周总结
             const summaryCell = worksheet.getCell(`I${startRow}`);
