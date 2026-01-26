@@ -1,4 +1,4 @@
-import { Settings, Plus } from "lucide-react";
+import { Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { Project } from "@/types";
@@ -21,12 +21,20 @@ export default function ProjectSidebar({ projects, selectedId, onSelect, onAddCl
         return colors[id % colors.length];
     };
 
+    const STATUS_DOT = {
+        completed: 'bg-emerald-500',
+        in_progress: 'bg-blue-500',
+        not_started: 'bg-slate-400'
+    } as const;
+
     return (
         <div className="flex flex-col h-full bg-background">
             <div className="flex-1 p-2 overflow-y-auto">
                 <div className="space-y-1">
                     {projects.map((project) => {
                         const isSelected = selectedId === project.id;
+                        const status = project.project_status || 'not_started';
+                        const statusColor = STATUS_DOT[status] || STATUS_DOT.not_started;
                         return (
                             <div
                                 key={project.id}
@@ -40,6 +48,11 @@ export default function ProjectSidebar({ projects, selectedId, onSelect, onAddCl
                                 <span className="text-sm truncate font-medium flex-1">
                                     {project.name || 'Untitled'}
                                 </span>
+                                <span
+                                    className={cn("w-2 h-2 rounded-full flex-shrink-0", statusColor)}
+                                    aria-label={status}
+                                    title={status}
+                                />
 
                                 {onEditClick && (
                                     <Button

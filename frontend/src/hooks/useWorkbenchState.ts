@@ -122,7 +122,7 @@ export function useWorkbenchState(filterMemberId?: number | null) {
                 }
             })
             .catch(err => console.error('Error fetching projects:', err));
-    }, [selectedSprintId, filterMemberId, navigate, location.pathname, selectedProjectId]);
+    }, [selectedSprintId, filterMemberId, refreshTrigger, navigate, location.pathname, selectedProjectId]);
 
     const triggerRefresh = () => setRefreshTrigger(prev => prev + 1);
 

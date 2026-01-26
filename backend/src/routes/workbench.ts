@@ -20,10 +20,29 @@ router.get('/sprint/:sprintId/projects', requireAuth, async (req, res) => {
                 sp.priority,
                 sp.notes,
                 u.id as owner_id,
-                u.display_name as owner_name
+                u.display_name as owner_name,
+                COALESCE(stats.story_total, 0) as story_total,
+                CASE
+                    WHEN COALESCE(stats.story_total, 0) = 0 THEN 'not_started'
+                    WHEN COALESCE(stats.story_in_progress, 0) > 0 THEN 'in_progress'
+                    WHEN COALESCE(stats.story_completed, 0) = stats.story_total THEN 'completed'
+                    WHEN COALESCE(stats.story_not_started, 0) = stats.story_total THEN 'not_started'
+                    ELSE 'in_progress'
+                END as project_status
             FROM projects p
             INNER JOIN sprint_projects sp ON p.id = sp.project_id AND sp.sprint_id = $1
             LEFT JOIN users u ON p.owner_id = u.id
+            LEFT JOIN (
+                SELECT
+                    project_id,
+                    COUNT(*) as story_total,
+                    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as story_in_progress,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as story_completed,
+                    SUM(CASE WHEN status IN ('not_started', 'on_hold') OR status IS NULL THEN 1 ELSE 0 END) as story_not_started
+                FROM sprint_stories
+                WHERE sprint_id = $1
+                GROUP BY project_id
+            ) stats ON stats.project_id = p.id
         `;
         const params: any[] = [sprintId];
 

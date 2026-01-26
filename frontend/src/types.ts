@@ -76,6 +76,7 @@ export interface Project {
     owner_name?: string;     // 项目负责人名称
     software_name?: string;  // Backend compatibility
     source?: string;         // 需求来源/项目对接人
+    project_status?: 'not_started' | 'in_progress' | 'completed';
 }
 
 export interface BoardData {
