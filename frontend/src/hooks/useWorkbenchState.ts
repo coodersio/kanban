@@ -106,23 +106,35 @@ export function useWorkbenchState(filterMemberId?: number | null) {
                 // Auto-select first project if no entity in URL
                 const entityMatch = location.pathname.match(/\/(STORY|TASK|PROJECT)-(\d+)(-\d+)?$/);
                 const entityType = entityMatch ? entityMatch[1] : null;
-                const hasSelectedProject = selectedProjectId ? data.some((p: Project) => p.id === selectedProjectId) : false;
-                if (!hasSelectedProject) {
+                const urlProjectId = entityType === 'PROJECT' && entityMatch?.[2]
+                    ? Number(entityMatch[2])
+                    : null;
+                const hasSelectedProject = selectedProjectId
+                    ? data.some((p: Project) => p.id === selectedProjectId)
+                    : false;
+                const urlProjectInList = urlProjectId
+                    ? data.some((p: Project) => p.id === urlProjectId)
+                    : false;
+
+                if (urlProjectInList && urlProjectId !== selectedProjectId) {
+                    setSelectedProjectId(urlProjectId);
+                } else if (!hasSelectedProject && !urlProjectInList) {
                     setSelectedProjectId(null);
                 }
-                if (
-                    data.length > 0
-                    && !hasSelectedProject
-                    && data[0].snapshot_id
-                    && (!entityType || entityType === 'PROJECT')
-                ) {
-                    const params = new URLSearchParams();
-                    params.set('sprint', selectedSprintId);
-                    navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}?${params.toString()}`, { replace: true });
+
+                if (data.length > 0 && data[0].snapshot_id) {
+                    const shouldAutoSelectFirst =
+                        !entityType
+                        || (entityType === 'PROJECT' && !urlProjectInList);
+                    if (shouldAutoSelectFirst) {
+                        const params = new URLSearchParams();
+                        params.set('sprint', selectedSprintId);
+                        navigate(`/dashboard/workbench/PROJECT-${data[0].id}-${data[0].snapshot_id}?${params.toString()}`, { replace: true });
+                    }
                 }
             })
             .catch(err => console.error('Error fetching projects:', err));
-    }, [selectedSprintId, filterMemberId, refreshTrigger, navigate, location.pathname, selectedProjectId]);
+    }, [selectedSprintId, filterMemberId, refreshTrigger, navigate, location.pathname]);
 
     const triggerRefresh = () => setRefreshTrigger(prev => prev + 1);
 
