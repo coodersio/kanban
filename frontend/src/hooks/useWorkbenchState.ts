@@ -130,8 +130,11 @@ export function useWorkbenchState(filterMemberId?: number | null) {
 
                 if (data.length > 0 && data[0].snapshot_id) {
                     const shouldAutoSelectFirst =
-                        !entityType
-                        || (entityType === 'PROJECT' && !urlProjectInList);
+                        !hasSelectedProject
+                        && (
+                            !entityType
+                            || (entityType === 'PROJECT' && !urlProjectInList)
+                        );
                     if (shouldAutoSelectFirst) {
                         const params = new URLSearchParams();
                         params.set('sprint', selectedSprintId);
