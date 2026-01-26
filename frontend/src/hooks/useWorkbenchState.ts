@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Sprint, Project, Member, Department, ProjectType } from '@/types';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -21,9 +21,14 @@ export function useWorkbenchState(filterMemberId?: number | null) {
     const urlSprintId = searchParams.get('sprint');
     const [selectedSprintId, setSelectedSprintId] = useState<string>(urlSprintId || '');
     const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+    const selectedProjectIdRef = useRef<number | null>(null);
 
     // Refresh trigger for data refetch
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    useEffect(() => {
+        selectedProjectIdRef.current = selectedProjectId;
+    }, [selectedProjectId]);
 
     // Fetch sprints
     useEffect(() => {
@@ -109,14 +114,15 @@ export function useWorkbenchState(filterMemberId?: number | null) {
                 const urlProjectId = entityType === 'PROJECT' && entityMatch?.[2]
                     ? Number(entityMatch[2])
                     : null;
-                const hasSelectedProject = selectedProjectId
-                    ? data.some((p: Project) => p.id === selectedProjectId)
+                const currentSelectedProjectId = selectedProjectIdRef.current;
+                const hasSelectedProject = currentSelectedProjectId
+                    ? data.some((p: Project) => p.id === currentSelectedProjectId)
                     : false;
                 const urlProjectInList = urlProjectId
                     ? data.some((p: Project) => p.id === urlProjectId)
                     : false;
 
-                if (urlProjectInList && urlProjectId !== selectedProjectId) {
+                if (urlProjectInList && urlProjectId !== currentSelectedProjectId) {
                     setSelectedProjectId(urlProjectId);
                 } else if (!hasSelectedProject && !urlProjectInList) {
                     setSelectedProjectId(null);
