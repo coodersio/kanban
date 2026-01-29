@@ -543,18 +543,18 @@ function generateNextWeekPlan(nextSprint: any): string {
  * Format: "1) xxx\n2) yyy\n3) zzz"
  * Returns: ["xxx", "yyy", "zzz"] (without numbering)
  */
+const WORK_ITEM_ENUM_SUFFIX = '）';
+
 function parseWorkItems(description: string | null): string[] {
     if (!description) return [];
 
-    const lines = description.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const lines = description.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
     const workItems: string[] = [];
 
     for (const line of lines) {
-        // Match patterns like "1)", "1.", "a)", "a.", etc. and extract content
-        const match = line.match(/^[\d]+[\)\.]\s*(.+)$/) || line.match(/^[a-z][\)\.]\s*(.+)$/);
-        if (match) {
-            // Extract content without numbering
-            workItems.push(match[1]);
+        const stripped = stripLeadingEnumerator(line);
+        if (stripped !== null) {
+            workItems.push(stripped);
         } else if (workItems.length > 0) {
             // Continuation of previous item
             workItems[workItems.length - 1] += ' ' + line;
@@ -565,6 +565,33 @@ function parseWorkItems(description: string | null): string[] {
     }
 
     return workItems;
+}
+
+function stripLeadingEnumerator(line: string): string | null {
+    const trimmed = line.trim();
+
+    // Bullet list styles (• ▪ ·) and hyphen bullets ("- xxx")
+    const bulletMatch = trimmed.match(/^(?:[•▪·]\s*|-\s+)(.+)$/u);
+    if (bulletMatch) return bulletMatch[1].trim();
+
+    // Bracketed numbering: (1) / （1）
+    const bracketMatch = trimmed.match(/^[（(]\s*\d{1,3}\s*[)）]\s*(.+)$/u);
+    if (bracketMatch) return bracketMatch[1].trim();
+
+    // Multi-level numbering: 1.1 / 1.1.1 (also support Chinese dot: 。)
+    // This must come before the "1." matcher, otherwise "1.1 xxx" becomes "1 xxx".
+    const multiLevelMatch = trimmed.match(/^\d{1,3}(?:[\.。]\d+)+\s*(.+)$/u);
+    if (multiLevelMatch) return multiLevelMatch[1].trim();
+
+    // Simple numbering: 1) / 1） / 1. / 1。 / 1、 (single-level)
+    const numericMatch = trimmed.match(/^\d{1,3}[)）\.。、。]\s*(.+)$/u);
+    if (numericMatch) return numericMatch[1].trim();
+
+    // Alpha numbering: a) / A) / a. / A。 / a、 (single-letter)
+    const alphaMatch = trimmed.match(/^[a-zA-Z][)）\.。、。]\s*(.+)$/u);
+    if (alphaMatch) return alphaMatch[1].trim();
+
+    return null;
 }
 
 /**
@@ -765,17 +792,17 @@ function formatWeeklySummaryOptimized(stories: any[], tasks: any[]): any {
                 text: `-${statusText}`
             });
 
-            // Work Items Layer - Pure indentation, no symbols, Slate Gray
+            // Work Items Layer - With numbering 1）2）3）..., Slate Gray
             const workItems = parseWorkItems(task.description);
             if (workItems.length > 0) {
-                workItems.forEach((item) => {
+                workItems.forEach((item, idx) => {
                     richText.push({
                         font: {
                             name: EXCEL_STYLES.FONTS.WORK_ITEM.name,
                             size: EXCEL_STYLES.FONTS.WORK_ITEM.size,
                             color: { argb: EXCEL_STYLES.COLORS.SLATE_GRAY }
                         },
-                        text: `\n${' '.repeat(EXCEL_STYLES.INDENT.WORK_ITEM)}${item}`
+                        text: `\n${' '.repeat(EXCEL_STYLES.INDENT.WORK_ITEM)}${idx + 1}${WORK_ITEM_ENUM_SUFFIX} ${item}`
                     });
                 });
             }
@@ -873,17 +900,17 @@ function formatNextWeekPlanOptimized(stories: any[], tasks: any[]): any {
                 });
             }
 
-            // Work Items Layer - Pure indentation, no symbols, Slate Gray
+            // Work Items Layer - With numbering 1）2）3）..., Slate Gray
             const workItems = parseWorkItems(task.description);
             if (workItems.length > 0) {
-                workItems.forEach((item) => {
+                workItems.forEach((item, idx) => {
                     richText.push({
                         font: {
                             name: EXCEL_STYLES.FONTS.WORK_ITEM.name,
                             size: EXCEL_STYLES.FONTS.WORK_ITEM.size,
                             color: { argb: EXCEL_STYLES.COLORS.SLATE_GRAY }
                         },
-                        text: `\n${' '.repeat(EXCEL_STYLES.INDENT.WORK_ITEM)}${item}`
+                        text: `\n${' '.repeat(EXCEL_STYLES.INDENT.WORK_ITEM)}${idx + 1}${WORK_ITEM_ENUM_SUFFIX} ${item}`
                     });
                 });
             }

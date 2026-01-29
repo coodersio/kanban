@@ -86,6 +86,10 @@ export function ProjectDialog({
     // Reuse mode state
     const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
     const [selectedReuseIds, setSelectedReuseIds] = useState<number[]>([]);
+    const [searchKeyword, setSearchKeyword] = useState('');
+
+    // Prevent duplicate submission
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Load editing project data
     useEffect(() => {
@@ -121,28 +125,48 @@ export function ProjectDialog({
         setPriority('中');
         setNotes('');
         setSelectedReuseIds([]);
+        setSearchKeyword('');
     };
 
+    // Filter projects by search keyword
+    const filteredProjects = availableProjects.filter(p => {
+        if (!searchKeyword.trim()) return true;
+        const keyword = searchKeyword.toLowerCase();
+        const name = (p.name || p.software_name || '').toLowerCase();
+        const desc = (p.description || '').toLowerCase();
+        return name.includes(keyword) || desc.includes(keyword);
+    });
+
     const handleSave = async () => {
-        if (!name) return;
-        await onSaveProject({
-            name,
-            description,
-            departmentId,
-            projectTypeId,
-            ownerId,
-            source,
-            priority,
-            notes,
-            projectId: isEditMode && editingProject ? editingProject.id : null
-        });
-        resetForm();
+        if (!name || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await onSaveProject({
+                name,
+                description,
+                departmentId,
+                projectTypeId,
+                ownerId,
+                source,
+                priority,
+                notes,
+                projectId: isEditMode && editingProject ? editingProject.id : null
+            });
+            resetForm();
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleReuse = async () => {
-        if (selectedReuseIds.length === 0) return;
-        await onReuseProject(selectedReuseIds, priority, notes);
-        resetForm();
+        if (selectedReuseIds.length === 0 || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await onReuseProject(selectedReuseIds, priority, notes);
+            resetForm();
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -281,6 +305,14 @@ export function ProjectDialog({
                     </div>
                 ) : (
                     <div className="space-y-4 py-2">
+                        {/* Search input */}
+                        <div className="grid gap-2">
+                            <Input
+                                placeholder="搜索项目名称..."
+                                value={searchKeyword}
+                                onChange={(e) => setSearchKeyword(e.target.value)}
+                            />
+                        </div>
                         <div className="grid gap-2">
                             <div className="flex items-center justify-between">
                                 <Label className="text-sm font-medium">选择项目（可多选）</Label>
@@ -291,13 +323,13 @@ export function ProjectDialog({
                                 )}
                             </div>
                             <div className="border rounded-lg max-h-[300px] overflow-y-auto">
-                                {availableProjects.length === 0 ? (
+                                {filteredProjects.length === 0 ? (
                                     <div className="p-4 text-sm text-muted-foreground text-center">
-                                        没有可用的项目
+                                        {searchKeyword ? '没有匹配的项目' : '没有可用的项目'}
                                     </div>
                                 ) : (
                                     <div className="space-y-1 p-2">
-                                        {availableProjects.map(p => (
+                                        {filteredProjects.map(p => (
                                             <div
                                                 key={p.id}
                                                 className={cn(
@@ -379,14 +411,14 @@ export function ProjectDialog({
                         </div>
                         {/* Right side: Cancel and Save/Reuse buttons */}
                         <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+                            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>取消</Button>
                             {activeTab === 'create' ? (
-                                <Button onClick={handleSave} disabled={!name}>
-                                    {isEditMode ? '保存修改' : '创建项目'}
+                                <Button onClick={handleSave} disabled={!name || isSubmitting}>
+                                    {isSubmitting ? '提交中...' : (isEditMode ? '保存修改' : '创建项目')}
                                 </Button>
                             ) : (
-                                <Button onClick={handleReuse} disabled={selectedReuseIds.length === 0}>
-                                    选用项目 {selectedReuseIds.length > 0 && `(${selectedReuseIds.length})`}
+                                <Button onClick={handleReuse} disabled={selectedReuseIds.length === 0 || isSubmitting}>
+                                    {isSubmitting ? '提交中...' : `选用项目${selectedReuseIds.length > 0 ? ` (${selectedReuseIds.length})` : ''}`}
                                 </Button>
                             )}
                         </div>
