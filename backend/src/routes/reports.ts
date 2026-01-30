@@ -1250,7 +1250,8 @@ router.get('/weekly', async (req: Request, res: Response) => {
             nextSprint = nextResult.rows[0];
         }
 
-        // 3. Get projects with stories in current sprint
+        // 3. Get projects in current sprint (and next sprint if exists)
+        const sprintIds = nextSprint ? [Number(sprintId), nextSprint.id] : [Number(sprintId)];
         const projectsQuery = `
             SELECT DISTINCT
                 p.id,
@@ -1265,12 +1266,12 @@ router.get('/weekly', async (req: Request, res: Response) => {
             LEFT JOIN departments d ON p.department_id = d.id
             LEFT JOIN users u ON p.owner_id = u.id
             WHERE p.id IN (
-                SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = $1
+                SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = ANY($1)
             )
             ORDER BY p.id
         `;
 
-        const projectsResult = await pool.query(projectsQuery, [sprintId]);
+        const projectsResult = await pool.query(projectsQuery, [sprintIds]);
         const projects = [];
 
         // 4. For each project, get stories and tasks with multi-sprint data
@@ -1419,11 +1420,11 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 nextTasks = nextTasksResult.rows;
             }
 
-            // Calculate completion rate
-            const completedStories = stories.filter(s => s.status === 'completed').length;
-            const completionRate = stories.length > 0
-                ? Math.round((completedStories / stories.length) * 100)
-                : 0;
+            // Calculate completion rate based on tasks
+            const completedTasks = tasks.filter(t => t.status === 'completed').length;
+            const completionRate = tasks.length > 0
+                ? Math.round((completedTasks / tasks.length) * 100)
+                : null;
 
             projects.push({
                 ...project,
@@ -1522,7 +1523,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
         for (let projIdx = 0; projIdx < projects.length; projIdx++) {
             const project = projects[projIdx];
 
-            if (project.stories.length === 0) continue;
+            if (project.stories.length === 0 && (!project.next_stories || project.next_stories.length === 0)) continue;
 
             const startRow = currentRow;
             const rowCount = 1; // Now each project is one row
@@ -1566,25 +1567,35 @@ router.get('/weekly', async (req: Request, res: Response) => {
             membersCell.value = extractTeamMembers(project.stories, project.tasks);
             membersCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
+            const hasCurrentData = project.stories.length > 0;
+
             // H: 关键节点计划
             const planCell = worksheet.getCell(`H${startRow}`);
-            planCell.value = formatKeyMilestones(project.stories);
+            planCell.value = hasCurrentData ? formatKeyMilestones(project.stories) : '暂无';
             planCell.alignment = { vertical: 'middle', wrapText: true };
 
             // I: 本周总结
             const summaryCell = worksheet.getCell(`I${startRow}`);
-            summaryCell.value = formatWeeklySummaryOptimized(project.stories, project.tasks);
-            summaryCell.alignment = { vertical: 'top', wrapText: true };
+            summaryCell.value = hasCurrentData
+                ? formatWeeklySummaryOptimized(project.stories, project.tasks)
+                : '暂无';
+            summaryCell.alignment = { vertical: hasCurrentData ? 'top' : 'middle', wrapText: true };
 
             // J: 完成率
             const rateCell = worksheet.getCell(`J${startRow}`);
-            rateCell.value = `${project.completion_rate}%`;
-            rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
-            rateCell.font = {
-                bold: true,
-                name: '微软雅黑',
-                color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
-            };
+            if (!hasCurrentData || project.completion_rate === null) {
+                rateCell.value = '暂无';
+                rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                rateCell.font = { bold: true, name: '微软雅黑' };
+            } else {
+                rateCell.value = `${project.completion_rate}%`;
+                rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                rateCell.font = {
+                    bold: true,
+                    name: '微软雅黑',
+                    color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
+                };
+            }
 
             // K: 下周计划
             const nextPlanCell = worksheet.getCell(`K${startRow}`);
@@ -1598,44 +1609,49 @@ router.get('/weekly', async (req: Request, res: Response) => {
 
             // L: 风险及应对 - Collect and format with numbered list and story labels
             const riskCell = worksheet.getCell(`L${startRow}`);
-            const riskItems: string[] = [];
-            const seenRisks = new Set<string>();
+            if (!hasCurrentData) {
+                riskCell.value = '暂无';
+                riskCell.alignment = { vertical: 'middle', wrapText: true };
+            } else {
+                const riskItems: string[] = [];
+                const seenRisks = new Set<string>();
 
-            // Collect risks from stories and tasks
-            for (const story of project.stories) {
-                if (story.risk_and_countermeasure && story.risk_and_countermeasure.trim()) {
-                    const text = story.risk_and_countermeasure.trim();
-                    const fullText = `【${story.title}】${text}`;
-                    if (!seenRisks.has(text)) {
-                        riskItems.push(fullText);
-                        seenRisks.add(text);
+                // Collect risks from stories and tasks
+                for (const story of project.stories) {
+                    if (story.risk_and_countermeasure && story.risk_and_countermeasure.trim()) {
+                        const text = story.risk_and_countermeasure.trim();
+                        const fullText = `【${story.title}】${text}`;
+                        if (!seenRisks.has(text)) {
+                            riskItems.push(fullText);
+                            seenRisks.add(text);
+                        }
                     }
-                }
-                // Also check tasks under this story
-                if (story.tasks) {
-                    for (const task of story.tasks) {
-                        if (task.risk_and_countermeasure && task.risk_and_countermeasure.trim()) {
-                            const text = task.risk_and_countermeasure.trim();
-                            const fullText = `【${story.title}】${text}`;
-                            if (!seenRisks.has(text)) {
-                                riskItems.push(fullText);
-                                seenRisks.add(text);
+                    // Also check tasks under this story
+                    if (story.tasks) {
+                        for (const task of story.tasks) {
+                            if (task.risk_and_countermeasure && task.risk_and_countermeasure.trim()) {
+                                const text = task.risk_and_countermeasure.trim();
+                                const fullText = `【${story.title}】${text}`;
+                                if (!seenRisks.has(text)) {
+                                    riskItems.push(fullText);
+                                    seenRisks.add(text);
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Format with numbered list if multiple items
-            let riskText = '暂无';
-            if (riskItems.length === 1) {
-                riskText = riskItems[0];
-            } else if (riskItems.length > 1) {
-                riskText = riskItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
-            }
+                // Format with numbered list if multiple items
+                let riskText = '暂无';
+                if (riskItems.length === 1) {
+                    riskText = riskItems[0];
+                } else if (riskItems.length > 1) {
+                    riskText = riskItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+                }
 
-            riskCell.value = riskText;
-            riskCell.alignment = { vertical: 'top', wrapText: true };
+                riskCell.value = riskText;
+                riskCell.alignment = { vertical: 'top', wrapText: true };
+            }
 
             // Apply background color and borders to all cells in row
             for (let col = 1; col <= 12; col++) {
@@ -1911,11 +1927,11 @@ router.get('/personal', async (req: Request, res: Response) => {
                 nextTasks = nextTasksResult.rows;
             }
 
-            // Calculate completion rate
-            const completedStories = stories.filter(s => s.status === 'completed').length;
-            const completionRate = stories.length > 0
-                ? Math.round((completedStories / stories.length) * 100)
-                : 0;
+            // Calculate completion rate based on tasks
+            const completedTasks = tasks.filter(t => t.status === 'completed').length;
+            const completionRate = tasks.length > 0
+                ? Math.round((completedTasks / tasks.length) * 100)
+                : null;
 
             projects.push({
                 ...project,
@@ -2070,13 +2086,19 @@ router.get('/personal', async (req: Request, res: Response) => {
 
             // J: 完成率
             const rateCell = worksheet.getCell(`J${startRow}`);
-            rateCell.value = `${project.completion_rate}%`;
-            rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
-            rateCell.font = {
-                bold: true,
-                name: '微软雅黑',
-                color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
-            };
+            if (project.completion_rate === null) {
+                rateCell.value = '暂无';
+                rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                rateCell.font = { bold: true, name: '微软雅黑' };
+            } else {
+                rateCell.value = `${project.completion_rate}%`;
+                rateCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                rateCell.font = {
+                    bold: true,
+                    name: '微软雅黑',
+                    color: { argb: project.completion_rate >= 80 ? 'FF008000' : 'FFFF0000' }
+                };
+            }
 
             // K: 下周计划
             const nextPlanCell = worksheet.getCell(`K${startRow}`);
