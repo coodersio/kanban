@@ -1781,9 +1781,10 @@ router.get('/personal', async (req: Request, res: Response) => {
 
         // 5. For each project, get user's assigned stories and tasks
         for (const project of projectsResult.rows) {
-            // Get stories assigned to this user in current sprint
+            // Get stories where user is assigned OR user has tasks under that story
+            // This ensures users who only have tasks (not story ownership) can still export the project
             const storiesQuery = `
-                SELECT
+                SELECT DISTINCT
                     s.id,
                     s.title,
                     s.description,
@@ -1797,7 +1798,14 @@ router.get('/personal', async (req: Request, res: Response) => {
                 FROM stories s
                 JOIN sprint_stories ss ON s.id = ss.story_id
                 LEFT JOIN users u ON ss.assigned_to = u.id
-                WHERE ss.sprint_id = $1 AND ss.project_id = $2 AND ss.assigned_to = $3
+                WHERE ss.sprint_id = $1 AND ss.project_id = $2
+                  AND (
+                    ss.assigned_to = $3
+                    OR EXISTS (
+                      SELECT 1 FROM sprint_tasks st
+                      WHERE st.sprint_id = $1 AND st.story_id = s.id AND st.assigned_to = $3 AND st.project_id = $2
+                    )
+                  )
                 ORDER BY s.id
             `;
 
@@ -1885,7 +1893,16 @@ router.get('/personal', async (req: Request, res: Response) => {
                     LEFT JOIN users u ON ss.assigned_to = u.id
                     WHERE ss.sprint_id = $1
                         AND ss.project_id = $2
-                        AND ss.assigned_to = $3
+                        AND (
+                            ss.assigned_to = $3
+                            OR EXISTS (
+                                SELECT 1 FROM sprint_tasks st
+                                WHERE st.sprint_id = $1
+                                    AND st.story_id = s.id
+                                    AND st.assigned_to = $3
+                                    AND st.project_id = $2
+                            )
+                        )
                         AND EXISTS (
                             SELECT 1 FROM sprint_projects sp
                             WHERE sp.sprint_id = $1 AND sp.project_id = $2
@@ -2031,7 +2048,8 @@ router.get('/personal', async (req: Request, res: Response) => {
         for (let projIdx = 0; projIdx < projects.length; projIdx++) {
             const project = projects[projIdx];
 
-            if (project.stories.length === 0) continue;
+            // Skip project only if both stories and tasks are empty
+            if (project.stories.length === 0 && project.tasks.length === 0) continue;
 
             const startRow = currentRow;
 
