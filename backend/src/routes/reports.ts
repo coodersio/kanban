@@ -1753,6 +1753,11 @@ router.get('/personal', async (req: Request, res: Response) => {
         }
 
         // 4. Get projects where user has assigned stories or tasks
+        // Include both current sprint and next sprint so "next sprint only" new work is not missed.
+        const sprintIdsForProjectDiscovery = nextSprint
+            ? [Number(sprintId), nextSprint.id]
+            : [Number(sprintId)];
+
         const projectsQuery = `
             SELECT DISTINCT
                 p.id,
@@ -1768,15 +1773,15 @@ router.get('/personal', async (req: Request, res: Response) => {
             LEFT JOIN users u ON p.owner_id = u.id
             WHERE p.id IN (
                 SELECT DISTINCT project_id FROM sprint_stories
-                WHERE sprint_id = $1 AND assigned_to = $2
+                WHERE sprint_id = ANY($1) AND assigned_to = $2
                 UNION
                 SELECT DISTINCT project_id FROM sprint_tasks
-                WHERE sprint_id = $1 AND assigned_to = $2
+                WHERE sprint_id = ANY($1) AND assigned_to = $2
             )
             ORDER BY p.id
         `;
 
-        const projectsResult = await pool.query(projectsQuery, [sprintId, userId]);
+        const projectsResult = await pool.query(projectsQuery, [sprintIdsForProjectDiscovery, userId]);
         const projects = [];
 
         // 5. For each project, get user's assigned stories and tasks
@@ -2048,8 +2053,10 @@ router.get('/personal', async (req: Request, res: Response) => {
         for (let projIdx = 0; projIdx < projects.length; projIdx++) {
             const project = projects[projIdx];
 
-            // Skip project only if both stories and tasks are empty
-            if (project.stories.length === 0 && project.tasks.length === 0) continue;
+            // Keep projects that have either current-sprint data or next-sprint plan data.
+            const hasCurrentData = project.stories.length > 0 || project.tasks.length > 0;
+            const hasNextData = project.next_stories.length > 0 || project.next_tasks.length > 0;
+            if (!hasCurrentData && !hasNextData) continue;
 
             const startRow = currentRow;
 
