@@ -1266,7 +1266,11 @@ router.get('/weekly', async (req: Request, res: Response) => {
             LEFT JOIN departments d ON p.department_id = d.id
             LEFT JOIN users u ON p.owner_id = u.id
             WHERE p.id IN (
+                SELECT DISTINCT project_id FROM sprint_projects WHERE sprint_id = ANY($1)
+                UNION
                 SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = ANY($1)
+                UNION
+                SELECT DISTINCT project_id FROM sprint_tasks WHERE sprint_id = ANY($1)
             )
             ORDER BY p.id
         `;
@@ -1364,7 +1368,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
             let nextStories: any[] = [];
             let nextTasks: any[] = [];
             if (nextSprint) {
-                // Get all stories in next sprint (only if project is registered in sprint_projects)
+                // Get all stories in next sprint for this project
                 const nextStoriesQuery = `
                     SELECT
                         s.id,
@@ -1381,17 +1385,13 @@ router.get('/weekly', async (req: Request, res: Response) => {
                     LEFT JOIN users u ON ss.assigned_to = u.id
                     WHERE ss.sprint_id = $1
                         AND ss.project_id = $2
-                        AND EXISTS (
-                            SELECT 1 FROM sprint_projects sp
-                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
-                        )
                     ORDER BY s.id
                 `;
 
                 const nextStoriesResult = await pool.query(nextStoriesQuery, [nextSprint.id, project.id]);
                 nextStories = nextStoriesResult.rows;
 
-                // Get all tasks in next sprint (only if project is registered in sprint_projects)
+                // Get all tasks in next sprint for this project
                 const nextTasksQuery = `
                     SELECT
                         t.id,
@@ -1409,10 +1409,6 @@ router.get('/weekly', async (req: Request, res: Response) => {
                     LEFT JOIN users u ON st.assigned_to = u.id
                     WHERE st.sprint_id = $1
                         AND st.project_id = $2
-                        AND EXISTS (
-                            SELECT 1 FROM sprint_projects sp
-                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
-                        )
                     ORDER BY st.order_index ASC, t.id ASC
                 `;
 
@@ -1523,7 +1519,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
         for (let projIdx = 0; projIdx < projects.length; projIdx++) {
             const project = projects[projIdx];
 
-            if (project.stories.length === 0 && (!project.next_stories || project.next_stories.length === 0)) continue;
+            // Show all discovered projects, even those with only sprint_projects entry (no stories/tasks yet)
 
             const startRow = currentRow;
             const rowCount = 1; // Now each project is one row
@@ -1616,7 +1612,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 const riskItems: string[] = [];
                 const seenRisks = new Set<string>();
 
-                // Collect risks from stories and tasks
+                // Collect risks from stories
                 for (const story of project.stories) {
                     if (story.risk_and_countermeasure && story.risk_and_countermeasure.trim()) {
                         const text = story.risk_and_countermeasure.trim();
@@ -1626,17 +1622,19 @@ router.get('/weekly', async (req: Request, res: Response) => {
                             seenRisks.add(text);
                         }
                     }
-                    // Also check tasks under this story
-                    if (story.tasks) {
-                        for (const task of story.tasks) {
-                            if (task.risk_and_countermeasure && task.risk_and_countermeasure.trim()) {
-                                const text = task.risk_and_countermeasure.trim();
-                                const fullText = `【${story.title}】${text}`;
-                                if (!seenRisks.has(text)) {
-                                    riskItems.push(fullText);
-                                    seenRisks.add(text);
-                                }
-                            }
+                }
+
+                // Collect risks from tasks (tasks are a separate array on project)
+                for (const task of project.tasks) {
+                    if (task.risk_and_countermeasure && task.risk_and_countermeasure.trim()) {
+                        const text = task.risk_and_countermeasure.trim();
+                        // Find parent story title for context
+                        const parentStory = project.stories.find((s: any) => s.id === task.story_id);
+                        const label = parentStory ? parentStory.title : '任务';
+                        const fullText = `【${label}】${text}`;
+                        if (!seenRisks.has(text)) {
+                            riskItems.push(fullText);
+                            seenRisks.add(text);
                         }
                     }
                 }
@@ -1777,6 +1775,10 @@ router.get('/personal', async (req: Request, res: Response) => {
                 UNION
                 SELECT DISTINCT project_id FROM sprint_tasks
                 WHERE sprint_id = ANY($1) AND assigned_to = $2
+                UNION
+                SELECT DISTINCT sp.project_id FROM sprint_projects sp
+                JOIN projects proj ON sp.project_id = proj.id
+                WHERE sp.sprint_id = ANY($1) AND proj.owner_id = $2
             )
             ORDER BY p.id
         `;
@@ -1908,10 +1910,6 @@ router.get('/personal', async (req: Request, res: Response) => {
                                     AND st.project_id = $2
                             )
                         )
-                        AND EXISTS (
-                            SELECT 1 FROM sprint_projects sp
-                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
-                        )
                     ORDER BY s.id
                 `;
 
@@ -1938,10 +1936,6 @@ router.get('/personal', async (req: Request, res: Response) => {
                     WHERE st.sprint_id = $1
                         AND st.project_id = $2
                         AND st.assigned_to = $3
-                        AND EXISTS (
-                            SELECT 1 FROM sprint_projects sp
-                            WHERE sp.sprint_id = $1 AND sp.project_id = $2
-                        )
                     ORDER BY st.order_index ASC, t.id ASC
                 `;
 
@@ -2053,10 +2047,7 @@ router.get('/personal', async (req: Request, res: Response) => {
         for (let projIdx = 0; projIdx < projects.length; projIdx++) {
             const project = projects[projIdx];
 
-            // Keep projects that have either current-sprint data or next-sprint plan data.
-            const hasCurrentData = project.stories.length > 0 || project.tasks.length > 0;
-            const hasNextData = project.next_stories.length > 0 || project.next_tasks.length > 0;
-            if (!hasCurrentData && !hasNextData) continue;
+            // Show all discovered projects, even those with only sprint_projects entry (no stories/tasks yet)
 
             const startRow = currentRow;
 
