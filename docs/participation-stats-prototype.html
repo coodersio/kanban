@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>参与项目统计 - 低保真原型</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f5f3ee;
+            --panel: #fffdf8;
+            --panel-strong: #f0ebe0;
+            --line: #d9d1c1;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --accent: #9a3412;
+            --accent-soft: #f8dfd1;
+            --accent-strong: #7c2d12;
+            --ok: #166534;
+            --warn: #9a3412;
+            --shadow: 0 14px 32px rgba(31, 41, 55, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(154, 52, 18, 0.08), transparent 28%),
+                linear-gradient(180deg, #f8f5ef 0%, var(--bg) 100%);
+            color: var(--text);
+        }
+
+        .shell {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 32px 20px 48px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #fffaf2 0%, #f6efe4 100%);
+            border: 1px solid rgba(154, 52, 18, 0.14);
+            border-radius: 24px;
+            padding: 28px 28px 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .hero h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+            line-height: 1.1;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .panel {
+            margin-top: 20px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .filter-grid {
+            padding: 24px 24px 16px;
+            display: grid;
+            gap: 18px;
+        }
+
+        .filter-row {
+            display: grid;
+            grid-template-columns: 92px 1fr;
+            gap: 14px;
+            align-items: start;
+        }
+
+        .filter-title {
+            padding-top: 10px;
+            font-weight: 700;
+            color: var(--accent-strong);
+        }
+
+        .filter-body {
+            display: grid;
+            gap: 10px;
+        }
+
+        .chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .chip {
+            border: 1px solid var(--line);
+            background: #ffffff;
+            color: var(--text);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: 14px;
+            line-height: 1;
+            cursor: pointer;
+            transition: 140ms ease;
+        }
+
+        .chip:hover {
+            border-color: #c57b57;
+            transform: translateY(-1px);
+        }
+
+        .chip.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--accent-strong);
+            font-weight: 700;
+        }
+
+        .selected-text {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px 24px;
+            border-top: 1px solid var(--line);
+            background: var(--panel-strong);
+        }
+
+        .toolbar-left,
+        .toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            border: 1px solid transparent;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 140ms ease;
+        }
+
+        .button.primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .button.primary:hover {
+            background: var(--accent-strong);
+        }
+
+        .button.secondary {
+            border-color: var(--line);
+            background: #fff;
+            color: var(--text);
+        }
+
+        .button.secondary:hover {
+            border-color: #c57b57;
+        }
+
+        .button.copy {
+            border-color: #b6d3bf;
+            background: #effaf3;
+            color: var(--ok);
+            font-weight: 700;
+        }
+
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .stat {
+            min-width: 132px;
+            padding: 12px 14px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .table-wrap {
+            overflow: auto;
+            padding: 18px 24px 24px;
+        }
+
+        table {
+            width: 100%;
+            min-width: 980px;
+            border-collapse: collapse;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            overflow: hidden;
+        }
+
+        thead th {
+            text-align: left;
+            padding: 14px 16px;
+            background: #f7efe4;
+            color: #7c2d12;
+            font-size: 13px;
+            letter-spacing: 0.02em;
+            border-bottom: 1px solid var(--line);
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #ece6d8;
+            vertical-align: top;
+            font-size: 14px;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #fffaf4;
+        }
+
+        tbody tr:hover {
+            background: #fef2ea;
+        }
+
+        .project {
+            font-weight: 700;
+            color: var(--accent-strong);
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .tag.role-owner {
+            background: #fef3c7;
+            border-color: #f5d591;
+            color: #92400e;
+        }
+
+        .tag.role-member {
+            background: #e8f1ff;
+            border-color: #bfd3ff;
+            color: #1d4ed8;
+        }
+
+        .tag.status-done {
+            background: #e9f8ee;
+            border-color: #bfe6ca;
+            color: var(--ok);
+        }
+
+        .tag.status-progress {
+            background: #fff3e8;
+            border-color: #f4cfb1;
+            color: var(--warn);
+        }
+
+        .footer-note {
+            padding: 0 24px 24px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .toast {
+            min-height: 20px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        @media (max-width: 900px) {
+            .filter-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .filter-title {
+                padding-top: 0;
+            }
+
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .toolbar-left,
+            .toolbar-right {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <section class="hero">
+            <h1>参与项目统计</h1>
+            <p>低保真原型：两行多选筛选 + 可复制表格。适合统计多个迭代内指定成员参与的项目、关键节点与完成时间。</p>
+        </section>
+
+        <section class="panel">
+            <div class="filter-grid">
+                <div class="filter-row">
+                    <div class="filter-title">迭代</div>
+                    <div class="filter-body">
+                        <div class="chip-list" id="sprint-chips"></div>
+                        <div class="selected-text" id="sprint-selected-text"></div>
+                    </div>
+                </div>
+
+                <div class="filter-row">
+                    <div class="filter-title">成员</div>
+                    <div class="filter-body">
+                        <div class="chip-list" id="member-chips"></div>
+                        <div class="selected-text" id="member-selected-text"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <button class="button primary" id="query-button">查询</button>
+                    <button class="button secondary" id="reset-button">清空筛选</button>
+                    <button class="button copy" id="copy-button">复制到 Excel</button>
+                    <div class="toast" id="toast-text">切换筛选后点击“查询”，表格内容会按当前条件刷新。</div>
+                </div>
+                <div class="toolbar-right stats">
+                    <div class="stat">
+                        <div class="stat-label">项目数</div>
+                        <div class="stat-value" id="project-count">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">关键节点数</div>
+                        <div class="stat-value" id="milestone-count">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">成员数</div>
+                        <div class="stat-value" id="member-count">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>项目名称</th>
+                            <th>迭代</th>
+                            <th>关键节点</th>
+                            <th>成员</th>
+                            <th>角色</th>
+                            <th>状态</th>
+                            <th>完成时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+
+            <div class="footer-note" id="footer-note">共 0 条记录</div>
+        </section>
+    </div>
+
+    <script>
+        const rows = [
+            { project: "Exhaust gas integration", sprint: "W7", milestone: "翻译英文版", member: "田子琛", role: "负责人", status: "已完成", completedAt: "2026-03-10" },
+            { project: "Exhaust gas integration", sprint: "W8", milestone: "商务翻译核对", member: "田子琛", role: "参与人", status: "已完成", completedAt: "2026-03-14" },
+            { project: "PMTestHostComputer", sprint: "W8", milestone: "根据研发任务单功能编码开发", member: "吴群群", role: "负责人", status: "已完成", completedAt: "2026-03-13" },
+            { project: "NH3-CEMS", sprint: "W8", milestone: "测试节点", member: "吴群群", role: "参与人", status: "进行中", completedAt: "" },
+            { project: "测试导出个人周报", sprint: "W9", milestone: "测试节点", member: "吴群群", role: "负责人", status: "进行中", completedAt: "" },
+            { project: "Flow Calibration", sprint: "W9", milestone: "联调现场确认", member: "陈剑锋", role: "负责人", status: "已完成", completedAt: "2026-03-21" },
+            { project: "Emission QA Board", sprint: "W10", milestone: "接口联测", member: "张洁", role: "参与人", status: "进行中", completedAt: "" },
+            { project: "Emission QA Board", sprint: "W10", milestone: "版本冻结", member: "吴群群", role: "负责人", status: "进行中", completedAt: "" }
+        ];
+
+        const sprintOptions = Array.from(new Set(rows.map((row) => row.sprint)));
+        const memberOptions = Array.from(new Set(rows.map((row) => row.member)));
+
+        const selected = {
+            sprints: new Set(sprintOptions),
+            members: new Set(memberOptions)
+        };
+
+        const sprintChips = document.getElementById("sprint-chips");
+        const memberChips = document.getElementById("member-chips");
+        const sprintSelectedText = document.getElementById("sprint-selected-text");
+        const memberSelectedText = document.getElementById("member-selected-text");
+        const tableBody = document.getElementById("table-body");
+        const footerNote = document.getElementById("footer-note");
+        const toastText = document.getElementById("toast-text");
+
+        function createChip(group, value, label, isAll) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "chip";
+            button.textContent = label;
+            button.dataset.group = group;
+            button.dataset.value = value;
+            if (isAll) button.dataset.all = "true";
+            button.addEventListener("click", () => toggleChip(group, value, isAll));
+            return button;
+        }
+
+        function renderChipGroups() {
+            sprintChips.innerHTML = "";
+            memberChips.innerHTML = "";
+
+            sprintChips.appendChild(createChip("sprints", "__all__", "全部", true));
+            sprintOptions.forEach((option) => sprintChips.appendChild(createChip("sprints", option, option, false)));
+
+            memberChips.appendChild(createChip("members", "__all__", "全部", true));
+            memberOptions.forEach((option) => memberChips.appendChild(createChip("members", option, option, false)));
+
+            syncChipStates();
+            renderSelectionText();
+        }
+
+        function toggleChip(group, value, isAll) {
+            const options = group === "sprints" ? sprintOptions : memberOptions;
+            const targetSet = selected[group];
+
+            if (isAll) {
+                targetSet.clear();
+                options.forEach((item) => targetSet.add(item));
+                syncChipStates();
+                renderSelectionText();
+                return;
+            }
+
+            if (targetSet.has(value)) {
+                targetSet.delete(value);
+            } else {
+                targetSet.add(value);
+            }
+
+            if (targetSet.size === 0) {
+                options.forEach((item) => targetSet.add(item));
+            }
+
+            syncChipStates();
+            renderSelectionText();
+        }
+
+        function syncChipStates() {
+            document.querySelectorAll(".chip").forEach((chip) => {
+                const group = chip.dataset.group;
+                const value = chip.dataset.value;
+                const options = group === "sprints" ? sprintOptions : memberOptions;
+
+                if (chip.dataset.all === "true") {
+                    chip.classList.toggle("active", selected[group].size === options.length);
+                } else {
+                    chip.classList.toggle("active", selected[group].has(value));
+                }
+            });
+        }
+
+        function renderSelectionText() {
+            sprintSelectedText.textContent = selected.sprints.size === sprintOptions.length
+                ? "已选：全部迭代"
+                : `已选：${Array.from(selected.sprints).join(", ")}`;
+
+            memberSelectedText.textContent = selected.members.size === memberOptions.length
+                ? "已选：全部成员"
+                : `已选：${Array.from(selected.members).join(", ")}`;
+        }
+
+        function getFilteredRows() {
+            return rows.filter((row) => selected.sprints.has(row.sprint) && selected.members.has(row.member));
+        }
+
+        function renderTable() {
+            const filteredRows = getFilteredRows();
+            const distinctProjects = new Set(filteredRows.map((row) => row.project));
+            const distinctMembers = new Set(filteredRows.map((row) => row.member));
+
+            tableBody.innerHTML = "";
+
+            filteredRows.forEach((row) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><span class="project">${row.project}</span></td>
+                    <td>${row.sprint}</td>
+                    <td>${row.milestone}</td>
+                    <td>${row.member}</td>
+                    <td>
+                        <span class="tag ${row.role === "负责人" ? "role-owner" : "role-member"}">
+                            ${row.role}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="tag ${row.status === "已完成" ? "status-done" : "status-progress"}">
+                            ${row.status}
+                        </span>
+                    </td>
+                    <td>${row.completedAt || "—"}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            if (filteredRows.length === 0) {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td colspan="7" style="text-align:center; color:#6b7280; padding:32px 16px;">
+                        当前筛选条件下暂无数据
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            }
+
+            document.getElementById("project-count").textContent = distinctProjects.size;
+            document.getElementById("milestone-count").textContent = filteredRows.length;
+            document.getElementById("member-count").textContent = distinctMembers.size;
+            footerNote.textContent = `共 ${filteredRows.length} 条记录`;
+            toastText.textContent = "统计结果已刷新。表格可直接复制为 Excel 可识别的列结构。";
+        }
+
+        async function copyVisibleRows() {
+            const filteredRows = getFilteredRows();
+
+            if (filteredRows.length === 0) {
+                toastText.textContent = "当前没有可复制的数据。";
+                return;
+            }
+
+            const header = ["项目名称", "迭代", "关键节点", "成员", "角色", "状态", "完成时间"];
+            const lines = filteredRows.map((row) => [
+                row.project,
+                row.sprint,
+                row.milestone,
+                row.member,
+                row.role,
+                row.status,
+                row.completedAt || ""
+            ]);
+
+            const tsv = [header, ...lines]
+                .map((line) => line.join("\t"))
+                .join("\n");
+
+            try {
+                await navigator.clipboard.writeText(tsv);
+                toastText.textContent = `已复制 ${filteredRows.length} 条记录。可直接粘贴到 Excel。`;
+            } catch (error) {
+                toastText.textContent = "复制失败：当前浏览器环境不允许写入剪贴板。";
+            }
+        }
+
+        document.getElementById("query-button").addEventListener("click", renderTable);
+
+        document.getElementById("reset-button").addEventListener("click", () => {
+            selected.sprints.clear();
+            selected.members.clear();
+            sprintOptions.forEach((item) => selected.sprints.add(item));
+            memberOptions.forEach((item) => selected.members.add(item));
+            syncChipStates();
+            renderSelectionText();
+            renderTable();
+        });
+
+        document.getElementById("copy-button").addEventListener("click", copyVisibleRows);
+
+        renderChipGroups();
+        renderTable();
+    </script>
+</body>
+</html>

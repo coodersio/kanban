@@ -15,6 +15,7 @@ import reportRoutes from './routes/reports';
 import dashboardRoutes from './routes/dashboard';
 import notificationRoutes from './routes/notifications';
 import searchRoutes from './routes/search';
+import participationStatsRoutes from './routes/participation_stats';
 import pool from './db/connection';
 
 dotenv.config();
@@ -69,6 +70,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/participation-stats', participationStatsRoutes);
 const publicDir = path.join(__dirname, 'public');
 if (isProduction) {
     app.use(express.static(publicDir));

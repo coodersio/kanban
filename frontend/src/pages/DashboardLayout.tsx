@@ -131,6 +131,7 @@ export default function DashboardLayout() {
                         <NavItem href="/dashboard/workbench" icon={Briefcase} label="工作台" />
                         <NavItem href="/dashboard/projects" icon={Layers} label="项目管理" />
                         <NavItem href="/dashboard/sprints" icon={Calendar} label="迭代管理" />
+                        <NavItem href="/dashboard/participation-stats" icon={BarChart3} label="参与统计" />
                         <NavItem href="/dashboard/users" icon={Users} label="成员管理" />
                         <NavItem href="/dashboard/settings" icon={Settings} label="系统设置" />
                     </nav>
@@ -148,6 +149,7 @@ export default function DashboardLayout() {
                             {(location.pathname === '/dashboard/workbench' || location.pathname.startsWith('/dashboard/workbench/')) && '工作台'}
                             {(location.pathname === '/dashboard/projects' || location.pathname.startsWith('/dashboard/projects/')) && '项目管理'}
                             {(location.pathname === '/dashboard/sprints' || location.pathname.startsWith('/dashboard/sprints/')) && '迭代计划'}
+                            {(location.pathname === '/dashboard/participation-stats' || location.pathname.startsWith('/dashboard/participation-stats/')) && '参与项目统计'}
                             {(location.pathname === '/dashboard/users' || location.pathname.startsWith('/dashboard/users/')) && '成员管理'}
                         </h1>
                     </div>

@@ -9,6 +9,7 @@ import SprintsPage from '@/pages/SprintsPage';
 import ProjectsPage from '@/pages/ProjectsPage';
 import Help from '@/pages/Help';
 import RootRedirect from '@/components/RootRedirect';
+import ParticipationStatsPage from '@/pages/ParticipationStatsPage';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="sprints" element={<SprintsPage />} />
+          <Route path="participation-stats" element={<ParticipationStatsPage />} />
           {/* Add other routes here */}
         </Route>
 

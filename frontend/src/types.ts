@@ -120,3 +120,23 @@ export interface SearchResult {
     sprint_id?: number;
     sprint_number?: string;
 }
+
+export interface ParticipationStatsRow {
+    projectId: number;
+    projectName: string;
+    sprintId: number;
+    sprintName: string;
+    storyId: number;
+    storyTitle: string;
+    memberId: number;
+    memberName: string;
+    role: '负责人' | '参与人';
+    status: 'not_started' | 'in_progress' | 'completed' | 'on_hold';
+    completedAt: string | null;
+}
+
+export interface ParticipationStatsSummary {
+    projectCount: number;
+    milestoneCount: number;
+    memberCount: number;
+}
