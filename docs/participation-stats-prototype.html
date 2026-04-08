@@ -212,6 +212,15 @@
             padding: 18px 24px 24px;
         }
 
+        .empty-panel {
+            padding: 44px 16px;
+            text-align: center;
+            color: var(--muted);
+            border: 1px dashed #dccfb9;
+            border-radius: 18px;
+            background: #fffaf4;
+        }
+
         table {
             width: 100%;
             min-width: 980px;
@@ -248,9 +257,98 @@
             background: #fef2ea;
         }
 
-        .project {
+        .project-cell {
+            font-weight: 800;
+            color: var(--accent-strong);
+            background: linear-gradient(180deg, #fff9f0 0%, #fff4e8 100%);
+            min-width: 190px;
+            vertical-align: top;
+        }
+
+        .milestone-cell {
+            min-width: 380px;
+        }
+
+        .milestone-box {
+            border: 1px solid #e3d6bf;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #fffdf9 0%, #fff7ec 100%);
+            padding: 12px 14px;
+        }
+
+        .milestone-list {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+            display: grid;
+            gap: 12px;
+        }
+
+        .milestone-item {
+            line-height: 1.5;
+        }
+
+        .milestone-index {
             font-weight: 700;
             color: var(--accent-strong);
+        }
+
+        .milestone-name {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .milestone-line {
+            margin-top: 4px;
+            font-size: 13px;
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        .meta-stack {
+            display: grid;
+            gap: 6px;
+        }
+
+        .meta-text {
+            font-size: 13px;
+            color: var(--text);
+            line-height: 1.45;
+        }
+
+        .member-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .person-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid #d7dbe5;
+            background: #f8fafc;
+            color: #334155;
+            white-space: nowrap;
+        }
+
+        .person-pill.owner {
+            border-color: #f3c980;
+            background: #fff7dc;
+            color: #92400e;
+        }
+
+        .person-pill.member {
+            border-color: #bfd3ff;
+            background: #edf4ff;
+            color: #1d4ed8;
+        }
+
+        .sprint-cell {
+            min-width: 170px;
         }
 
         .tag {
@@ -326,7 +424,7 @@
     <div class="shell">
         <section class="hero">
             <h1>参与项目统计</h1>
-            <p>低保真原型：两行多选筛选 + 可复制表格。适合统计多个迭代内指定成员参与的项目、关键节点与完成时间。</p>
+            <p>低保真原型：一行一个项目。第二列把该项目的所有关键节点放进同一个内容框里，并按“无完成时间优先，其次按完成时间降序”编号排列。</p>
         </section>
 
         <section class="panel">
@@ -350,10 +448,9 @@
 
             <div class="toolbar">
                 <div class="toolbar-left">
-                    <button class="button primary" id="query-button">查询</button>
                     <button class="button secondary" id="reset-button">清空筛选</button>
                     <button class="button copy" id="copy-button">复制到 Excel</button>
-                    <div class="toast" id="toast-text">切换筛选后点击“查询”，表格内容会按当前条件刷新。</div>
+                    <div class="toast" id="toast-text">筛选切换后会自动刷新，复制内容与当前聚合表格保持一致。</div>
                 </div>
                 <div class="toolbar-right stats">
                     <div class="stat">
@@ -376,39 +473,44 @@
                     <thead>
                         <tr>
                             <th>项目名称</th>
-                            <th>迭代</th>
                             <th>关键节点</th>
+                            <th>参与迭代</th>
                             <th>成员</th>
-                            <th>角色</th>
-                            <th>状态</th>
-                            <th>完成时间</th>
                         </tr>
                     </thead>
                     <tbody id="table-body"></tbody>
                 </table>
             </div>
 
-            <div class="footer-note" id="footer-note">共 0 条记录</div>
+            <div class="footer-note" id="footer-note">共 0 个项目，0 个关键节点</div>
         </section>
     </div>
 
     <script>
         const rows = [
-            { project: "Exhaust gas integration", sprint: "W7", milestone: "翻译英文版", member: "田子琛", role: "负责人", status: "已完成", completedAt: "2026-03-10" },
-            { project: "Exhaust gas integration", sprint: "W8", milestone: "商务翻译核对", member: "田子琛", role: "参与人", status: "已完成", completedAt: "2026-03-14" },
-            { project: "PMTestHostComputer", sprint: "W8", milestone: "根据研发任务单功能编码开发", member: "吴群群", role: "负责人", status: "已完成", completedAt: "2026-03-13" },
-            { project: "NH3-CEMS", sprint: "W8", milestone: "测试节点", member: "吴群群", role: "参与人", status: "进行中", completedAt: "" },
-            { project: "测试导出个人周报", sprint: "W9", milestone: "测试节点", member: "吴群群", role: "负责人", status: "进行中", completedAt: "" },
-            { project: "Flow Calibration", sprint: "W9", milestone: "联调现场确认", member: "陈剑锋", role: "负责人", status: "已完成", completedAt: "2026-03-21" },
-            { project: "Emission QA Board", sprint: "W10", milestone: "接口联测", member: "张洁", role: "参与人", status: "进行中", completedAt: "" },
-            { project: "Emission QA Board", sprint: "W10", milestone: "版本冻结", member: "吴群群", role: "负责人", status: "进行中", completedAt: "" }
+            { project: "壁挂炉", sprint: "W12", milestone: "壁挂炉后端需求讨论以及功能修改", member: "陈明宇", role: "负责人", status: "已完成", completedAt: "2026-03-20" },
+            { project: "壁挂炉", sprint: "W13", milestone: "壁挂炉后端需求讨论以及功能修改", member: "陈明宇", role: "负责人", status: "已完成", completedAt: "2026-03-27" },
+            { project: "壁挂炉", sprint: "W14", milestone: "壁挂炉后端需求讨论以及功能修改", member: "陈明宇", role: "负责人", status: "已完成", completedAt: "2026-04-03" },
+            { project: "壁挂炉", sprint: "W15", milestone: "壁挂炉后端需求讨论以及功能修改", member: "陈明宇", role: "负责人", status: "进行中", completedAt: "" },
+            { project: "四方MES系统", sprint: "W13", milestone: "评审MES系统各个模块功能以及开发周期", member: "陈明宇", role: "负责人", status: "进行中", completedAt: "2026-03-27" },
+            { project: "四方MES系统", sprint: "W14", milestone: "预研现有MES系统以及通用术语功能等", member: "陈明宇", role: "负责人", status: "进行中", completedAt: "2026-04-03" },
+            { project: "四方MES系统", sprint: "W15", milestone: "预研现有MES系统以及通用术语功能等", member: "陈明宇", role: "负责人", status: "进行中", completedAt: "" },
+            { project: "DN流量计平台", sprint: "W12", milestone: "完成客户新增需求后端开发", member: "陈明宇", role: "负责人", status: "已完成", completedAt: "2026-03-20" },
+            { project: "DN流量计平台", sprint: "W13", milestone: "完成客户新增需求后端开发", member: "陈明宇", role: "负责人", status: "已完成", completedAt: "2026-03-27" },
+            { project: "DN流量计平台", sprint: "W14", milestone: "完成客户新增需求后端开发", member: "陈明宇", role: "负责人", status: "已完成", completedAt: "2026-04-03" },
+            { project: "管道阀门云平台", sprint: "W12", milestone: "跟踪测试线上新版本功能", member: "陈明宇", role: "参与人", status: "已完成", completedAt: "2026-03-20" },
+            { project: "肺功能云平台", sprint: "W12", milestone: "完成云端部署以及配置", member: "陈明宇", role: "参与人", status: "已完成", completedAt: "2026-03-20" },
+            { project: "燃气表平台(标准版)", sprint: "W13", milestone: "完成新平台账号以及权限分配", member: "陈明宇", role: "负责人", status: "已完成", completedAt: "2026-03-27" },
+            { project: "Emission QA Board", sprint: "W14", milestone: "接口联测", member: "张洁", role: "参与人", status: "进行中", completedAt: "" },
+            { project: "Emission QA Board", sprint: "W15", milestone: "接口联测", member: "张洁", role: "参与人", status: "进行中", completedAt: "" },
+            { project: "Flow Calibration", sprint: "W15", milestone: "联调现场确认", member: "陈剑锋", role: "负责人", status: "已完成", completedAt: "2026-04-03" }
         ];
 
         const sprintOptions = Array.from(new Set(rows.map((row) => row.sprint)));
         const memberOptions = Array.from(new Set(rows.map((row) => row.member)));
 
         const selected = {
-            sprints: new Set(sprintOptions),
+            sprints: new Set(),
             members: new Set(memberOptions)
         };
 
@@ -450,13 +552,18 @@
             const options = group === "sprints" ? sprintOptions : memberOptions;
             const targetSet = selected[group];
 
-            if (isAll) {
-                targetSet.clear();
-                options.forEach((item) => targetSet.add(item));
-                syncChipStates();
-                renderSelectionText();
-                return;
-            }
+                if (isAll) {
+                    if (targetSet.size === options.length) {
+                        targetSet.clear();
+                    } else {
+                        targetSet.clear();
+                        options.forEach((item) => targetSet.add(item));
+                    }
+                    syncChipStates();
+                    renderSelectionText();
+                    renderTable();
+                    return;
+                }
 
             if (targetSet.has(value)) {
                 targetSet.delete(value);
@@ -464,12 +571,9 @@
                 targetSet.add(value);
             }
 
-            if (targetSet.size === 0) {
-                options.forEach((item) => targetSet.add(item));
-            }
-
             syncChipStates();
             renderSelectionText();
+            renderTable();
         }
 
         function syncChipStates() {
@@ -487,82 +591,216 @@
         }
 
         function renderSelectionText() {
-            sprintSelectedText.textContent = selected.sprints.size === sprintOptions.length
-                ? "已选：全部迭代"
-                : `已选：${Array.from(selected.sprints).join(", ")}`;
+            sprintSelectedText.textContent = selected.sprints.size === 0
+                ? "已选：未选择"
+                : selected.sprints.size === sprintOptions.length
+                    ? "已选：全部迭代"
+                    : `已选：${Array.from(selected.sprints).join(", ")}`;
 
-            memberSelectedText.textContent = selected.members.size === memberOptions.length
-                ? "已选：全部成员"
-                : `已选：${Array.from(selected.members).join(", ")}`;
+            memberSelectedText.textContent = selected.members.size === 0
+                ? "已选：未选择"
+                : selected.members.size === memberOptions.length
+                    ? "已选：全部成员"
+                    : `已选：${Array.from(selected.members).join(", ")}`;
         }
 
         function getFilteredRows() {
             return rows.filter((row) => selected.sprints.has(row.sprint) && selected.members.has(row.member));
         }
 
+        function getSprintOrder(sprint) {
+            const match = String(sprint).match(/(\d+)/);
+            return match ? Number(match[1]) : 0;
+        }
+
+        function getGroupedProjects() {
+            if (selected.sprints.size === 0 || selected.members.size === 0) {
+                return [];
+            }
+
+            const projectMap = new Map();
+
+            getFilteredRows().forEach((row) => {
+                if (!projectMap.has(row.project)) {
+                    projectMap.set(row.project, {
+                        project: row.project,
+                        sprints: new Set(),
+                        members: new Map(),
+                        milestones: new Map()
+                    });
+                }
+
+                const project = projectMap.get(row.project);
+                project.sprints.add(row.sprint);
+                project.members.set(row.member, row.role === "负责人" ? "负责人" : (project.members.get(row.member) || "参与人"));
+
+                const key = row.milestone;
+                const sprintOrder = getSprintOrder(row.sprint);
+
+                if (!project.milestones.has(key)) {
+                    project.milestones.set(key, {
+                        milestone: row.milestone,
+                        sprints: new Set([row.sprint]),
+                        members: new Map([[row.member, row.role]]),
+                        latestStatus: row.status,
+                        latestSprintOrder: sprintOrder,
+                        latestCompletedAt: row.completedAt || "",
+                        latestCompletedValue: row.completedAt ? new Date(row.completedAt).getTime() : 0
+                    });
+                    return;
+                }
+
+                const current = project.milestones.get(key);
+                current.sprints.add(row.sprint);
+                current.members.set(row.member, row.role === "负责人" ? "负责人" : (current.members.get(row.member) || "参与人"));
+
+                if (sprintOrder >= current.latestSprintOrder) {
+                    current.latestSprintOrder = sprintOrder;
+                    current.latestStatus = row.status;
+                }
+
+                const completedValue = row.completedAt ? new Date(row.completedAt).getTime() : 0;
+                if (completedValue >= current.latestCompletedValue) {
+                    current.latestCompletedValue = completedValue;
+                    current.latestCompletedAt = row.completedAt || "";
+                }
+            });
+
+            return Array.from(projectMap.values())
+                .map((project) => ({
+                    project: project.project,
+                    sprints: Array.from(project.sprints).sort((a, b) => getSprintOrder(a) - getSprintOrder(b)),
+                    members: Array.from(project.members.entries())
+                        .sort((a, b) => a[0].localeCompare(b[0], "zh-CN"))
+                        .map(([name, role]) => ({ name, role })),
+                    milestones: Array.from(project.milestones.values())
+                        .map((item) => ({
+                            milestone: item.milestone,
+                            sprints: Array.from(item.sprints).sort((a, b) => getSprintOrder(a) - getSprintOrder(b)),
+                            members: Array.from(item.members.entries())
+                                .sort((a, b) => a[0].localeCompare(b[0], "zh-CN"))
+                                .map(([name, role]) => ({ name, role })),
+                            status: item.latestStatus,
+                            completedAt: item.latestCompletedAt
+                        }))
+                        .sort((a, b) => {
+                            const aPending = !a.completedAt;
+                            const bPending = !b.completedAt;
+                            if (aPending && !bPending) return -1;
+                            if (!aPending && bPending) return 1;
+                            if (a.completedAt && b.completedAt) {
+                                return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+                            }
+                            return a.milestone.localeCompare(b.milestone, "zh-CN");
+                        })
+                }))
+                .sort((a, b) => a.project.localeCompare(b.project, "zh-CN"));
+        }
+
         function renderTable() {
-            const filteredRows = getFilteredRows();
-            const distinctProjects = new Set(filteredRows.map((row) => row.project));
-            const distinctMembers = new Set(filteredRows.map((row) => row.member));
+            const groupedProjects = getGroupedProjects();
+            const projectCount = groupedProjects.length;
+            const milestoneCount = groupedProjects.reduce((sum, project) => sum + project.milestones.length, 0);
+            const memberCount = new Set(
+                groupedProjects.flatMap((project) => project.members.map((member) => member.name))
+            ).size;
 
             tableBody.innerHTML = "";
 
-            filteredRows.forEach((row) => {
+            if (groupedProjects.length === 0) {
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
-                    <td><span class="project">${row.project}</span></td>
-                    <td>${row.sprint}</td>
-                    <td>${row.milestone}</td>
-                    <td>${row.member}</td>
-                    <td>
-                        <span class="tag ${row.role === "负责人" ? "role-owner" : "role-member"}">
-                            ${row.role}
-                        </span>
+                    <td colspan="4" style="text-align:center; color:#6b7280; padding:40px 16px;">
+                        ${selected.sprints.size === 0 && selected.members.size === 0
+                            ? "请选择至少一个迭代和一个成员"
+                            : selected.sprints.size === 0
+                                ? "请选择至少一个迭代"
+                                : selected.members.size === 0
+                                    ? "请选择至少一个成员"
+                                    : "当前筛选条件下暂无项目"}
                     </td>
-                    <td>
-                        <span class="tag ${row.status === "已完成" ? "status-done" : "status-progress"}">
-                            ${row.status}
-                        </span>
-                    </td>
-                    <td>${row.completedAt || "—"}</td>
                 `;
                 tableBody.appendChild(tr);
-            });
+            } else {
+                groupedProjects.forEach((project) => {
+                    const tr = document.createElement("tr");
 
-            if (filteredRows.length === 0) {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td colspan="7" style="text-align:center; color:#6b7280; padding:32px 16px;">
-                        当前筛选条件下暂无数据
-                    </td>
-                `;
-                tableBody.appendChild(tr);
+                    const projectCell = document.createElement("td");
+                    projectCell.className = "project-cell";
+                    projectCell.textContent = project.project;
+
+                    const milestoneCell = document.createElement("td");
+                    milestoneCell.className = "milestone-cell";
+                    milestoneCell.innerHTML = `
+                        <div class="milestone-box">
+                            <ol class="milestone-list">
+                                ${project.milestones.map((milestone, index) => `
+                                    <li class="milestone-item">
+                                        <div class="milestone-line">
+                                            <span class="milestone-index">${index + 1}）</span>
+                                            <span class="milestone-name">${milestone.milestone}</span>
+                                            <span> | ${milestone.status} | ${milestone.completedAt || "—"}</span>
+                                        </div>
+                                    </li>
+                                `).join("")}
+                            </ol>
+                        </div>
+                    `;
+
+                    const sprintCell = document.createElement("td");
+                    sprintCell.className = "sprint-cell";
+                    sprintCell.innerHTML = `
+                        <div class="meta-stack">
+                            <div class="meta-text">${project.sprints.join(", ")}</div>
+                        </div>
+                    `;
+
+                    const memberCell = document.createElement("td");
+                    memberCell.innerHTML = `
+                        <div class="member-pills">
+                            ${project.members.map((member) => `
+                                <span class="person-pill ${member.role === "负责人" ? "owner" : "member"}">
+                                    ${member.name} / ${member.role}
+                                </span>
+                            `).join("")}
+                        </div>
+                    `;
+
+                    tr.appendChild(projectCell);
+                    tr.appendChild(milestoneCell);
+                    tr.appendChild(sprintCell);
+                    tr.appendChild(memberCell);
+                    tableBody.appendChild(tr);
+                });
             }
 
-            document.getElementById("project-count").textContent = distinctProjects.size;
-            document.getElementById("milestone-count").textContent = filteredRows.length;
-            document.getElementById("member-count").textContent = distinctMembers.size;
-            footerNote.textContent = `共 ${filteredRows.length} 条记录`;
-            toastText.textContent = "统计结果已刷新。表格可直接复制为 Excel 可识别的列结构。";
+            document.getElementById("project-count").textContent = projectCount;
+            document.getElementById("milestone-count").textContent = milestoneCount;
+            document.getElementById("member-count").textContent = memberCount;
+            footerNote.textContent = `共 ${projectCount} 个项目，${milestoneCount} 个关键节点`;
+            toastText.textContent = "统计结果已刷新。当前是“一行一个项目”，关键节点集中在第二列的内容框中。";
         }
 
         async function copyVisibleRows() {
-            const filteredRows = getFilteredRows();
+            const groupedProjects = getGroupedProjects();
+            const flattenedRows = groupedProjects.map((project) => ({
+                project: project.project,
+                milestones: project.milestones.map((milestone, index) => `${index + 1}）${milestone.milestone} | ${milestone.status} | ${milestone.completedAt || "—"}`).join("； "),
+                sprints: project.sprints.join(", "),
+                members: project.members.map((member) => `${member.name}(${member.role})`).join(", ")
+            }));
 
-            if (filteredRows.length === 0) {
+            if (flattenedRows.length === 0) {
                 toastText.textContent = "当前没有可复制的数据。";
                 return;
             }
 
-            const header = ["项目名称", "迭代", "关键节点", "成员", "角色", "状态", "完成时间"];
-            const lines = filteredRows.map((row) => [
+            const header = ["项目名称", "关键节点", "参与迭代", "成员"];
+            const lines = flattenedRows.map((row) => [
                 row.project,
-                row.sprint,
-                row.milestone,
-                row.member,
-                row.role,
-                row.status,
-                row.completedAt || ""
+                row.milestones,
+                row.sprints,
+                row.members,
             ]);
 
             const tsv = [header, ...lines]
@@ -571,18 +809,15 @@
 
             try {
                 await navigator.clipboard.writeText(tsv);
-                toastText.textContent = `已复制 ${filteredRows.length} 条记录。可直接粘贴到 Excel。`;
+                toastText.textContent = `已复制 ${flattenedRows.length} 条项目记录。可直接粘贴到 Excel。`;
             } catch (error) {
                 toastText.textContent = "复制失败：当前浏览器环境不允许写入剪贴板。";
             }
         }
 
-        document.getElementById("query-button").addEventListener("click", renderTable);
-
         document.getElementById("reset-button").addEventListener("click", () => {
             selected.sprints.clear();
             selected.members.clear();
-            sprintOptions.forEach((item) => selected.sprints.add(item));
             memberOptions.forEach((item) => selected.members.add(item));
             syncChipStates();
             renderSelectionText();

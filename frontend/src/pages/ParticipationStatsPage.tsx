@@ -4,10 +4,8 @@ import { format } from 'date-fns';
 import { BarChart3, CalendarRange, Copy, RefreshCcw, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
-import type { Member, ParticipationStatsRow, ParticipationStatsSummary, Sprint } from '@/types';
+import type { Member, ParticipationStatsRow, Sprint } from '@/types';
 
 type CurrentUser = {
     id: number;
@@ -15,10 +13,26 @@ type CurrentUser = {
     displayName: string;
 };
 
-const EMPTY_SUMMARY: ParticipationStatsSummary = {
-    projectCount: 0,
-    milestoneCount: 0,
-    memberCount: 0
+type ProjectMember = {
+    memberId: number;
+    memberName: string;
+    role: '负责人' | '参与人';
+};
+
+type ProjectMilestone = {
+    storyId: number;
+    storyTitle: string;
+    status: ParticipationStatsRow['status'];
+    completedAt: string | null;
+    sprintSortValue: number;
+};
+
+type ProjectGroup = {
+    projectId: number;
+    projectName: string;
+    sprints: Array<{ id: number; name: string; sortValue: number }>;
+    members: ProjectMember[];
+    milestones: ProjectMilestone[];
 };
 
 function statusLabel(status: ParticipationStatsRow['status']) {
@@ -34,22 +48,28 @@ function statusLabel(status: ParticipationStatsRow['status']) {
     }
 }
 
-function statusBadgeClass(status: ParticipationStatsRow['status']) {
-    switch (status) {
-        case 'completed':
-            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-        case 'in_progress':
-            return 'bg-amber-100 text-amber-700 border-amber-200';
-        case 'on_hold':
-            return 'bg-rose-100 text-rose-700 border-rose-200';
-        default:
-            return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-}
-
 function formatCompletedAt(value: string | null) {
     if (!value) return '—';
     return format(new Date(value), 'yyyy-MM-dd');
+}
+
+function escapeHtml(value: string) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeTsvCell(value: string) {
+    if (!/["\t\n]/.test(value)) return value;
+    return `"${value.replace(/"/g, '""')}"`;
+}
+
+function getSprintSortValue(sprintName: string, sprintId: number) {
+    const match = sprintName.match(/(\d+)/);
+    return match ? Number.parseInt(match[1], 10) : sprintId;
 }
 
 export default function ParticipationStatsPage() {
@@ -59,7 +79,6 @@ export default function ParticipationStatsPage() {
     const [selectedSprintIds, setSelectedSprintIds] = useState<number[]>([]);
     const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
     const [rows, setRows] = useState<ParticipationStatsRow[]>([]);
-    const [summary, setSummary] = useState<ParticipationStatsSummary>(EMPTY_SUMMARY);
     const [loadingFilters, setLoadingFilters] = useState(true);
     const [filtersReady, setFiltersReady] = useState(false);
     const [querying, setQuerying] = useState(false);
@@ -114,7 +133,6 @@ export default function ParticipationStatsPage() {
 
         if (selectedSprintIds.length === 0 || selectedMemberIds.length === 0) {
             setRows([]);
-            setSummary(EMPTY_SUMMARY);
             setError(null);
             setCopyMessage('');
             return;
@@ -144,6 +162,89 @@ export default function ParticipationStatsPage() {
             .join(', ')}`;
     }, [selectedMemberIds, members, memberAllSelected]);
 
+    const projectGroups = useMemo<ProjectGroup[]>(() => {
+        const groups = new Map<number, {
+            projectId: number;
+            projectName: string;
+            sprints: Map<number, { id: number; name: string; sortValue: number }>;
+            members: Map<number, ProjectMember>;
+            milestones: Map<number, ProjectMilestone>;
+        }>();
+
+        rows.forEach((row) => {
+            const sprintSortValue = getSprintSortValue(row.sprintName, row.sprintId);
+            let group = groups.get(row.projectId);
+
+            if (!group) {
+                group = {
+                    projectId: row.projectId,
+                    projectName: row.projectName,
+                    sprints: new Map(),
+                    members: new Map(),
+                    milestones: new Map()
+                };
+                groups.set(row.projectId, group);
+            }
+
+            group.sprints.set(row.sprintId, {
+                id: row.sprintId,
+                name: row.sprintName,
+                sortValue: sprintSortValue
+            });
+
+            const currentMember = group.members.get(row.memberId);
+            if (!currentMember || row.role === '负责人') {
+                group.members.set(row.memberId, {
+                    memberId: row.memberId,
+                    memberName: row.memberName,
+                    role: row.role === '负责人' ? '负责人' : currentMember?.role ?? '参与人'
+                });
+            }
+
+            const currentMilestone = group.milestones.get(row.storyId);
+            if (!currentMilestone || sprintSortValue > currentMilestone.sprintSortValue) {
+                group.milestones.set(row.storyId, {
+                    storyId: row.storyId,
+                    storyTitle: row.storyTitle,
+                    status: row.status,
+                    completedAt: row.completedAt,
+                    sprintSortValue
+                });
+            }
+        });
+
+        return Array.from(groups.values()).map((group) => ({
+            projectId: group.projectId,
+            projectName: group.projectName,
+            sprints: Array.from(group.sprints.values())
+                .sort((a, b) => a.sortValue - b.sortValue),
+            members: Array.from(group.members.values())
+                .sort((a, b) => a.memberName.localeCompare(b.memberName, 'zh-CN')),
+            milestones: Array.from(group.milestones.values())
+                .sort((a, b) => {
+                    const aPending = !a.completedAt;
+                    const bPending = !b.completedAt;
+
+                    if (aPending && !bPending) return -1;
+                    if (!aPending && bPending) return 1;
+
+                    if (a.completedAt && b.completedAt) {
+                        return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+                    }
+
+                    return b.sprintSortValue - a.sprintSortValue || a.storyTitle.localeCompare(b.storyTitle, 'zh-CN');
+                })
+        }));
+    }, [rows]);
+
+    const displaySummary = useMemo(() => ({
+        projectCount: projectGroups.length,
+        milestoneCount: projectGroups.reduce((sum, group) => sum + group.milestones.length, 0),
+        memberCount: new Set(
+            projectGroups.flatMap((group) => group.members.map((member) => member.memberId))
+        ).size
+    }), [projectGroups]);
+
     async function fetchStats(sprintIds: number[], memberIds: number[]) {
         try {
             setQuerying(true);
@@ -165,11 +266,9 @@ export default function ParticipationStatsPage() {
 
             const data = await res.json();
             setRows(data.rows || []);
-            setSummary(data.summary || EMPTY_SUMMARY);
         } catch (fetchError) {
             console.error('Error fetching participation stats:', fetchError);
             setRows([]);
-            setSummary(EMPTY_SUMMARY);
             setError('统计数据加载失败，请稍后重试');
         } finally {
             setQuerying(false);
@@ -203,29 +302,66 @@ export default function ParticipationStatsPage() {
     }
 
     async function copyToExcel() {
-        if (rows.length === 0) {
+        if (projectGroups.length === 0) {
             setCopyMessage('当前没有可复制的数据');
             return;
         }
 
-        const header = ['项目名称', '迭代', '关键节点', '成员', '角色', '状态', '完成时间'];
-        const body = rows.map((row) => [
-            row.projectName,
-            row.sprintName,
-            row.storyTitle,
-            row.memberName,
-            row.role,
-            statusLabel(row.status),
-            row.completedAt ? formatCompletedAt(row.completedAt) : ''
-        ]);
+        const header = ['项目名称', '关键节点', '参与迭代', '成员'];
+        const body = projectGroups.map((project) => {
+            const milestoneLines = project.milestones
+                .map((milestone, index) => `${index + 1}）${milestone.storyTitle} | ${statusLabel(milestone.status)} | ${formatCompletedAt(milestone.completedAt)}`);
 
-        const tsv = [header, ...body]
+            return {
+                projectName: project.projectName,
+                milestonesText: milestoneLines.join('\n'),
+                milestonesHtml: milestoneLines.map((line) => `<div>${escapeHtml(line)}</div>`).join(''),
+                sprints: project.sprints.map((sprint) => sprint.name).join(', '),
+                members: project.members.map((member) => `${member.memberName}(${member.role})`).join('，')
+            };
+        });
+
+        const tsv = [
+            header.map(escapeTsvCell),
+            ...body.map((row) => [
+                escapeTsvCell(row.projectName),
+                escapeTsvCell(row.milestonesText),
+                escapeTsvCell(row.sprints),
+                escapeTsvCell(row.members)
+            ])
+        ]
             .map((line) => line.join('\t'))
             .join('\n');
 
+        const html = `
+            <table>
+                <thead>
+                    <tr>${header.map((title) => `<th>${escapeHtml(title)}</th>`).join('')}</tr>
+                </thead>
+                <tbody>
+                    ${body.map((row) => `
+                        <tr>
+                            <td>${escapeHtml(row.projectName)}</td>
+                            <td>${row.milestonesHtml}</td>
+                            <td>${escapeHtml(row.sprints)}</td>
+                            <td>${escapeHtml(row.members)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
         try {
-            await navigator.clipboard.writeText(tsv);
-            setCopyMessage(`已复制 ${rows.length} 条记录，可直接粘贴到 Excel`);
+            if (navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
+                const clipboardItem = new ClipboardItem({
+                    'text/plain': new Blob([tsv], { type: 'text/plain' }),
+                    'text/html': new Blob([html], { type: 'text/html' })
+                });
+                await navigator.clipboard.write([clipboardItem]);
+            } else {
+                await navigator.clipboard.writeText(tsv);
+            }
+            setCopyMessage(`已复制 ${projectGroups.length} 条项目记录，可直接粘贴到 Excel`);
         } catch (copyError) {
             console.error('Error copying participation stats:', copyError);
             setCopyMessage('复制失败，请检查浏览器剪贴板权限');
@@ -357,7 +493,7 @@ export default function ParticipationStatsPage() {
                                 <RefreshCcw className="w-4 h-4 mr-2" />
                                 清空筛选
                             </Button>
-                            <Button variant="outline" onClick={copyToExcel} disabled={rows.length === 0}>
+                            <Button variant="outline" onClick={copyToExcel} disabled={projectGroups.length === 0}>
                                 <Copy className="w-4 h-4 mr-2" />
                                 复制到 Excel
                             </Button>
@@ -375,7 +511,7 @@ export default function ParticipationStatsPage() {
                         <CardTitle className="text-sm font-medium text-muted-foreground">项目数</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-semibold">{summary.projectCount}</div>
+                        <div className="text-3xl font-semibold">{displaySummary.projectCount}</div>
                     </CardContent>
                 </Card>
                 <Card className="shadow-sm">
@@ -383,7 +519,7 @@ export default function ParticipationStatsPage() {
                         <CardTitle className="text-sm font-medium text-muted-foreground">关键节点数</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-semibold">{summary.milestoneCount}</div>
+                        <div className="text-3xl font-semibold">{displaySummary.milestoneCount}</div>
                     </CardContent>
                 </Card>
                 <Card className="shadow-sm">
@@ -391,7 +527,7 @@ export default function ParticipationStatsPage() {
                         <CardTitle className="text-sm font-medium text-muted-foreground">成员数</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-semibold">{summary.memberCount}</div>
+                        <div className="text-3xl font-semibold">{displaySummary.memberCount}</div>
                     </CardContent>
                 </Card>
             </div>
@@ -402,45 +538,55 @@ export default function ParticipationStatsPage() {
                         <TableHeader>
                             <TableRow className="hover:bg-transparent">
                                 <TableHead>项目名称</TableHead>
-                                <TableHead>迭代</TableHead>
                                 <TableHead>关键节点</TableHead>
+                                <TableHead>参与迭代</TableHead>
                                 <TableHead>成员</TableHead>
-                                <TableHead>角色</TableHead>
-                                <TableHead>状态</TableHead>
-                                <TableHead>完成时间</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {rows.map((row) => (
-                                <TableRow key={`${row.sprintId}-${row.projectId}-${row.storyId}-${row.memberId}`} className="hover:bg-muted/40">
-                                    <TableCell className="font-medium text-foreground">{row.projectName}</TableCell>
-                                    <TableCell>{row.sprintName}</TableCell>
-                                    <TableCell>{row.storyTitle}</TableCell>
-                                    <TableCell>{row.memberName}</TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant="outline"
-                                            className={cn(
-                                                'font-normal',
-                                                row.role === '负责人'
-                                                    ? 'bg-amber-100 text-amber-700 border-amber-200'
-                                                    : 'bg-blue-100 text-blue-700 border-blue-200'
-                                            )}
-                                        >
-                                            {row.role}
-                                        </Badge>
+                            {projectGroups.map((project) => (
+                                <TableRow key={project.projectId} className="hover:bg-muted/40">
+                                    <TableCell className="font-medium text-foreground align-top">
+                                        {project.projectName}
                                     </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className={cn('font-normal', statusBadgeClass(row.status))}>
-                                            {statusLabel(row.status)}
-                                        </Badge>
+                                    <TableCell className="align-top">
+                                        <div className="space-y-2 py-1 text-sm leading-6 text-foreground">
+                                            {project.milestones.map((milestone, index) => (
+                                                <div key={milestone.storyId}>
+                                                    <span className="font-semibold text-primary">{index + 1}）</span>
+                                                    <span className="ml-1">{milestone.storyTitle}</span>
+                                                    <span className="text-muted-foreground"> | </span>
+                                                    <span>{statusLabel(milestone.status)}</span>
+                                                    <span className="text-muted-foreground"> | </span>
+                                                    <span>{formatCompletedAt(milestone.completedAt)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </TableCell>
-                                    <TableCell>{formatCompletedAt(row.completedAt)}</TableCell>
+                                    <TableCell className="align-top">
+                                        {project.sprints.map((sprint) => sprint.name).join(', ')}
+                                    </TableCell>
+                                    <TableCell className="align-top">
+                                        <div className="flex flex-wrap gap-2">
+                                            {project.members.map((member) => (
+                                                <span
+                                                    key={member.memberId}
+                                                    className={
+                                                        member.role === '负责人'
+                                                            ? 'inline-flex rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700'
+                                                            : 'inline-flex rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700'
+                                                    }
+                                                >
+                                                    {member.memberName} / {member.role}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
                             ))}
-                            {!querying && rows.length === 0 && (
+                            {!querying && projectGroups.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-32 text-center">
+                                    <TableCell colSpan={4} className="h-32 text-center">
                                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                                             <BarChart3 className="w-8 h-8 opacity-20" />
                                             <p className="text-sm">{emptyStateMessage}</p>
