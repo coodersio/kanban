@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>添加迭代项目 - 双 Tab 原型</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4efe7;
+            --panel: #fffdfa;
+            --line: #ddd2c1;
+            --text: #1f2937;
+            --muted: #667085;
+            --accent: #9a3412;
+            --accent-soft: #fbe5d8;
+            --accent-strong: #7c2d12;
+            --ok: #166534;
+            --ok-soft: #edf8f0;
+            --warn: #9a3412;
+            --warn-soft: #fff2e8;
+            --shadow: 0 18px 42px rgba(31, 41, 55, 0.12);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(154, 52, 18, 0.10), transparent 22%),
+                linear-gradient(180deg, #f8f4ed 0%, var(--bg) 100%);
+        }
+
+        .shell {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 28px 20px 56px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #fffaf3 0%, #f6efe3 100%);
+            border: 1px solid rgba(154, 52, 18, 0.14);
+            border-radius: 24px;
+            padding: 26px 28px;
+            box-shadow: var(--shadow);
+        }
+
+        .hero h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+            line-height: 1.1;
+        }
+
+        .hero p {
+            margin: 0;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+
+        .layout {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: 1.25fr 0.75fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .card-head {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--line);
+            background: #fff9f0;
+        }
+
+        .card-head h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .card-head p {
+            margin: 6px 0 0;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+
+        .dialog-wrap { padding: 22px; }
+
+        .dialog {
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            background: white;
+            overflow: hidden;
+        }
+
+        .dialog-header {
+            padding: 18px 20px 14px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .dialog-title {
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        .sprint-badge {
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: var(--accent-strong);
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            padding: 14px 20px 0;
+            border-bottom: 1px solid var(--line);
+            background: linear-gradient(180deg, #fffdfa 0%, #fff9f2 100%);
+        }
+
+        .tab {
+            border: 1px solid transparent;
+            border-bottom: 0;
+            border-radius: 14px 14px 0 0;
+            background: transparent;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--muted);
+            cursor: pointer;
+            transition: 120ms ease;
+        }
+
+        .tab.active {
+            background: white;
+            color: var(--accent-strong);
+            border-color: var(--line);
+            box-shadow: 0 -1px 0 white inset;
+        }
+
+        .tab-panel {
+            display: none;
+            padding: 18px 20px 20px;
+        }
+
+        .tab-panel.active {
+            display: grid;
+            gap: 16px;
+        }
+
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+
+        .field label {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .field-note {
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+
+        .text-input,
+        .text-area,
+        .select {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 11px 12px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .text-input:focus,
+        .text-area:focus,
+        .select:focus {
+            outline: none;
+            border-color: #c9714c;
+            box-shadow: 0 0 0 4px rgba(154, 52, 18, 0.10);
+        }
+
+        .text-area {
+            min-height: 88px;
+            resize: vertical;
+        }
+
+        .grid-two {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .suggestion-wrap,
+        .project-list {
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .suggestion-empty {
+            padding: 14px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .suggestion-item,
+        .project-row {
+            padding: 12px 14px;
+            border-bottom: 1px solid #efe8db;
+        }
+
+        .suggestion-item:last-child,
+        .project-row:last-child { border-bottom: 0; }
+
+        .suggestion-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .suggestion-name,
+        .project-name {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .suggestion-meta,
+        .project-desc,
+        .box-body {
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+
+        .project-list { max-height: 340px; overflow: auto; }
+
+        .project-row {
+            display: grid;
+            grid-template-columns: 22px 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+
+        .project-row:hover { background: #fff7ef; }
+
+        .checkbox { width: 18px; height: 18px; margin-top: 2px; }
+
+        .small-button,
+        .button-primary,
+        .button-secondary,
+        .button-ghost {
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 120ms ease;
+        }
+
+        .small-button {
+            padding: 8px 10px;
+            border: 1px solid var(--line);
+            background: white;
+            color: var(--accent-strong);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .small-button:hover,
+        .button-secondary:hover,
+        .button-ghost:hover { border-color: #c9714c; }
+
+        .button-primary,
+        .button-secondary,
+        .button-ghost {
+            padding: 10px 14px;
+            border: 1px solid transparent;
+            font-size: 14px;
+        }
+
+        .button-primary { background: var(--accent); color: white; }
+        .button-primary:hover { background: var(--accent-strong); }
+        .button-secondary { background: white; border-color: var(--line); color: var(--text); }
+        .button-ghost { background: transparent; border-color: var(--line); color: var(--accent-strong); }
+
+        .warning-box,
+        .info-box,
+        .selection-box,
+        .quick-reuse-box {
+            border-radius: 16px;
+            padding: 14px 16px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .warning-box { border: 1px solid #efc3a4; background: var(--warn-soft); color: var(--warn); }
+        .info-box { border: 1px solid #d8cdbd; background: #fff9f2; color: #6b4a37; }
+        .selection-box,
+        .quick-reuse-box { border: 1px solid #cde3d4; background: var(--ok-soft); color: var(--ok); }
+
+        .box-title { font-size: 13px; font-weight: 800; }
+
+        .action-row,
+        .list-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+        .selected-count { font-size: 12px; color: var(--muted); font-weight: 700; }
+
+        .hidden { display: none !important; }
+
+        .flow-card {
+            padding: 18px 20px;
+            border-top: 1px solid var(--line);
+            display: grid;
+            gap: 14px;
+        }
+
+        .flow-card:first-child { border-top: 0; }
+
+        .step {
+            display: grid;
+            grid-template-columns: 28px 1fr;
+            gap: 10px;
+            align-items: start;
+        }
+
+        .step-index {
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: #f4eadb;
+            color: var(--accent-strong);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .step-body { font-size: 14px; line-height: 1.65; }
+        .step-title { font-weight: 800; margin-bottom: 2px; }
+
+        .log {
+            border: 1px dashed #d7c8b2;
+            border-radius: 16px;
+            background: #fff9f2;
+            padding: 14px 16px;
+            font-size: 13px;
+            color: #6b4a37;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 980px) {
+            .layout { grid-template-columns: 1fr; }
+            .grid-two { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <section class="hero">
+            <h1>添加迭代项目 - 双 Tab 低保真原型</h1>
+            <p>这版保留两个功能入口：`新建项目` 负责创建；`引入旧项目` 负责多选复用。同时在新建页里提供“单选直接引入”的快捷路径，选中已有项目后直接隐藏下方表单。</p>
+        </section>
+
+        <section class="layout">
+            <div class="card">
+                <div class="card-head">
+                    <h2>工作台弹窗原型</h2>
+                    <p>当前迭代：W16。新建页支持单选快捷引入；引入页保留原本的搜索、滚动和多选能力。</p>
+                </div>
+                <div class="dialog-wrap">
+                    <div class="dialog">
+                        <div class="dialog-header">
+                            <div class="dialog-title">添加迭代项目</div>
+                            <div class="sprint-badge">当前迭代：W16</div>
+                        </div>
+
+                        <div class="tabs">
+                            <button class="tab active" id="tab-create" type="button">新建项目</button>
+                            <button class="tab" id="tab-reuse" type="button">引入旧项目</button>
+                        </div>
+
+                        <section class="tab-panel active" id="panel-create">
+                            <div class="field">
+                                <label for="create-name">项目名称</label>
+                                <div class="field-note">输入名称后先看“已有项目”建议。这里允许单选已有项目并直接引入；如果不选，才继续走新建表单。</div>
+                                <input id="create-name" class="text-input" placeholder="例如：壁挂炉" />
+                            </div>
+
+                            <div class="field">
+                                <label>已有项目建议</label>
+                                <div class="suggestion-wrap" id="create-suggestions"></div>
+                            </div>
+
+                            <div class="quick-reuse-box hidden" id="quick-reuse-box">
+                                <div class="box-title">已选择已有项目，当前走“单选直接引入”</div>
+                                <div class="box-body" id="quick-reuse-text"></div>
+                                <div class="action-buttons">
+                                    <button class="button-secondary" type="button" id="clear-quick-reuse">重新新建</button>
+                                    <button class="button-primary" type="button">直接引入当前迭代</button>
+                                </div>
+                            </div>
+
+                            <div class="warning-box hidden" id="create-warning">
+                                <div class="box-title">发现疑似已有项目</div>
+                                <div class="box-body" id="create-warning-text"></div>
+                            </div>
+
+                            <div id="create-form-block">
+                                <div class="grid-two">
+                                    <div class="field">
+                                        <label for="create-department">所属部门</label>
+                                        <select id="create-department" class="select">
+                                            <option value="">请选择</option>
+                                            <option>烟气分析仪组</option>
+                                            <option>粉尘二组</option>
+                                            <option>软件平台组</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label for="create-type">项目类型</label>
+                                        <select id="create-type" class="select">
+                                            <option value="">请选择</option>
+                                            <option>研发内部任务</option>
+                                            <option>研发任务单</option>
+                                            <option>运维支持</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="field" style="margin-top: 16px;">
+                                    <label for="create-desc">项目描述</label>
+                                    <textarea id="create-desc" class="text-area" placeholder="简要描述项目内容..."></textarea>
+                                </div>
+
+                                <div class="grid-two" style="margin-top: 16px;">
+                                    <div class="field">
+                                        <label for="create-owner">项目负责人</label>
+                                        <select id="create-owner" class="select">
+                                            <option value="">请选择</option>
+                                            <option>陈明宇</option>
+                                            <option>余菊</option>
+                                            <option>吴群群</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label for="create-source">需求来源 / 项目对接人</label>
+                                        <input id="create-source" class="text-input" placeholder="例如：张三 / XX部门" />
+                                    </div>
+                                </div>
+
+                                <div class="action-row" style="margin-top: 16px;">
+                                    <div class="field-note">如果项目名称与历史项目完全重名，后端仍然需要最终拦截。这里的建议区主要是提前提醒用户，或者让他直接单选复用。</div>
+                                    <div class="action-buttons">
+                                        <button class="button-secondary" type="button">取消</button>
+                                        <button class="button-primary" type="button">创建并加入当前迭代</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="tab-panel" id="panel-reuse">
+                            <div class="list-toolbar">
+                                <div class="field" style="flex: 1 1 360px;">
+                                    <label for="reuse-search">搜索项目</label>
+                                    <input id="reuse-search" class="text-input" placeholder="搜索项目名称，或直接滚动浏览全部项目" />
+                                </div>
+                                <div class="selected-count" id="reuse-selected-count">已选 0 项</div>
+                            </div>
+
+                            <div class="info-box">
+                                <div class="box-title">引入旧项目</div>
+                                <div class="box-body">这里保留原本的多选心智。用户可以直接滚动查看全部项目，也可以先搜索再勾选，最后一次性引入当前迭代。</div>
+                            </div>
+
+                            <div class="project-list" id="reuse-list"></div>
+
+                            <div class="grid-two">
+                                <div class="field">
+                                    <label for="reuse-priority">迭代优先级</label>
+                                    <select id="reuse-priority" class="select">
+                                        <option>高</option>
+                                        <option selected>中</option>
+                                        <option>低</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="reuse-notes">迭代备注</label>
+                                    <input id="reuse-notes" class="text-input" placeholder="例如：本迭代关口" />
+                                </div>
+                            </div>
+
+                            <div class="selection-box hidden" id="reuse-selection-box">
+                                <div class="box-title">当前勾选结果</div>
+                                <div class="box-body" id="reuse-selection-text"></div>
+                            </div>
+
+                            <div class="action-row">
+                                <div class="field-note">如果当前迭代里已经有同名项目或同一个项目，提交时后端应该明确提示“重复添加”。</div>
+                                <div class="action-buttons">
+                                    <button class="button-secondary" type="button">取消</button>
+                                    <button class="button-primary" type="button" id="reuse-submit">引入项目（0）</button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-head">
+                    <h2>交互说明</h2>
+                    <p>这版把你的意思落成两层能力：新建页里支持“单选直接引入”，引入页里保留“多选批量引入”。</p>
+                </div>
+                <div class="flow-card">
+                    <div class="step">
+                        <div class="step-index">1</div>
+                        <div class="step-body">
+                            <div class="step-title">新建项目页</div>
+                            用户先输入项目名称。下面出现已有项目建议，但这时仍停留在“新建项目”Tab 内。
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-index">2</div>
+                        <div class="step-body">
+                            <div class="step-title">点选建议项</div>
+                            一旦点击某个已有项目，下面的新建表单直接隐藏，改成“单选直接引入”状态，不再要求填写描述、部门等字段。
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-index">3</div>
+                        <div class="step-body">
+                            <div class="step-title">如果用户不点建议</div>
+                            那就继续展示完整新建表单。也就是说，同一个 Tab 内自然分出“单选直接引入”和“继续新建”两条路径。
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-index">4</div>
+                        <div class="step-body">
+                            <div class="step-title">引入旧项目页</div>
+                            这个 Tab 仍然存在，因为它解决的是“搜索、滚动、批量多选”场景，和新建页里的单选快捷复用不是一回事。
+                        </div>
+                    </div>
+                </div>
+                <div class="flow-card">
+                    <div class="log" id="event-log">当前状态：查看“新建项目”页。你可以试试输入“壁挂炉”、“MES”或“自动标检”，再点某个建议项，观察表单是否隐藏。</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const projects = [
+            { id: 101, name: '壁挂炉', description: '壁挂炉后端需求讨论以及功能修改', owner: '陈明宇', department: '软件平台组' },
+            { id: 102, name: '壁挂炉项目', description: '壁挂炉项目测试与联调', owner: '余菊', department: '软件平台组' },
+            { id: 103, name: '四方MES系统', description: '预研现有MES系统以及通用术语功能等', owner: '陈明宇', department: '烟气分析仪组' },
+            { id: 104, name: 'DN流量计平台', description: '完成客户端新增需求前后端开发', owner: '余菊', department: '粉尘二组' },
+            { id: 105, name: '通用自动标检上位机', description: '自动标检分为粉尘和气体两种', owner: '吴群群', department: '软件平台组' },
+            { id: 106, name: '自动标检上位机', description: '历史项目：上位机通用功能维护', owner: '吴群群', department: '软件平台组' },
+            { id: 107, name: 'MES平台升级', description: 'MES 平台升级与界面优化', owner: '陈明宇', department: '烟气分析仪组' }
+        ];
+
+        const createName = document.getElementById('create-name');
+        const createSuggestions = document.getElementById('create-suggestions');
+        const createWarning = document.getElementById('create-warning');
+        const createWarningText = document.getElementById('create-warning-text');
+        const quickReuseBox = document.getElementById('quick-reuse-box');
+        const quickReuseText = document.getElementById('quick-reuse-text');
+        const clearQuickReuse = document.getElementById('clear-quick-reuse');
+        const createFormBlock = document.getElementById('create-form-block');
+        const reuseSearch = document.getElementById('reuse-search');
+        const reuseList = document.getElementById('reuse-list');
+        const reuseSelectedCount = document.getElementById('reuse-selected-count');
+        const reuseSelectionBox = document.getElementById('reuse-selection-box');
+        const reuseSelectionText = document.getElementById('reuse-selection-text');
+        const reuseSubmit = document.getElementById('reuse-submit');
+        const tabCreate = document.getElementById('tab-create');
+        const tabReuse = document.getElementById('tab-reuse');
+        const panelCreate = document.getElementById('panel-create');
+        const panelReuse = document.getElementById('panel-reuse');
+        const log = document.getElementById('event-log');
+
+        const selectedReuseIds = new Set();
+        let selectedQuickReuseProject = null;
+
+        function normalize(text) {
+            return text.toLowerCase().replace(/\s+/g, '').trim();
+        }
+
+        function switchTab(tab) {
+            const isCreate = tab === 'create';
+            tabCreate.classList.toggle('active', isCreate);
+            tabReuse.classList.toggle('active', !isCreate);
+            panelCreate.classList.toggle('active', isCreate);
+            panelReuse.classList.toggle('active', !isCreate);
+            log.innerHTML = isCreate
+                ? '当前状态：查看“新建项目”页。你可以试试输入“壁挂炉”、“MES”或“自动标检”，再点某个建议项，观察表单是否隐藏。'
+                : '当前状态：查看“引入旧项目”页。你可以直接滚动浏览全部项目，也可以先搜索再多选。';
+        }
+
+        function searchProjects(keyword) {
+            const normalized = normalize(keyword);
+            if (!normalized) return [];
+            return projects.filter(project => normalize(project.name).includes(normalized) || normalize(project.description).includes(normalized));
+        }
+
+        function setQuickReuse(project) {
+            selectedQuickReuseProject = project;
+            quickReuseBox.classList.remove('hidden');
+            createFormBlock.classList.add('hidden');
+            createWarning.classList.add('hidden');
+            quickReuseText.textContent = `${project.name} · ${project.description} · 负责人：${project.owner} · ${project.department}`;
+            log.innerHTML = `当前状态：已在“新建项目”页中单选已有项目“${project.name}”，下方表单已隐藏，当前可直接引入。`;
+        }
+
+        function clearQuickReuseState() {
+            selectedQuickReuseProject = null;
+            quickReuseBox.classList.add('hidden');
+            createFormBlock.classList.remove('hidden');
+            renderCreateSuggestions();
+        }
+
+        function renderCreateSuggestions() {
+            const keyword = createName.value.trim();
+            const suggestions = searchProjects(keyword);
+
+            if (selectedQuickReuseProject && selectedQuickReuseProject.name !== keyword) {
+                selectedQuickReuseProject = null;
+                quickReuseBox.classList.add('hidden');
+                createFormBlock.classList.remove('hidden');
+            }
+
+            if (!keyword) {
+                createSuggestions.innerHTML = '<div class="suggestion-empty">开始输入项目名称后，这里会显示历史项目建议。你可以直接点某一项单选引入；如果不点，就继续填写新建表单。</div>';
+                createWarning.classList.add('hidden');
+                return;
+            }
+
+            if (suggestions.length === 0) {
+                createSuggestions.innerHTML = '<div class="suggestion-empty">没有匹配的历史项目。可以继续填写下方表单，新建一个全局项目。</div>';
+                if (!selectedQuickReuseProject) {
+                    createWarning.classList.add('hidden');
+                    createFormBlock.classList.remove('hidden');
+                }
+                log.innerHTML = `当前状态：名称“${keyword}”暂无历史匹配项，正在新建项目。`;
+                return;
+            }
+
+            createSuggestions.innerHTML = suggestions.map(project => `
+                <div class="suggestion-item">
+                    <div class="suggestion-top">
+                        <div class="suggestion-name">${project.name}</div>
+                        <button class="small-button" type="button" data-pick-project="${project.id}">直接选用</button>
+                    </div>
+                    <div class="suggestion-meta">${project.description} · 负责人：${project.owner} · ${project.department}</div>
+                </div>
+            `).join('');
+
+            const exactMatch = suggestions.find(project => normalize(project.name) === normalize(keyword));
+
+            if (!selectedQuickReuseProject) {
+                createWarning.classList.remove('hidden');
+                createFormBlock.classList.remove('hidden');
+                createWarningText.textContent = exactMatch
+                    ? `发现完全重名项目“${exactMatch.name}”。如果这是同一个项目，可以直接点上面的“直接选用”；如果不是，再继续新建。`
+                    : `发现 ${suggestions.length} 个相似项目。你可以直接点上面的“直接选用”；如果都不是，再继续填写下方表单。`;
+            }
+
+            createSuggestions.querySelectorAll('[data-pick-project]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const id = Number(button.getAttribute('data-pick-project'));
+                    const project = projects.find(item => item.id === id);
+                    if (project) {
+                        createName.value = project.name;
+                        setQuickReuse(project);
+                    }
+                });
+            });
+
+            if (!selectedQuickReuseProject) {
+                log.innerHTML = exactMatch
+                    ? `当前状态：输入了“${keyword}”，系统发现完全重名项目，允许你直接单选引入，也允许继续新建。`
+                    : `当前状态：输入了“${keyword}”，系统给出了相似项目建议。你可以直接选用某一项，或者忽略它们继续新建。`;
+            }
+        }
+
+        function renderReuseList() {
+            const keyword = reuseSearch.value.trim();
+            const filtered = keyword
+                ? projects.filter(project => normalize(project.name).includes(normalize(keyword)) || normalize(project.description).includes(normalize(keyword)))
+                : projects;
+
+            if (filtered.length === 0) {
+                reuseList.innerHTML = '<div class="suggestion-empty">没有匹配的项目。你可以清空搜索词，重新查看全部历史项目。</div>';
+            } else {
+                reuseList.innerHTML = filtered.map(project => `
+                    <label class="project-row">
+                        <input class="checkbox" type="checkbox" data-project-id="${project.id}" ${selectedReuseIds.has(project.id) ? 'checked' : ''} />
+                        <div>
+                            <div class="project-name">${project.name}</div>
+                            <div class="project-desc">${project.description} · 负责人：${project.owner} · ${project.department}</div>
+                        </div>
+                    </label>
+                `).join('');
+            }
+
+            reuseList.querySelectorAll('[data-project-id]').forEach(checkbox => {
+                checkbox.addEventListener('change', () => {
+                    const id = Number(checkbox.getAttribute('data-project-id'));
+                    if (checkbox.checked) {
+                        selectedReuseIds.add(id);
+                    } else {
+                        selectedReuseIds.delete(id);
+                    }
+                    updateReuseSelection();
+                });
+            });
+
+            updateReuseSelection();
+        }
+
+        function updateReuseSelection() {
+            const selectedProjects = projects.filter(project => selectedReuseIds.has(project.id));
+            reuseSelectedCount.textContent = `已选 ${selectedProjects.length} 项`;
+            reuseSubmit.textContent = `引入项目（${selectedProjects.length}）`;
+
+            if (selectedProjects.length === 0) {
+                reuseSelectionBox.classList.add('hidden');
+                reuseSelectionText.textContent = '';
+                return;
+            }
+
+            reuseSelectionBox.classList.remove('hidden');
+            reuseSelectionText.textContent = selectedProjects.map((project, index) => `${index + 1}）${project.name}`).join('；');
+        }
+
+        tabCreate.addEventListener('click', () => switchTab('create'));
+        tabReuse.addEventListener('click', () => switchTab('reuse'));
+        createName.addEventListener('input', renderCreateSuggestions);
+        reuseSearch.addEventListener('input', renderReuseList);
+        clearQuickReuse.addEventListener('click', () => {
+            selectedQuickReuseProject = null;
+            quickReuseBox.classList.add('hidden');
+            createFormBlock.classList.remove('hidden');
+            renderCreateSuggestions();
+            log.innerHTML = '当前状态：已取消单选直接引入，恢复为“新建项目”表单。';
+        });
+
+        createName.value = '壁挂炉';
+        renderCreateSuggestions();
+        renderReuseList();
+    </script>
+</body>
+</html>

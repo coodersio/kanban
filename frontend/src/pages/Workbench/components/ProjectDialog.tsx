@@ -84,8 +84,10 @@ export function ProjectDialog({
     const [notes, setNotes] = useState('');
 
     // Reuse mode state
+    const [allProjects, setAllProjects] = useState<Project[]>([]);
     const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
     const [selectedReuseIds, setSelectedReuseIds] = useState<number[]>([]);
+    const [selectedQuickReuseProject, setSelectedQuickReuseProject] = useState<Project | null>(null);
     const [searchKeyword, setSearchKeyword] = useState('');
 
     // Prevent duplicate submission
@@ -105,15 +107,30 @@ export function ProjectDialog({
         }
     }, [isEditMode, editingProject]);
 
-    // Fetch available projects for reuse
+    // Fetch all projects for create suggestions + available projects for reuse
     useEffect(() => {
-        if (open && activeTab === 'reuse' && selectedSprintId) {
-            fetch(`/api/workbench/projects/available?sprintId=${selectedSprintId}&search=`)
-                .then(res => res.json())
-                .then(data => setAvailableProjects(data))
-                .catch(err => console.error('Error fetching available projects:', err));
+        if (open && !isEditMode && selectedSprintId) {
+            Promise.all([
+                fetch('/api/projects'),
+                fetch(`/api/workbench/projects/available?sprintId=${selectedSprintId}&search=`)
+            ])
+                .then(async ([allRes, availableRes]) => {
+                    const [allData, availableData] = await Promise.all([
+                        allRes.ok ? allRes.json() : [],
+                        availableRes.ok ? availableRes.json() : []
+                    ]);
+                    setAllProjects(allData);
+                    setAvailableProjects(availableData);
+                })
+                .catch(err => console.error('Error fetching project options:', err));
         }
-    }, [open, activeTab, selectedSprintId]);
+    }, [open, isEditMode, selectedSprintId]);
+
+    useEffect(() => {
+        if (!open) {
+            resetForm();
+        }
+    }, [open]);
 
     const resetForm = () => {
         setName('');
@@ -124,7 +141,9 @@ export function ProjectDialog({
         setSource('');
         setPriority('中');
         setNotes('');
+        setAllProjects([]);
         setSelectedReuseIds([]);
+        setSelectedQuickReuseProject(null);
         setSearchKeyword('');
     };
 
@@ -137,10 +156,53 @@ export function ProjectDialog({
         return name.includes(keyword) || desc.includes(keyword);
     });
 
+    const normalizedCreateKeyword = name.trim().toLowerCase();
+    const availableProjectIds = new Set(availableProjects.map(project => project.id));
+    const createSuggestions = !isEditMode && normalizedCreateKeyword
+        ? allProjects
+            .filter(project => {
+                const projectName = (project.name || project.software_name || '').toLowerCase();
+                const projectDesc = (project.description || '').toLowerCase();
+                return projectName.includes(normalizedCreateKeyword) || projectDesc.includes(normalizedCreateKeyword);
+            })
+            .sort((a, b) => {
+                const aName = (a.name || a.software_name || '').toLowerCase();
+                const bName = (b.name || b.software_name || '').toLowerCase();
+                const aExact = aName === normalizedCreateKeyword ? 1 : 0;
+                const bExact = bName === normalizedCreateKeyword ? 1 : 0;
+                if (aExact !== bExact) return bExact - aExact;
+                const aPrefix = aName.startsWith(normalizedCreateKeyword) ? 1 : 0;
+                const bPrefix = bName.startsWith(normalizedCreateKeyword) ? 1 : 0;
+                if (aPrefix !== bPrefix) return bPrefix - aPrefix;
+                return b.id - a.id;
+            })
+            .slice(0, 8)
+        : [];
+    const exactSuggestion = createSuggestions.find(project => (project.name || project.software_name || '').trim().toLowerCase() === normalizedCreateKeyword);
+
+    const handleProjectNameChange = (value: string) => {
+        setName(value);
+        if (selectedQuickReuseProject && value.trim() !== (selectedQuickReuseProject.name || selectedQuickReuseProject.software_name || '')) {
+            setSelectedQuickReuseProject(null);
+        }
+    };
+
+    const handleSelectQuickReuseProject = (project: Project) => {
+        setSelectedQuickReuseProject(project);
+        setName(project.name || project.software_name || '');
+        setPriority('中');
+        setNotes('');
+    };
+
     const handleSave = async () => {
         if (!name || isSubmitting) return;
         setIsSubmitting(true);
         try {
+            if (!isEditMode && selectedQuickReuseProject) {
+                await onReuseProject([selectedQuickReuseProject.id], '中', '');
+                resetForm();
+                return;
+            }
             await onSaveProject({
                 name,
                 description,
@@ -211,9 +273,94 @@ export function ProjectDialog({
                                 id="project-name"
                                 placeholder="例如：通用标检平台"
                                 value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                onChange={(e) => handleProjectNameChange(e.target.value)}
                             />
                         </div>
+                        {!isEditMode && normalizedCreateKeyword && (
+                            <div className="grid gap-2">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-sm font-medium">已有项目</Label>
+                                    {createSuggestions.length > 0 && (
+                                        <span className="text-xs text-muted-foreground">
+                                            匹配 {createSuggestions.length} 项
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="border rounded-lg overflow-hidden">
+                                    {createSuggestions.length === 0 ? (
+                                        <div className="p-3 text-sm text-muted-foreground">
+                                            没有匹配的历史项目，可继续填写下方表单新建项目。
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y">
+                                            {createSuggestions.map(project => {
+                                                const projectName = project.name || project.software_name || '';
+                                                const isAvailable = availableProjectIds.has(project.id);
+                                                return (
+                                                    <div key={project.id} className="flex items-start justify-between gap-3 p-3">
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm font-medium">{projectName}</div>
+                                                            {project.description && (
+                                                                <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                                                    {project.description}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {isAvailable ? (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleSelectQuickReuseProject(project)}
+                                                                disabled={isSubmitting}
+                                                                className="shrink-0"
+                                                            >
+                                                                直接选用
+                                                            </Button>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground shrink-0 pt-1">
+                                                                当前迭代已存在
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {!isEditMode && selectedQuickReuseProject && (
+                            <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                                <div className="text-sm font-medium text-green-800">已选择已有项目，下面将直接引入当前迭代</div>
+                                <div className="text-xs text-green-700 mt-1">
+                                    {selectedQuickReuseProject.name || selectedQuickReuseProject.software_name}
+                                    {selectedQuickReuseProject.description ? ` · ${selectedQuickReuseProject.description}` : ''}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="mt-2 h-auto px-0 text-green-800 hover:bg-transparent"
+                                    onClick={() => setSelectedQuickReuseProject(null)}
+                                    disabled={isSubmitting}
+                                >
+                                    继续新建
+                                </Button>
+                            </div>
+                        )}
+                        {!isEditMode && !selectedQuickReuseProject && exactSuggestion && !availableProjectIds.has(exactSuggestion.id) && (
+                            <div className="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                                当前迭代已存在同名项目，不能重复引入。如果确实是不同项目，请修改项目名称后再创建。
+                            </div>
+                        )}
+                        {!isEditMode && !selectedQuickReuseProject && !exactSuggestion && createSuggestions.length > 0 && (
+                            <div className="text-sm text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                                已找到相似项目。如果其中某项就是当前项目，可以直接点“直接选用”；否则继续填写下方表单新建。
+                            </div>
+                        )}
+                        {(!selectedQuickReuseProject || isEditMode) && (
+                            <>
                         <div className="grid gap-2">
                             <Label htmlFor="project-desc" className="text-sm font-medium">项目描述</Label>
                             <Textarea
@@ -302,6 +449,8 @@ export function ProjectDialog({
                                 />
                             </div>
                         </div>
+                            </>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-4 py-2">
@@ -413,8 +562,14 @@ export function ProjectDialog({
                         <div className="flex gap-2">
                             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>取消</Button>
                             {activeTab === 'create' ? (
-                                <Button onClick={handleSave} disabled={!name || isSubmitting}>
-                                    {isSubmitting ? '提交中...' : (isEditMode ? '保存修改' : '创建项目')}
+                                <Button onClick={handleSave} disabled={(!name && !selectedQuickReuseProject) || isSubmitting}>
+                                    {isSubmitting
+                                        ? '提交中...'
+                                        : isEditMode
+                                            ? '保存修改'
+                                            : selectedQuickReuseProject
+                                                ? '直接引入项目'
+                                                : '创建项目'}
                                 </Button>
                             ) : (
                                 <Button onClick={handleReuse} disabled={selectedReuseIds.length === 0 || isSubmitting}>
