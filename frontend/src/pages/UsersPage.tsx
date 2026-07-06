@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -127,18 +127,17 @@ export default function UsersPage() {
                 </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     {hasPermission(Permission.CREATE_USER) && (
-                        <DialogTrigger asChild>
-                            <Button
-                                onClick={() => {
-                                    setEditingUser(null);
-                                    setFormData({ user_name: '', display_name: '', password: '', role: 'developer', group_id: '' });
-                                }}
-                                className="gap-2"
-                            >
-                                <Plus className="w-4 h-4" />
-                                添加成员
-                            </Button>
-                        </DialogTrigger>
+                        <Button
+                            onClick={() => {
+                                setEditingUser(null);
+                                setFormData({ user_name: '', display_name: '', password: '', role: 'developer', group_id: '' });
+                                setIsOpen(true);
+                            }}
+                            className="gap-2"
+                        >
+                            <Plus className="w-4 h-4" />
+                            添加成员
+                        </Button>
                     )}
                     <DialogContent className="sm:max-w-[425px]">
                         <DialogHeader>
