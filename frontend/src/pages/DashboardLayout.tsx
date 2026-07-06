@@ -158,6 +158,7 @@ export default function DashboardLayout() {
                             {(location.pathname === '/dashboard/sprints' || location.pathname.startsWith('/dashboard/sprints/')) && '迭代计划'}
                             {(location.pathname === '/dashboard/participation-stats' || location.pathname.startsWith('/dashboard/participation-stats/')) && '参与项目统计'}
                             {(location.pathname === '/dashboard/users' || location.pathname.startsWith('/dashboard/users/')) && '成员管理'}
+                            {(location.pathname === '/dashboard/settings' || location.pathname.startsWith('/dashboard/settings/')) && '系统设置'}
                         </h1>
                     </div>
 

@@ -1,16 +1,47 @@
 import express from 'express';
 import pool from '../db/connection';
-import { requireAdmin, requireAuth } from '../middleware/permissions';
+import { getSessionUser, isSystemAdmin, requireAdmin, requireAuth } from '../middleware/permissions';
+import { getCurrentGroupId } from '../utils/groupScope';
 
 const router = express.Router();
 
 router.get('/', requireAuth, async (req, res) => {
     try {
+        const user = getSessionUser(req);
+        const params: any[] = [];
+        let where = '';
+
+        if (!isSystemAdmin(user)) {
+            const groupId = getCurrentGroupId(req);
+            if (!groupId) {
+                return res.status(403).json({ message: 'Forbidden - User group is required' });
+            }
+            params.push(groupId);
+            where = 'WHERE g.id = $1';
+        }
+
         const result = await pool.query(`
-            SELECT id, name, created_at, updated_at
+            SELECT
+                g.id,
+                g.name,
+                g.created_at,
+                g.updated_at,
+                COUNT(DISTINCT u.id)::int AS user_count,
+                COUNT(DISTINCT p.id)::int AS project_count,
+                COUNT(DISTINCT s.id)::int AS sprint_count,
+                COALESCE(
+                    string_agg(DISTINCT u.display_name, '、') FILTER (WHERE u.role = 'group_admin'),
+                    ''
+                ) AS group_admin_names
             FROM groups
-            ORDER BY id ASC
-        `);
+            g
+            LEFT JOIN users u ON u.group_id = g.id
+            LEFT JOIN projects p ON p.group_id = g.id
+            LEFT JOIN sprints s ON s.group_id = g.id
+            ${where}
+            GROUP BY g.id, g.name, g.created_at, g.updated_at
+            ORDER BY g.id ASC
+        `, params);
         res.json(result.rows);
     } catch (err) {
         console.error('Error fetching groups:', err);

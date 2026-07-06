@@ -1,0 +1,72 @@
+# 小组权限隔离部署说明
+
+## 适用场景
+
+本次部署包含小组权限隔离能力：
+
+- 超级管理员可以管理全部小组。
+- 小组管理员只能管理本组成员、项目、迭代和报表。
+- 项目、迭代、周报、参与统计、全局搜索按小组隔离。
+- 存量数据会迁移到一个默认小组，不删除、不拆分原有数据。
+
+## 需要交付给部署方的文件
+
+1. 部署文档：`docs/group-permission-deployment.md`
+2. 手工 SQL：`docs/group-permission-migration.sql`
+
+补充说明：`backend/migrations/018_add_group_permissions.sql` 与手工 SQL 是同一轮数据库迁移。如果部署流程会自动执行 `backend/migrations`，可以使用该文件；如果部署方是直接拉 GitHub 代码后手工操作数据库，执行 `docs/group-permission-migration.sql` 即可。
+
+## 部署前确认
+
+1. 备份生产数据库。
+2. 确认生产环境连接的是正确数据库，不要在错误环境执行 SQL。
+3. 确认当前代码还没有先于 SQL 部署上线。本次代码依赖 `groups` 表和 `users/projects/sprints.group_id` 字段。
+
+## SQL 执行顺序
+
+打开并按段执行：`docs/group-permission-migration.sql`
+
+建议顺序：
+
+1. 先执行 `0. Pre-migration audit`。
+2. 再执行 `1. Core schema migration`。
+3. 执行 `2. Post-migration validation` 并确认结果。
+4. 暂时不要执行 `3. Optional hard constraints`，除非已经确认没有空 `group_id` 和跨组异常关联。
+
+## 验证标准
+
+执行 `2. Post-migration validation` 后需要确认：
+
+- `users_without_group = 0`
+- `projects_without_group = 0`
+- `sprints_without_group = 0`
+- 跨组 sprint/project 关联查询返回 0 行
+- 至少存在一个 `默认小组`
+
+## 代码部署顺序
+
+推荐顺序：
+
+1. 拉取最新 `main` 分支代码。
+2. 备份数据库。
+3. 执行 `docs/group-permission-migration.sql` 的第 0、1、2 段。
+4. 确认验证 SQL 结果正常。
+5. 部署后端和前端代码。
+6. 使用超级管理员登录系统，进入 `系统设置 > 小组管理`，确认可以看到默认小组。
+7. 创建测试小组和小组管理员，验证该小组管理员只能看到本组数据。
+
+## 上线后操作建议
+
+1. 由超级管理员在 `系统设置 > 小组管理` 中创建真实小组。
+2. 在 `成员管理` 中为每个小组创建或调整小组管理员。
+3. 存量用户、项目、迭代默认都在 `默认小组`，如需拆分到不同小组，需要后续人工迁移 `group_id`。
+
+## 回滚说明
+
+如果 SQL 已执行但代码还没有部署，旧代码通常仍可运行，因为本次迁移主要是新增表和字段，并保留原字段结构。
+
+如果代码已部署后需要回滚代码：
+
+1. 先回滚应用代码。
+2. 不建议立即删除 `groups` 表或 `group_id` 字段，避免破坏已经写入的新数据。
+3. 如必须数据库回滚，需要先导出上线后新增的小组、用户、项目、迭代数据，再制定单独回滚 SQL。

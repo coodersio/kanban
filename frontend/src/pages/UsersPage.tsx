@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -27,9 +28,12 @@ interface UserData {
 
 export default function UsersPage() {
     const { user: currentUser, hasPermission, isAdmin } = usePermissions();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [users, setUsers] = useState<UserData[]>([]);
     const [groups, setGroups] = useState<Group[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState('');
     const [editingUser, setEditingUser] = useState<UserData | null>(null);
 
     const [formData, setFormData] = useState({
@@ -58,8 +62,39 @@ export default function UsersPage() {
         fetchGroups();
     }, []);
 
+    useEffect(() => {
+        if (!isAdmin() || searchParams.get('open') !== 'new') return;
+
+        const params = new URLSearchParams(searchParams);
+        const roleParam = params.get('role');
+        const groupId = params.get('groupId') || '';
+
+        setEditingUser(null);
+        setFormError('');
+        setFormData({
+            user_name: '',
+            display_name: '',
+            password: '',
+            role: roleParam === 'group_admin' ? 'group_admin' : 'developer',
+            group_id: groupId
+        });
+        setIsOpen(true);
+
+        params.delete('open');
+        params.delete('role');
+        params.delete('groupId');
+        setSearchParams(params, { replace: true });
+    }, [currentUser?.role, searchParams, setSearchParams]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setFormError('');
+
+        if (isAdmin() && formData.role !== 'admin' && !formData.group_id) {
+            setFormError('请选择所属小组');
+            return;
+        }
+
         const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
         const method = editingUser ? 'PUT' : 'POST';
 
@@ -69,17 +104,35 @@ export default function UsersPage() {
             ? { display_name: formData.display_name, role: formData.role, password: formData.password, group_id: formData.group_id || undefined }
             : formData;
 
-        const res = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-        if (res.ok) {
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                const message = data.message === 'Username already exists'
+                    ? '用户名已存在，请换一个用户名'
+                    : data.message === 'Invalid group'
+                        ? '所属小组无效，请重新选择'
+                        : data.message || '保存失败，请稍后重试';
+                setFormError(message);
+                return;
+            }
+
             setIsOpen(false);
             setEditingUser(null);
+            setFormError('');
             setFormData({ user_name: '', display_name: '', password: '', role: 'developer', group_id: '' });
             fetchUsers();
+        } catch (err) {
+            console.error('Error saving user:', err);
+            setFormError('网络异常，保存失败');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -91,6 +144,7 @@ export default function UsersPage() {
 
     const openEdit = (user: UserData) => {
         setEditingUser(user);
+        setFormError('');
         setFormData({
             user_name: user.user_name,
             display_name: user.display_name,
@@ -130,6 +184,7 @@ export default function UsersPage() {
                         <Button
                             onClick={() => {
                                 setEditingUser(null);
+                                setFormError('');
                                 setFormData({ user_name: '', display_name: '', password: '', role: 'developer', group_id: '' });
                                 setIsOpen(true);
                             }}
@@ -181,7 +236,7 @@ export default function UsersPage() {
                             </div>
                             {isAdmin() && (
                                 <div className="space-y-2">
-                                    <Label htmlFor="group_id">所属小组</Label>
+                                    <Label htmlFor="group_id">所属小组{formData.role !== 'admin' ? ' *' : ''}</Label>
                                     <Select value={formData.group_id} onValueChange={(val) => setFormData({ ...formData, group_id: val })}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="选择小组" />
@@ -208,11 +263,14 @@ export default function UsersPage() {
                                 />
                             </div>
                             <DialogFooter className="gap-2">
+                                {formError && (
+                                    <p className="mr-auto self-center text-sm text-destructive">{formError}</p>
+                                )}
                                 <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                                     取消
                                 </Button>
-                                <Button type="submit">
-                                    {editingUser ? '保存' : '创建'}
+                                <Button type="submit" disabled={isSubmitting}>
+                                    {isSubmitting ? '保存中...' : editingUser ? '保存' : '创建'}
                                 </Button>
                             </DialogFooter>
                         </form>

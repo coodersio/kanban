@@ -13,6 +13,10 @@ export interface Group {
     name: string;
     created_at?: string;
     updated_at?: string;
+    user_count?: number;
+    project_count?: number;
+    sprint_count?: number;
+    group_admin_names?: string;
 }
 
 export interface Department {
