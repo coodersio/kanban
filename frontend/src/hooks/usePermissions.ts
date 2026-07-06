@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 // User roles
 export enum UserRole {
     ADMIN = 'admin',
+    GROUP_ADMIN = 'group_admin',
     DEVELOPER = 'developer',
     EXTERNAL = 'external'
 }
@@ -81,6 +82,34 @@ const rolePermissions: Record<UserRole, Permission[]> = {
         Permission.EDIT_SETTINGS
     ],
 
+    [UserRole.GROUP_ADMIN]: [
+        Permission.VIEW_USERS,
+        Permission.CREATE_USER,
+        Permission.EDIT_USER,
+        Permission.DELETE_USER,
+        Permission.VIEW_PROJECTS,
+        Permission.CREATE_PROJECT,
+        Permission.EDIT_PROJECT,
+        Permission.DELETE_PROJECT,
+        Permission.VIEW_STORIES,
+        Permission.CREATE_STORY,
+        Permission.EDIT_STORY,
+        Permission.DELETE_STORY,
+        Permission.VIEW_TASKS,
+        Permission.CREATE_TASK,
+        Permission.EDIT_TASK,
+        Permission.DELETE_TASK,
+        Permission.UPDATE_TASK_STATUS,
+        Permission.VIEW_SPRINTS,
+        Permission.CREATE_SPRINT,
+        Permission.EDIT_SPRINT,
+        Permission.DELETE_SPRINT,
+        Permission.ACTIVATE_SPRINT,
+        Permission.EXPORT_SUMMARY_REPORT,
+        Permission.EXPORT_PERSONAL_REPORT,
+        Permission.VIEW_SETTINGS
+    ],
+
     [UserRole.DEVELOPER]: [
         Permission.VIEW_USERS,
         // Full project permissions
@@ -117,7 +146,7 @@ const rolePermissions: Record<UserRole, Permission[]> = {
  * Hook to get current user info
  */
 export function useCurrentUser() {
-    const [user, setUser] = useState<{ id: number; displayName: string; role: UserRole } | null>(null);
+    const [user, setUser] = useState<{ id: number; displayName: string; role: UserRole; groupId?: number; groupName?: string } | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -130,7 +159,9 @@ export function useCurrentUser() {
                 setUser({
                     id: data.user.id,
                     displayName: data.user.displayName,
-                    role: data.user.role as UserRole
+                    role: data.user.role as UserRole,
+                    groupId: data.user.groupId,
+                    groupName: data.user.groupName
                 });
                 setLoading(false);
             })
@@ -167,6 +198,10 @@ export function usePermissions() {
         return user?.role === UserRole.ADMIN;
     };
 
+    const isGroupAdmin = (): boolean => {
+        return user?.role === UserRole.GROUP_ADMIN;
+    };
+
     const isDeveloper = (): boolean => {
         return user?.role === UserRole.DEVELOPER;
     };
@@ -186,6 +221,7 @@ export function usePermissions() {
         hasAnyPermission,
         hasAllPermissions,
         isAdmin,
+        isGroupAdmin,
         isDeveloper,
         isExternal,
         canEdit
@@ -199,6 +235,8 @@ export function getRoleDisplayName(role: UserRole | string): string {
     switch (role) {
         case UserRole.ADMIN:
             return '管理员';
+        case UserRole.GROUP_ADMIN:
+            return '小组管理员';
         case UserRole.DEVELOPER:
             return '开发者';
         case UserRole.EXTERNAL:

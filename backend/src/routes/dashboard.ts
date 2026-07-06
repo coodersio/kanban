@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../db/connection';
 import { requireAuth } from '../middleware/permissions';
+import { getEffectiveGroupId } from '../utils/groupScope';
 
 const router = express.Router();
 
@@ -10,18 +11,23 @@ router.get('/stats', requireAuth, async (req, res) => {
         const user = (req.session as any).user;
         const userId = user?.id;
         const role = user?.role;
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
+        const groupParams = groupId ? [groupId] : [];
+        const groupProjectWhere = groupId ? 'WHERE group_id = $1' : '';
+        const groupSprintWhere = groupId ? 'AND group_id = $1' : '';
+        const groupJoinProjectWhere = groupId ? 'WHERE p.group_id = $1' : '';
 
         // 1. Overview Statistics
         const overviewQuery = `
             SELECT
-                (SELECT COUNT(DISTINCT id) FROM projects) as total_projects,
-                (SELECT COUNT(DISTINCT id) FROM stories) as total_stories,
-                (SELECT COUNT(DISTINCT id) FROM tasks) as total_tasks,
-                (SELECT COUNT(DISTINCT id) FROM sprints WHERE status = 'current') as active_sprints,
-                (SELECT COUNT(DISTINCT id) FROM sprint_stories WHERE status = 'completed') as completed_stories,
-                (SELECT COUNT(DISTINCT id) FROM sprint_tasks WHERE status = 'completed') as completed_tasks
+                (SELECT COUNT(DISTINCT id) FROM projects ${groupProjectWhere}) as total_projects,
+                (SELECT COUNT(DISTINCT s.id) FROM stories s JOIN projects p ON p.id = s.project_id ${groupJoinProjectWhere}) as total_stories,
+                (SELECT COUNT(DISTINCT t.id) FROM tasks t JOIN projects p ON p.id = t.project_id ${groupJoinProjectWhere}) as total_tasks,
+                (SELECT COUNT(DISTINCT id) FROM sprints WHERE status = 'current' ${groupSprintWhere}) as active_sprints,
+                (SELECT COUNT(DISTINCT ss.id) FROM sprint_stories ss JOIN projects p ON p.id = ss.project_id WHERE ss.status = 'completed' ${groupId ? 'AND p.group_id = $1' : ''}) as completed_stories,
+                (SELECT COUNT(DISTINCT st.id) FROM sprint_tasks st JOIN projects p ON p.id = st.project_id WHERE st.status = 'completed' ${groupId ? 'AND p.group_id = $1' : ''}) as completed_tasks
         `;
-        const overviewResult = await pool.query(overviewQuery);
+        const overviewResult = await pool.query(overviewQuery, groupParams);
         const overview = overviewResult.rows[0];
 
         // Calculate completion rates
@@ -34,9 +40,9 @@ router.get('/stats', requireAuth, async (req, res) => {
 
         // 2. Task Distribution by Status (Current Sprint)
         const currentSprintQuery = `
-            SELECT id FROM sprints WHERE status = 'current' LIMIT 1
+            SELECT id FROM sprints WHERE status = 'current' ${groupSprintWhere} LIMIT 1
         `;
-        const currentSprintResult = await pool.query(currentSprintQuery);
+        const currentSprintResult = await pool.query(currentSprintQuery, groupParams);
         const currentSprintId = currentSprintResult.rows[0]?.id;
 
         let taskDistribution = { not_started: 0, in_progress: 0, completed: 0 };
@@ -68,12 +74,12 @@ router.get('/stats', requireAuth, async (req, res) => {
             FROM sprints sp
             LEFT JOIN sprint_stories ss ON sp.id = ss.sprint_id
             LEFT JOIN sprint_tasks st ON sp.id = st.sprint_id
-            WHERE sp.id != -1
+            WHERE sp.id != -1 ${groupId ? 'AND sp.group_id = $1' : ''}
             GROUP BY sp.id, sp.sprint_number, sp.start_date, sp.end_date
             ORDER BY sp.start_date DESC
             LIMIT 4
         `;
-        const weeklyProgressResult = await pool.query(weeklyProgressQuery);
+        const weeklyProgressResult = await pool.query(weeklyProgressQuery, groupParams);
         const weeklyProgress = weeklyProgressResult.rows.map(row => ({
             week: row.sprint_number,
             startDate: row.start_date,
@@ -168,7 +174,8 @@ router.get('/stats', requireAuth, async (req, res) => {
 
         // 6. Team Performance (if admin/developer)
         let teamPerformance = null;
-        if (role === 'admin' || role === 'developer') {
+        if (role === 'admin' || role === 'group_admin' || role === 'developer') {
+            const teamParams = groupId ? [currentSprintId, groupId] : [currentSprintId];
             const teamPerformanceQuery = `
                 SELECT
                     u.id,
@@ -178,14 +185,15 @@ router.get('/stats', requireAuth, async (req, res) => {
                     COALESCE(AVG(CASE WHEN st.status = 'completed' THEN st.progress END), 0) as avg_progress
                 FROM users u
                 LEFT JOIN sprint_tasks st ON u.id = st.assigned_to AND st.sprint_id = $1
-                WHERE u.role IN ('admin', 'developer')
+                WHERE u.role IN ('admin', 'group_admin', 'developer')
+                  ${groupId ? 'AND u.group_id = $2' : ''}
                 GROUP BY u.id, u.display_name
                 HAVING COUNT(DISTINCT st.task_id) > 0
                 ORDER BY completed_tasks DESC
                 LIMIT 5
             `;
             const teamPerformanceResult = currentSprintId
-                ? await pool.query(teamPerformanceQuery, [currentSprintId])
+                ? await pool.query(teamPerformanceQuery, teamParams)
                 : { rows: [] };
 
             teamPerformance = teamPerformanceResult.rows.map(row => ({
@@ -262,12 +270,16 @@ router.get('/stats', requireAuth, async (req, res) => {
 router.get('/at-risk', requireAuth, async (req, res) => {
     try {
         const { sprintId } = req.query;
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
 
         // Get current sprint if not specified
         let currentSprintId = sprintId;
-        if (!currentSprintId) {
-            const currentSprintQuery = `SELECT id FROM sprints WHERE status = 'current' LIMIT 1`;
-            const currentSprintResult = await pool.query(currentSprintQuery);
+        if (currentSprintId && groupId) {
+            const scopedSprint = await pool.query('SELECT id FROM sprints WHERE id = $1 AND group_id = $2', [currentSprintId, groupId]);
+            currentSprintId = scopedSprint.rows[0]?.id;
+        } else if (!currentSprintId) {
+            const currentSprintQuery = `SELECT id FROM sprints WHERE status = 'current' ${groupId ? 'AND group_id = $1' : ''} LIMIT 1`;
+            const currentSprintResult = await pool.query(currentSprintQuery, groupId ? [groupId] : []);
             currentSprintId = currentSprintResult.rows[0]?.id;
         }
 
@@ -362,11 +374,11 @@ router.get('/at-risk', requireAuth, async (req, res) => {
         // Week-over-week overdue change (simplified - compare with previous sprint)
         const previousSprintQuery = `
             SELECT id FROM sprints
-            WHERE id < $1
+            WHERE id < $1 ${groupId ? 'AND group_id = $2' : ''}
             ORDER BY id DESC
             LIMIT 1
         `;
-        const previousSprintResult = await pool.query(previousSprintQuery, [currentSprintId]);
+        const previousSprintResult = await pool.query(previousSprintQuery, groupId ? [currentSprintId, groupId] : [currentSprintId]);
         const previousSprintId = previousSprintResult.rows[0]?.id;
 
         let overdueWeekly = 0;
@@ -420,12 +432,16 @@ router.get('/at-risk', requireAuth, async (req, res) => {
 router.get('/workload', requireAuth, async (req, res) => {
     try {
         const { sprintId } = req.query;
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
 
         // Get current sprint if not specified
         let currentSprintId = sprintId;
-        if (!currentSprintId) {
-            const currentSprintQuery = `SELECT id FROM sprints WHERE status = 'current' LIMIT 1`;
-            const currentSprintResult = await pool.query(currentSprintQuery);
+        if (currentSprintId && groupId) {
+            const scopedSprint = await pool.query('SELECT id FROM sprints WHERE id = $1 AND group_id = $2', [currentSprintId, groupId]);
+            currentSprintId = scopedSprint.rows[0]?.id;
+        } else if (!currentSprintId) {
+            const currentSprintQuery = `SELECT id FROM sprints WHERE status = 'current' ${groupId ? 'AND group_id = $1' : ''} LIMIT 1`;
+            const currentSprintResult = await pool.query(currentSprintQuery, groupId ? [groupId] : []);
             currentSprintId = currentSprintResult.rows[0]?.id;
         }
 
@@ -446,10 +462,11 @@ router.get('/workload', requireAuth, async (req, res) => {
             FROM users u
             LEFT JOIN sprint_tasks st ON u.id = st.assigned_to AND st.sprint_id = $1
             WHERE u.role != 'external'
+              ${groupId ? 'AND u.group_id = $2' : ''}
             GROUP BY u.id, u.display_name, u.role
             ORDER BY task_count DESC
         `;
-        const workload = await pool.query(workloadQuery, [currentSprintId]);
+        const workload = await pool.query(workloadQuery, groupId ? [currentSprintId, groupId] : [currentSprintId]);
 
         // Calculate load level for each member
         const members = workload.rows.map(m => {

@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import pool from '../db/connection';
 import { requireAuth, UserRole } from '../middleware/permissions';
+import { getEffectiveGroupId } from '../utils/groupScope';
 
 const router = express.Router();
 
@@ -36,11 +37,15 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
             ? [currentUser.id]
             : requestedMemberIds;
 
-        const params: Array<number[]> = [];
+        const params: any[] = [];
         let storySprintFilter = '';
         let taskSprintFilter = '';
         let storyMemberFilter = '';
         let taskMemberFilter = '';
+        let storyGroupFilter = '';
+        let taskGroupFilter = '';
+        let userGroupJoinFilter = '';
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
 
         if (requestedSprintIds.length > 0) {
             params.push(requestedSprintIds);
@@ -56,6 +61,14 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
             taskMemberFilter = ` AND st.assigned_to = ANY($${memberParam}::int[])`;
         }
 
+        if (groupId) {
+            params.push(groupId);
+            const groupParam = params.length;
+            storyGroupFilter = ` AND EXISTS (SELECT 1 FROM projects p WHERE p.id = ss.project_id AND p.group_id = $${groupParam})`;
+            taskGroupFilter = ` AND EXISTS (SELECT 1 FROM projects p WHERE p.id = st.project_id AND p.group_id = $${groupParam})`;
+            userGroupJoinFilter = ` AND u.group_id = $${groupParam}`;
+        }
+
         const query = `
             WITH story_owners AS (
                 SELECT
@@ -69,6 +82,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                     AND ss.assigned_to IS NOT NULL
                     ${storySprintFilter}
                     ${storyMemberFilter}
+                    ${storyGroupFilter}
             ),
             task_participants AS (
                 SELECT
@@ -84,6 +98,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                     AND COALESCE(st.story_id, t.story_id) IS NOT NULL
                     ${taskSprintFilter}
                     ${taskMemberFilter}
+                    ${taskGroupFilter}
             ),
             combined AS (
                 SELECT * FROM story_owners
@@ -119,7 +134,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
             JOIN projects p ON p.id = d.project_id
             JOIN sprints sp ON sp.id = d.sprint_id
             JOIN stories s ON s.id = d.story_id
-            JOIN users u ON u.id = d.member_id
+            JOIN users u ON u.id = d.member_id ${userGroupJoinFilter}
             LEFT JOIN sprint_stories ss
                 ON ss.sprint_id = d.sprint_id
                 AND ss.story_id = d.story_id

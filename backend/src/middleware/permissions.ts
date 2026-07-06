@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 // User roles
 export enum UserRole {
     ADMIN = 'admin',
+    GROUP_ADMIN = 'group_admin',
     DEVELOPER = 'developer',
     EXTERNAL = 'external'
 }
@@ -97,6 +98,45 @@ const rolePermissions: Record<UserRole, Permission[]> = {
         Permission.EDIT_SETTINGS
     ],
 
+    [UserRole.GROUP_ADMIN]: [
+        Permission.VIEW_USERS,
+        Permission.CREATE_USER,
+        Permission.EDIT_USER,
+        Permission.DELETE_USER,
+
+        Permission.VIEW_PROJECTS,
+        Permission.CREATE_PROJECT,
+        Permission.EDIT_PROJECT,
+        Permission.EDIT_OWN_PROJECT,
+        Permission.DELETE_PROJECT,
+
+        Permission.VIEW_STORIES,
+        Permission.CREATE_STORY,
+        Permission.EDIT_STORY,
+        Permission.EDIT_OWN_STORY,
+        Permission.DELETE_STORY,
+        Permission.ASSIGN_STORY,
+
+        Permission.VIEW_TASKS,
+        Permission.CREATE_TASK,
+        Permission.EDIT_TASK,
+        Permission.EDIT_ASSIGNED_TASK,
+        Permission.DELETE_TASK,
+        Permission.ASSIGN_TASK,
+        Permission.UPDATE_TASK_STATUS,
+
+        Permission.VIEW_SPRINTS,
+        Permission.CREATE_SPRINT,
+        Permission.EDIT_SPRINT,
+        Permission.DELETE_SPRINT,
+        Permission.ACTIVATE_SPRINT,
+
+        Permission.EXPORT_SUMMARY_REPORT,
+        Permission.EXPORT_PERSONAL_REPORT,
+
+        Permission.VIEW_SETTINGS
+    ],
+
     [UserRole.DEVELOPER]: [
         Permission.VIEW_USERS,
 
@@ -161,6 +201,28 @@ export function hasAnyPermission(userRole: string, permissions: Permission[]): b
  */
 export function hasAllPermissions(userRole: string, permissions: Permission[]): boolean {
     return permissions.every(permission => hasPermission(userRole, permission));
+}
+
+export function isSystemAdmin(user: any): boolean {
+    return user?.role === UserRole.ADMIN;
+}
+
+export function getSessionUser(req: Request) {
+    return (req.session as any)?.user;
+}
+
+export function getSessionGroupId(req: Request): number | null {
+    const groupId = getSessionUser(req)?.groupId;
+    return Number.isInteger(groupId) ? groupId : null;
+}
+
+export function requireGroupId(req: Request, res: Response): number | null {
+    const groupId = getSessionGroupId(req);
+    if (!groupId && !isSystemAdmin(getSessionUser(req))) {
+        res.status(403).json({ message: 'Forbidden - User group is required' });
+        return null;
+    }
+    return groupId;
 }
 
 /**

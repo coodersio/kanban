@@ -100,7 +100,7 @@ export function WorkloadHeatmap({ data, loading, onMemberClick }: WorkloadHeatma
                     {member.name}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {member.role === 'admin' ? '管理员' : '开发者'}
+                    {member.role === 'admin' ? '管理员' : member.role === 'group_admin' ? '小组管理员' : '开发者'}
                   </div>
                 </div>
 

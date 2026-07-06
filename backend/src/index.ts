@@ -6,6 +6,7 @@ import connectPgSimple from 'connect-pg-simple';
 import path from 'path';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
+import groupRoutes from './routes/groups';
 import departmentRoutes from './routes/departments';
 import projectTypeRoutes from './routes/project_types';
 import sprintRoutes from './routes/sprints';
@@ -61,6 +62,7 @@ app.use(session({
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/groups', groupRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/project-types', projectTypeRoutes);
 app.use('/api/sprints', sprintRoutes);

@@ -13,18 +13,22 @@ import { cn } from '@/lib/utils';
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { usePermissions, Permission } from '@/hooks/usePermissions';
+import type { Group } from '@/types';
 
 interface UserData {
     id: number;
     user_name: string;
     display_name: string;
-    role: 'admin' | 'developer' | 'external';
+    role: 'admin' | 'group_admin' | 'developer' | 'external';
+    group_id?: number;
+    group_name?: string;
     created_at?: string;
 }
 
 export default function UsersPage() {
-    const { hasPermission } = usePermissions();
+    const { user: currentUser, hasPermission, isAdmin } = usePermissions();
     const [users, setUsers] = useState<UserData[]>([]);
+    const [groups, setGroups] = useState<Group[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<UserData | null>(null);
 
@@ -32,7 +36,8 @@ export default function UsersPage() {
         user_name: '',
         display_name: '',
         password: '',
-        role: 'developer'
+        role: 'developer',
+        group_id: ''
     });
 
     const fetchUsers = async () => {
@@ -40,8 +45,17 @@ export default function UsersPage() {
         if (res.ok) setUsers(await res.json());
     };
 
+    const fetchGroups = async () => {
+        const res = await fetch('/api/groups');
+        if (res.ok) {
+            const data = await res.json();
+            setGroups(data);
+        }
+    };
+
     useEffect(() => {
         fetchUsers();
+        fetchGroups();
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -52,7 +66,7 @@ export default function UsersPage() {
         // For PUT (edit), don't send user_name (it's not allowed to be changed)
         // For POST (create), include user_name
         const payload = editingUser
-            ? { display_name: formData.display_name, role: formData.role, password: formData.password }
+            ? { display_name: formData.display_name, role: formData.role, password: formData.password, group_id: formData.group_id || undefined }
             : formData;
 
         const res = await fetch(url, {
@@ -64,7 +78,7 @@ export default function UsersPage() {
         if (res.ok) {
             setIsOpen(false);
             setEditingUser(null);
-            setFormData({ user_name: '', display_name: '', password: '', role: 'developer' });
+            setFormData({ user_name: '', display_name: '', password: '', role: 'developer', group_id: '' });
             fetchUsers();
         }
     };
@@ -81,7 +95,8 @@ export default function UsersPage() {
             user_name: user.user_name,
             display_name: user.display_name,
             password: '',
-            role: user.role
+            role: user.role,
+            group_id: user.group_id ? String(user.group_id) : ''
         });
         setIsOpen(true);
     }
@@ -89,6 +104,7 @@ export default function UsersPage() {
     const getRoleBadge = (role: string) => {
         const config = {
             admin: { label: '管理员', icon: Shield, className: 'bg-purple-100 text-purple-700 border-purple-200' },
+            group_admin: { label: '小组管理员', icon: Shield, className: 'bg-amber-100 text-amber-700 border-amber-200' },
             developer: { label: '开发者', icon: UserIcon, className: 'bg-blue-100 text-blue-700 border-blue-200' },
             external: { label: '外部成员', icon: UserCircle, className: 'bg-slate-100 text-slate-700 border-slate-200' }
         };
@@ -115,7 +131,7 @@ export default function UsersPage() {
                             <Button
                                 onClick={() => {
                                     setEditingUser(null);
-                                    setFormData({ user_name: '', display_name: '', password: '', role: 'developer' });
+                                    setFormData({ user_name: '', display_name: '', password: '', role: 'developer', group_id: '' });
                                 }}
                                 className="gap-2"
                             >
@@ -157,12 +173,28 @@ export default function UsersPage() {
                                         <SelectValue placeholder="选择角色" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="admin">管理员</SelectItem>
+                                        {isAdmin() && <SelectItem value="admin">管理员</SelectItem>}
+                                        {isAdmin() && <SelectItem value="group_admin">小组管理员</SelectItem>}
                                         <SelectItem value="developer">开发者</SelectItem>
                                         <SelectItem value="external">外部成员</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
+                            {isAdmin() && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="group_id">所属小组</Label>
+                                    <Select value={formData.group_id} onValueChange={(val) => setFormData({ ...formData, group_id: val })}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="选择小组" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {groups.map(group => (
+                                                <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <Label htmlFor="password">
                                     {editingUser ? '新密码（可选）' : '密码 *'}
@@ -197,6 +229,7 @@ export default function UsersPage() {
                             <TableRow className="hover:bg-transparent">
                                 <TableHead className="w-[300px]">成员</TableHead>
                                 <TableHead>角色</TableHead>
+                                <TableHead>小组</TableHead>
                                 <TableHead>加入时间</TableHead>
                                 <TableHead className="text-right w-[120px]">操作</TableHead>
                             </TableRow>
@@ -220,6 +253,9 @@ export default function UsersPage() {
                                     </TableCell>
                                     <TableCell>
                                         {getRoleBadge(user.role)}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">
+                                        {user.group_name || currentUser?.groupName || '-'}
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">
                                         {user.created_at ? format(new Date(user.created_at), 'PPP', { locale: zhCN }) : '-'}
@@ -252,7 +288,7 @@ export default function UsersPage() {
                             ))}
                             {users.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-32 text-center">
+                                    <TableCell colSpan={5} className="h-32 text-center">
                                         <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                                             <UserCircle className="w-8 h-8 opacity-20" />
                                             <p className="text-sm">暂无成员数据</p>

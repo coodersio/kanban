@@ -2,6 +2,8 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import pool from '../db/connection';
 import ExcelJS from 'exceljs';
+import { requireAuth } from '../middleware/permissions';
+import { ensureProjectInScope, ensureSprintInScope, ensureUserInScope, getEffectiveGroupId } from '../utils/groupScope';
 
 const router = express.Router();
 
@@ -35,14 +37,16 @@ const EXCEL_STYLES = {
 // TEST ENDPOINT: Check Next Sprint Data
 // GET /api/reports/test/next-sprint-data/:sprintNumber
 // ============================================================
-router.get('/test/next-sprint-data/:sprintNumber', async (req: Request, res: Response) => {
+router.get('/test/next-sprint-data/:sprintNumber', requireAuth, async (req: Request, res: Response) => {
     const { sprintNumber } = req.params;
 
     try {
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
         // Find current sprint
         const currentResult = await pool.query(
-            'SELECT id, sprint_number FROM sprints WHERE sprint_number = $1',
-            [sprintNumber]
+            `SELECT id, sprint_number, group_id FROM sprints
+             WHERE sprint_number = $1 ${groupId ? 'AND group_id = $2' : ''}`,
+            groupId ? [sprintNumber, groupId] : [sprintNumber]
         );
 
         if (currentResult.rows.length === 0) {
@@ -54,10 +58,10 @@ router.get('/test/next-sprint-data/:sprintNumber', async (req: Request, res: Res
         // Find next sprint
         const nextResult = await pool.query(
             `SELECT id, sprint_number FROM sprints
-             WHERE id > $1 AND id > 0
+             WHERE id > $1 AND id > 0 AND group_id = $2
              ORDER BY id ASC
              LIMIT 1`,
-            [currentSprint.id]
+            [currentSprint.id, currentSprint.group_id]
         );
 
         if (nextResult.rows.length === 0) {
@@ -79,10 +83,11 @@ router.get('/test/next-sprint-data/:sprintNumber', async (req: Request, res: Res
             WHERE p.id IN (
                 SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = $1
             )
+            AND p.group_id = $2
             ORDER BY p.id
         `;
 
-        const projectsResult = await pool.query(projectsQuery, [nextSprint.id]);
+        const projectsResult = await pool.query(projectsQuery, [nextSprint.id, currentSprint.group_id]);
         const projectsData = [];
 
         for (const project of projectsResult.rows) {
@@ -140,14 +145,16 @@ router.get('/test/next-sprint-data/:sprintNumber', async (req: Request, res: Res
 // TEST ENDPOINT: Check Current Sprint Projects
 // GET /api/reports/test/current-sprint-projects/:sprintNumber
 // ============================================================
-router.get('/test/current-sprint-projects/:sprintNumber', async (req: Request, res: Response) => {
+router.get('/test/current-sprint-projects/:sprintNumber', requireAuth, async (req: Request, res: Response) => {
     const { sprintNumber } = req.params;
 
     try {
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
         // Find current sprint
         const sprintResult = await pool.query(
-            'SELECT id, sprint_number FROM sprints WHERE sprint_number = $1',
-            [sprintNumber]
+            `SELECT id, sprint_number, group_id FROM sprints
+             WHERE sprint_number = $1 ${groupId ? 'AND group_id = $2' : ''}`,
+            groupId ? [sprintNumber, groupId] : [sprintNumber]
         );
 
         if (sprintResult.rows.length === 0) {
@@ -165,10 +172,11 @@ router.get('/test/current-sprint-projects/:sprintNumber', async (req: Request, r
             WHERE p.id IN (
                 SELECT DISTINCT project_id FROM sprint_stories WHERE sprint_id = $1
             )
+            AND p.group_id = $2
             ORDER BY p.id
         `;
 
-        const projectsResult = await pool.query(projectsQuery, [sprint.id]);
+        const projectsResult = await pool.query(projectsQuery, [sprint.id, sprint.group_id]);
         const projectsData = [];
 
         for (const project of projectsResult.rows) {
@@ -208,10 +216,11 @@ router.get('/test/current-sprint-projects/:sprintNumber', async (req: Request, r
 // TEST ENDPOINT: Check Project Details
 // GET /api/reports/test/project/:projectId
 // ============================================================
-router.get('/test/project/:projectId', async (req: Request, res: Response) => {
+router.get('/test/project/:projectId', requireAuth, async (req: Request, res: Response) => {
     const { projectId } = req.params;
 
     try {
+        if (!(await ensureProjectInScope(req, res, projectId))) return;
         const projectQuery = `
             SELECT
                 p.*,
@@ -242,14 +251,16 @@ router.get('/test/project/:projectId', async (req: Request, res: Response) => {
 // TEST ENDPOINT: Verify Sprint Sequence Logic
 // GET /api/reports/test/sprint-sequence/:sprintNumber
 // ============================================================
-router.get('/test/sprint-sequence/:sprintNumber', async (req: Request, res: Response) => {
+router.get('/test/sprint-sequence/:sprintNumber', requireAuth, async (req: Request, res: Response) => {
     const { sprintNumber } = req.params;
 
     try {
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
         // Find the current sprint by sprint_number
         const currentResult = await pool.query(
-            'SELECT id, sprint_number, start_date, end_date, status FROM sprints WHERE sprint_number = $1',
-            [sprintNumber]
+            `SELECT id, sprint_number, start_date, end_date, status, group_id FROM sprints
+             WHERE sprint_number = $1 ${groupId ? 'AND group_id = $2' : ''}`,
+            groupId ? [sprintNumber, groupId] : [sprintNumber]
         );
 
         if (currentResult.rows.length === 0) {
@@ -261,17 +272,20 @@ router.get('/test/sprint-sequence/:sprintNumber', async (req: Request, res: Resp
         // Find next sprint using ID-based logic (same as export logic)
         const nextResult = await pool.query(
             `SELECT id, sprint_number, start_date, end_date, status FROM sprints
-             WHERE id > $1 AND id > 0
+             WHERE id > $1 AND id > 0 AND group_id = $2
              ORDER BY id ASC
              LIMIT 1`,
-            [currentSprint.id]
+            [currentSprint.id, currentSprint.group_id]
         );
 
         const nextSprint = nextResult.rows.length > 0 ? nextResult.rows[0] : null;
 
         // Get all sprints for reference
         const allSprintsResult = await pool.query(
-            'SELECT id, sprint_number, status FROM sprints ORDER BY id ASC'
+            `SELECT id, sprint_number, status FROM sprints
+             WHERE 1 = 1 ${groupId ? 'AND group_id = $1' : ''}
+             ORDER BY id ASC`,
+            groupId ? [groupId] : []
         );
 
         return res.json({
@@ -289,14 +303,15 @@ router.get('/test/sprint-sequence/:sprintNumber', async (req: Request, res: Resp
 // GET /api/reports/sprint/:sprintId/data
 // Get weekly report data for a specific sprint
 // ============================================================
-router.get('/sprint/:sprintId/data', async (req: Request, res: Response) => {
+router.get('/sprint/:sprintId/data', requireAuth, async (req: Request, res: Response) => {
     const { sprintId } = req.params;
     const { userId } = req.query;
 
     try {
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
         // 1. Get Sprint Info
         const sprintResult = await pool.query(
-            'SELECT id, name, start_date, end_date, status FROM sprints WHERE id = $1',
+            'SELECT id, sprint_number AS name, start_date, end_date, status, group_id FROM sprints WHERE id = $1',
             [sprintId]
         );
         if (sprintResult.rows.length === 0) {
@@ -306,7 +321,7 @@ router.get('/sprint/:sprintId/data', async (req: Request, res: Response) => {
 
         // 2. Get Active Projects in this Sprint
         const projectsQuery = `
-            SELECT DISTINCT p.id, p.name, d.name AS department_name, pt.name AS project_type_name
+            SELECT DISTINCT p.id, p.software_name AS name, d.name AS department_name, pt.name AS project_type_name
             FROM projects p
             LEFT JOIN departments d ON p.department_id = d.id
             LEFT JOIN project_types pt ON p.project_type_id = pt.id
@@ -317,9 +332,10 @@ router.get('/sprint/:sprintId/data', async (req: Request, res: Response) => {
                 UNION
                 SELECT DISTINCT st.project_id FROM sprint_tasks st WHERE st.sprint_id = $1
             )
+            AND p.group_id = $2
             ORDER BY p.id
         `;
-        const projectsResult = await pool.query(projectsQuery, [sprintId]);
+        const projectsResult = await pool.query(projectsQuery, [sprintId, sprint.group_id]);
 
         // 3. For each project, get stories and tasks
         const projects = [];
@@ -413,14 +429,15 @@ router.get('/sprint/:sprintId/data', async (req: Request, res: Response) => {
 
         // 4. Get Next Sprint Info
         const nextSprintQuery = `
-            SELECT id, name, start_date
+            SELECT id, sprint_number AS name, start_date
             FROM sprints
             WHERE start_date > (SELECT start_date FROM sprints WHERE id = $1)
                 AND status IN ('planned', 'current')
+                AND group_id = $2
             ORDER BY start_date ASC
             LIMIT 1
         `;
-        const nextSprintResult = await pool.query(nextSprintQuery, [sprintId]);
+        const nextSprintResult = await pool.query(nextSprintQuery, [sprintId, sprint.group_id]);
 
         let next_sprint: any = { id: null, name: null, planned_stories: [] };
         if (nextSprintResult.rows.length > 0) {
@@ -951,11 +968,13 @@ function extractTeamMembers(stories: any[], tasks: any[]): string {
 // POST /api/reports/sprint/:sprintId/export
 // Export weekly report as Excel file
 // ============================================================
-router.post('/sprint/:sprintId/export', async (req: Request, res: Response) => {
+router.post('/sprint/:sprintId/export', requireAuth, async (req: Request, res: Response) => {
     const { sprintId } = req.params;
     const { userId, reportType } = req.body;
 
     try {
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
+        if (userId && !(await ensureUserInScope(req, res, userId))) return;
         const { sprint, projects, next_sprint } = await fetchWeeklyReportData(sprintId, userId);
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('周报');
@@ -1064,7 +1083,7 @@ router.post('/sprint/:sprintId/export', async (req: Request, res: Response) => {
 // ============================================================
 async function fetchWeeklyReportData(sprintId: string, userId?: number | string) {
     const sprintResult = await pool.query(
-        'SELECT id, name, start_date, end_date, status FROM sprints WHERE id = $1',
+        'SELECT id, sprint_number AS name, start_date, end_date, status, group_id FROM sprints WHERE id = $1',
         [sprintId]
     );
     if (sprintResult.rows.length === 0) {
@@ -1072,7 +1091,7 @@ async function fetchWeeklyReportData(sprintId: string, userId?: number | string)
     }
     const sprint = sprintResult.rows[0];
     const projectsQuery = `
-        SELECT DISTINCT p.id, p.name, d.name AS department_name, pt.name AS project_type_name
+        SELECT DISTINCT p.id, p.software_name AS name, d.name AS department_name, pt.name AS project_type_name
         FROM projects p
         LEFT JOIN departments d ON p.department_id = d.id
         LEFT JOIN project_types pt ON p.project_type_id = pt.id
@@ -1083,9 +1102,10 @@ async function fetchWeeklyReportData(sprintId: string, userId?: number | string)
             UNION
             SELECT DISTINCT st.project_id FROM sprint_tasks st WHERE st.sprint_id = $1
         )
+        AND p.group_id = $2
         ORDER BY p.id
     `;
-    const projectsResult = await pool.query(projectsQuery, [sprintId]);
+    const projectsResult = await pool.query(projectsQuery, [sprintId, sprint.group_id]);
     const projects = [];
     for (const project of projectsResult.rows) {
         const storiesQuery = `
@@ -1168,14 +1188,15 @@ async function fetchWeeklyReportData(sprintId: string, userId?: number | string)
         });
     }
     const nextSprintQuery = `
-        SELECT id, name, start_date
+        SELECT id, sprint_number AS name, start_date
         FROM sprints
         WHERE start_date > (SELECT start_date FROM sprints WHERE id = $1)
             AND status IN ('planned', 'current')
+            AND group_id = $2
         ORDER BY start_date ASC
         LIMIT 1
     `;
-    const nextSprintResult = await pool.query(nextSprintQuery, [sprintId]);
+    const nextSprintResult = await pool.query(nextSprintQuery, [sprintId, sprint.group_id]);
     let next_sprint: any = { id: null, name: null, planned_stories: [] };
     if (nextSprintResult.rows.length > 0) {
         const nextSprintData = nextSprintResult.rows[0];
@@ -1202,7 +1223,7 @@ async function fetchWeeklyReportData(sprintId: string, userId?: number | string)
 // GET /api/reports/weekly
 // Generate Excel weekly report for a sprint
 // ============================================================
-router.get('/weekly', async (req: Request, res: Response) => {
+router.get('/weekly', requireAuth, async (req: Request, res: Response) => {
     const { sprintId, reportType } = req.query;
 
     if (!sprintId) {
@@ -1210,9 +1231,10 @@ router.get('/weekly', async (req: Request, res: Response) => {
     }
 
     try {
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
         // 1. Get current sprint info
         const currentSprintResult = await pool.query(
-            'SELECT id, sprint_number, start_date, end_date FROM sprints WHERE id = $1',
+            'SELECT id, sprint_number, start_date, end_date, group_id FROM sprints WHERE id = $1',
             [sprintId]
         );
 
@@ -1229,8 +1251,8 @@ router.get('/weekly', async (req: Request, res: Response) => {
 
         if (currentSprintNum > 0) {
             const prevResult = await pool.query(
-                'SELECT id, sprint_number FROM sprints WHERE id = $1',
-                [currentSprintNum - 1]
+                'SELECT id, sprint_number FROM sprints WHERE id = $1 AND group_id = $2',
+                [currentSprintNum - 1, currentSprint.group_id]
             );
             if (prevResult.rows.length > 0) {
                 previousSprint = prevResult.rows[0];
@@ -1241,10 +1263,10 @@ router.get('/weekly', async (req: Request, res: Response) => {
         // Exclude special sprints like BACKLOG (id <= 0)
         const nextResult = await pool.query(
             `SELECT id, sprint_number FROM sprints
-             WHERE id > $1 AND id > 0
+             WHERE id > $1 AND id > 0 AND group_id = $2
              ORDER BY id ASC
              LIMIT 1`,
-            [currentSprintNum]
+            [currentSprintNum, currentSprint.group_id]
         );
         if (nextResult.rows.length > 0) {
             nextSprint = nextResult.rows[0];
@@ -1272,10 +1294,11 @@ router.get('/weekly', async (req: Request, res: Response) => {
                 UNION
                 SELECT DISTINCT project_id FROM sprint_tasks WHERE sprint_id = ANY($1)
             )
+            AND p.group_id = $2
             ORDER BY p.id
         `;
 
-        const projectsResult = await pool.query(projectsQuery, [sprintIds]);
+        const projectsResult = await pool.query(projectsQuery, [sprintIds, currentSprint.group_id]);
         const projects = [];
 
         // 4. For each project, get stories and tasks with multi-sprint data
@@ -1690,7 +1713,7 @@ router.get('/weekly', async (req: Request, res: Response) => {
 // PERSONAL WEEKLY REPORT EXPORT
 // GET /api/reports/personal?sprintId=X&userId=Y
 // ============================================================
-router.get('/personal', async (req: Request, res: Response) => {
+router.get('/personal', requireAuth, async (req: Request, res: Response) => {
     const { sprintId, userId } = req.query;
 
     if (!sprintId || !userId) {
@@ -1698,9 +1721,11 @@ router.get('/personal', async (req: Request, res: Response) => {
     }
 
     try {
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
+        if (!(await ensureUserInScope(req, res, userId))) return;
         // 1. Get user info
         const userResult = await pool.query(
-            `SELECT u.id, u.display_name, u.role
+            `SELECT u.id, u.display_name, u.role, u.group_id
              FROM users u
              WHERE u.id = $1`,
             [userId]
@@ -1714,7 +1739,7 @@ router.get('/personal', async (req: Request, res: Response) => {
 
         // 2. Get current sprint info
         const currentSprintResult = await pool.query(
-            'SELECT id, sprint_number, start_date, end_date FROM sprints WHERE id = $1',
+            'SELECT id, sprint_number, start_date, end_date, group_id FROM sprints WHERE id = $1',
             [sprintId]
         );
 
@@ -1723,6 +1748,9 @@ router.get('/personal', async (req: Request, res: Response) => {
         }
 
         const currentSprint = currentSprintResult.rows[0];
+        if (user.group_id !== currentSprint.group_id) {
+            return res.status(400).json({ message: 'User and sprint must belong to the same group' });
+        }
         const currentSprintNum = parseInt(sprintId as string);
 
         // 3. Get previous and next sprint info
@@ -1731,8 +1759,8 @@ router.get('/personal', async (req: Request, res: Response) => {
 
         if (currentSprintNum > 0) {
             const prevResult = await pool.query(
-                'SELECT id, sprint_number FROM sprints WHERE id = $1',
-                [currentSprintNum - 1]
+                'SELECT id, sprint_number FROM sprints WHERE id = $1 AND group_id = $2',
+                [currentSprintNum - 1, currentSprint.group_id]
             );
             if (prevResult.rows.length > 0) {
                 previousSprint = prevResult.rows[0];
@@ -1741,10 +1769,10 @@ router.get('/personal', async (req: Request, res: Response) => {
 
         const nextResult = await pool.query(
             `SELECT id, sprint_number FROM sprints
-             WHERE id > $1 AND id > 0
+             WHERE id > $1 AND id > 0 AND group_id = $2
              ORDER BY id ASC
              LIMIT 1`,
-            [currentSprintNum]
+            [currentSprintNum, currentSprint.group_id]
         );
         if (nextResult.rows.length > 0) {
             nextSprint = nextResult.rows[0];
@@ -1780,10 +1808,11 @@ router.get('/personal', async (req: Request, res: Response) => {
                 JOIN projects proj ON sp.project_id = proj.id
                 WHERE sp.sprint_id = ANY($1) AND proj.owner_id = $2
             )
+            AND p.group_id = $3
             ORDER BY p.id
         `;
 
-        const projectsResult = await pool.query(projectsQuery, [sprintIdsForProjectDiscovery, userId]);
+        const projectsResult = await pool.query(projectsQuery, [sprintIdsForProjectDiscovery, userId, currentSprint.group_id]);
         const projects = [];
 
         // 5. For each project, get user's assigned stories and tasks

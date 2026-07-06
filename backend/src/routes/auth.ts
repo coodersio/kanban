@@ -8,7 +8,12 @@ router.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
     try {
-        const result = await pool.query('SELECT * FROM users WHERE user_name = $1', [username]);
+        const result = await pool.query(`
+            SELECT u.*, g.name AS group_name
+            FROM users u
+            LEFT JOIN groups g ON g.id = u.group_id
+            WHERE u.user_name = $1
+        `, [username]);
 
         if (result.rows.length === 0) {
             return res.status(401).json({ message: 'Invalid credentials' });
@@ -26,7 +31,9 @@ router.post('/login', async (req, res) => {
             id: user.id,
             username: user.user_name,
             displayName: user.display_name,
-            role: user.role
+            role: user.role,
+            groupId: user.group_id,
+            groupName: user.group_name
         };
 
         res.json({
@@ -35,7 +42,9 @@ router.post('/login', async (req, res) => {
                 id: user.id,
                 username: user.user_name,
                 displayName: user.display_name,
-                role: user.role
+                role: user.role,
+                groupId: user.group_id,
+                groupName: user.group_name
             }
         });
     } catch (err) {

@@ -32,7 +32,7 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 export default function DashboardLayout() {
     const location = useLocation();
     const navigate = useNavigate();
-    const [currentUser, setCurrentUser] = useState<{ id: number, displayName: string, role: string } | null>(null);
+    const [currentUser, setCurrentUser] = useState<{ id: number, displayName: string, role: string, groupName?: string } | null>(null);
     const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
@@ -77,6 +77,13 @@ export default function DashboardLayout() {
         } catch (err) {
             console.error('Logout failed:', err);
         }
+    };
+
+    const getRoleLabel = (role?: string) => {
+        if (role === 'admin') return '管理员';
+        if (role === 'group_admin') return '小组管理员';
+        if (role === 'external') return '外部成员';
+        return '团队成员';
     };
 
     const NavItem = ({ href, icon: Icon, label }: { href: string, icon: any, label: string }) => {
@@ -199,7 +206,8 @@ export default function DashboardLayout() {
                                     <div className="flex flex-col space-y-1">
                                         <p className="text-sm font-medium leading-none">{currentUser?.displayName}</p>
                                         <p className="text-xs leading-none text-muted-foreground">
-                                            {currentUser?.role === 'admin' ? '管理员' : '团队成员'}
+                                            {getRoleLabel(currentUser?.role)}
+                                            {currentUser?.groupName ? ` / ${currentUser.groupName}` : ''}
                                         </p>
                                     </div>
                                 </DropdownMenuLabel>

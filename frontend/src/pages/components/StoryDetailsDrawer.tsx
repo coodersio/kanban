@@ -76,9 +76,10 @@ export default function StoryDetailsDrawer({
 
     // Permission Logic
     const isAdmin = currentUser?.role === 'admin';
+    const isGroupAdmin = currentUser?.role === 'group_admin';
     const isDeveloper = currentUser?.role === 'developer';
     const isExternal = currentUser?.role === 'external';
-    const canEdit = isAdmin || isDeveloper; // Admin and Developer can edit, External cannot
+    const canEdit = isAdmin || isGroupAdmin || isDeveloper;
 
     // Tab State
     const [activeTab, setActiveTab] = useState('details');

@@ -1,15 +1,9 @@
 import express, { Request, Response } from 'express';
 import pool from '../db/connection';
+import { requireAuth } from '../middleware/permissions';
+import { getEffectiveGroupId } from '../utils/groupScope';
 
 const router = express.Router();
-
-// Middleware to require authentication
-const requireAuth = (req: Request, res: Response, next: any) => {
-    if (!(req as any).session?.user) {
-        return res.status(401).json({ message: 'Not authenticated' });
-    }
-    next();
-};
 
 /**
  * GET /api/search?q={keyword}&limit={number}
@@ -25,6 +19,10 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
         }
 
         const searchPattern = `%${keyword.trim()}%`;
+        const groupId = getEffectiveGroupId(req, req.query.groupId);
+        const params: any[] = [searchPattern, limit];
+        const groupParam = groupId ? 3 : null;
+        if (groupId) params.push(groupId);
 
         const result = await pool.query(
             `
@@ -46,8 +44,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                 LIMIT 1
             ) sp ON true
             LEFT JOIN sprints s ON s.id = sp.sprint_id
-            WHERE p.software_name ILIKE $1
-               OR p.description ILIKE $1
+            WHERE (p.software_name ILIKE $1
+               OR p.description ILIKE $1)
+              ${groupParam ? `AND p.group_id = $${groupParam}` : ''}
 
             UNION ALL
 
@@ -62,6 +61,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                 s.sprint_number
             FROM sprints s
             WHERE s.sprint_number ILIKE $1
+              ${groupParam ? `AND s.group_id = $${groupParam}` : ''}
 
             UNION ALL
 
@@ -75,6 +75,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                 ss.sprint_id,
                 s.sprint_number
             FROM stories st
+            JOIN projects p ON p.id = st.project_id
             LEFT JOIN LATERAL (
                 SELECT id as snapshot_id, sprint_id
                 FROM sprint_stories
@@ -83,8 +84,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                 LIMIT 1
             ) ss ON true
             LEFT JOIN sprints s ON s.id = ss.sprint_id
-            WHERE st.title ILIKE $1
-               OR st.description ILIKE $1
+            WHERE (st.title ILIKE $1
+               OR st.description ILIKE $1)
+              ${groupParam ? `AND p.group_id = $${groupParam}` : ''}
 
             UNION ALL
 
@@ -98,6 +100,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                 tk.sprint_id,
                 s.sprint_number
             FROM tasks t
+            JOIN projects p ON p.id = t.project_id
             LEFT JOIN LATERAL (
                 SELECT id as snapshot_id, sprint_id
                 FROM sprint_tasks
@@ -106,13 +109,14 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
                 LIMIT 1
             ) tk ON true
             LEFT JOIN sprints s ON s.id = tk.sprint_id
-            WHERE t.title ILIKE $1
-               OR t.description ILIKE $1
+            WHERE (t.title ILIKE $1
+               OR t.description ILIKE $1)
+              ${groupParam ? `AND p.group_id = $${groupParam}` : ''}
 
             ORDER BY result_type, id
             LIMIT $2
             `,
-            [searchPattern, limit]
+            params
         );
 
         res.json({ results: result.rows });

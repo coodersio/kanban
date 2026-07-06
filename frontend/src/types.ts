@@ -4,6 +4,15 @@ export interface Member {
     display_name: string;
     avatar_url?: string;
     role?: string;
+    group_id?: number;
+    group_name?: string;
+}
+
+export interface Group {
+    id: number;
+    name: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface Department {
@@ -60,6 +69,8 @@ export interface Sprint {
     status: string;
     start_date?: string;
     end_date?: string;
+    group_id?: number;
+    group_name?: string;
 }
 
 export interface Project {
@@ -77,6 +88,8 @@ export interface Project {
     software_name?: string;  // Backend compatibility
     source?: string;         // 需求来源/项目对接人
     project_status?: 'not_started' | 'in_progress' | 'completed';
+    group_id?: number;
+    group_name?: string;
 }
 
 export interface BoardData {

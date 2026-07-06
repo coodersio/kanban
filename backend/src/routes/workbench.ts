@@ -1,8 +1,43 @@
 import express from 'express';
 import pool from '../db/connection';
 import { requireAuth, blockExternal } from '../middleware/permissions';
+import {
+    ensureProjectInScope,
+    ensureSprintInScope,
+    ensureSprintProjectInScope,
+    ensureStoryInScope,
+    ensureTaskInScope,
+    ensureUserInScope,
+    getCurrentGroupId
+} from '../utils/groupScope';
 
 const router = express.Router();
+
+async function ensureWorkbenchScope(
+    req: express.Request,
+    res: express.Response,
+    options: {
+        sprintId?: unknown;
+        projectId?: unknown;
+        storyId?: unknown;
+        taskId?: unknown;
+        assignedTo?: unknown;
+    }
+): Promise<boolean> {
+    if (options.sprintId && options.projectId) {
+        if (!(await ensureSprintProjectInScope(req, res, options.sprintId, options.projectId))) return false;
+    } else if (options.sprintId) {
+        if (!(await ensureSprintInScope(req, res, options.sprintId))) return false;
+    } else if (options.projectId) {
+        if (!(await ensureProjectInScope(req, res, options.projectId))) return false;
+    }
+
+    if (options.storyId && options.storyId !== '0' && !(await ensureStoryInScope(req, res, options.storyId))) return false;
+    if (options.taskId && !(await ensureTaskInScope(req, res, options.taskId))) return false;
+    if (options.assignedTo && options.assignedTo !== '0' && !(await ensureUserInScope(req, res, options.assignedTo))) return false;
+
+    return true;
+}
 
 // Get all projects associated with a specific sprint
 // Only return projects that have been added to this sprint (exist in sprint_projects)
@@ -10,6 +45,8 @@ router.get('/sprint/:sprintId/projects', requireAuth, async (req, res) => {
     try {
         const { sprintId } = req.params;
         const { memberId } = req.query;
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
+        if (memberId && memberId !== '0' && !(await ensureUserInScope(req, res, memberId))) return;
 
         // INNER JOIN to only get projects that are actually in this sprint
         let query = `
@@ -43,12 +80,13 @@ router.get('/sprint/:sprintId/projects', requireAuth, async (req, res) => {
                 WHERE sprint_id = $1
                 GROUP BY project_id
             ) stats ON stats.project_id = p.id
+            WHERE 1 = 1
         `;
         const params: any[] = [sprintId];
 
         if (memberId && memberId !== '0') {
             query += `
-            WHERE (
+            AND (
                 p.owner_id = $2
                 OR EXISTS (
                     SELECT 1 FROM sprint_stories ss
@@ -84,17 +122,22 @@ router.get('/projects/available', requireAuth, async (req, res) => {
     if (!sprintId) return res.status(400).json({ message: 'Missing sprintId' });
 
     try {
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
+        const sprintResult = await pool.query('SELECT group_id FROM sprints WHERE id = $1', [sprintId]);
+        const sprintGroupId = sprintResult.rows[0]?.group_id;
+
         let query = `
             SELECT p.* 
             FROM projects p
             WHERE p.id NOT IN (
                 SELECT project_id FROM sprint_projects WHERE sprint_id = $1
             )
+            AND p.group_id = $2
         `;
-        const params: any[] = [sprintId];
+        const params: any[] = [sprintId, sprintGroupId];
 
         if (search) {
-            query += ` AND (p.software_name ILIKE $2 OR p.description ILIKE $2)`;
+            query += ` AND (p.software_name ILIKE $3 OR p.description ILIKE $3)`;
             params.push(`%${search}%`);
         }
 
@@ -113,6 +156,7 @@ router.post('/sprint/projects', blockExternal, async (req, res) => {
     if (!sprintId || !projectId) return res.status(400).json({ message: 'Missing fields' });
 
     try {
+        if (!(await ensureSprintProjectInScope(req, res, sprintId, projectId))) return;
         await pool.query(
             'INSERT INTO sprint_projects (sprint_id, project_id, priority, notes) VALUES ($1, $2, $3, $4) ON CONFLICT (sprint_id, project_id) DO NOTHING',
             [sprintId, projectId, priority || '中', notes || '']
@@ -131,6 +175,7 @@ router.post('/sprint/project/delete', blockExternal, async (req, res) => {
 
     const client = await pool.connect();
     try {
+        if (!(await ensureSprintProjectInScope(req, res, sprintId, projectId))) return;
         await client.query('BEGIN');
 
         // Delete project snapshot from sprint
@@ -169,6 +214,13 @@ router.post('/project/update', blockExternal, async (req, res) => {
 
     const client = await pool.connect();
     try {
+        if (sprintId) {
+            if (!(await ensureSprintProjectInScope(req, res, sprintId, projectId))) return;
+        } else if (!(await ensureProjectInScope(req, res, projectId))) {
+            return;
+        }
+        if (owner_id && owner_id !== '0' && !(await ensureUserInScope(req, res, owner_id))) return;
+
         await client.query('BEGIN');
 
         // 1. Update Reference Table
@@ -218,6 +270,8 @@ router.get('/board', requireAuth, async (req, res) => {
     }
 
     try {
+        if (!(await ensureSprintProjectInScope(req, res, sprintId, projectId))) return;
+        if (memberId && memberId !== '0' && !(await ensureUserInScope(req, res, memberId))) return;
         // Fetch Stories for this Sprint & Project (from sprint_stories snapshot)
         // If no snapshot exists yet, we might want to return nothing?
         // Or should we fetch reference stories?
@@ -319,7 +373,10 @@ router.get('/board', requireAuth, async (req, res) => {
         tasksQuery += ` ORDER BY st.order_index ASC, t.id ASC`;
         const tasksResult = await pool.query(tasksQuery, params);
 
-        const membersResult = await pool.query('SELECT id, user_name, display_name FROM users');
+        const currentGroupId = getCurrentGroupId(req);
+        const membersResult = currentGroupId
+            ? await pool.query('SELECT id, user_name, display_name FROM users WHERE group_id = $1', [currentGroupId])
+            : await pool.query('SELECT id, user_name, display_name FROM users');
 
         // Transform results to match frontend expectations (e.g. nested assignee object)
         const stories = storiesResult.rows.map(row => ({
@@ -369,6 +426,7 @@ router.post('/task/status', blockExternal, async (req, res) => {
     if (role === 'external') {
         return res.status(403).json({ message: 'External users cannot update tasks' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId, taskId }))) return;
 
     try {
         // Developers and Admins can update task status (already blocked external users above)
@@ -414,6 +472,7 @@ router.post('/task/assign', blockExternal, async (req, res) => {
     if (role === 'external') {
         return res.status(403).json({ message: 'External users cannot assign tasks' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, taskId, assignedTo }))) return;
 
     try {
         // Check if sprint_tasks record exists
@@ -458,6 +517,7 @@ router.post('/story/status', blockExternal, async (req, res) => {
     if (role === 'external') {
         return res.status(403).json({ message: 'External users cannot update stories' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId }))) return;
 
     try {
         // Developers and Admins can update story status (already blocked external users above)
@@ -508,6 +568,7 @@ router.post('/story/assign', blockExternal, async (req, res) => {
     if (role === 'external') {
         return res.status(403).json({ message: 'External users cannot assign stories' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId, assignedTo }))) return;
 
     try {
         // Check if sprint_stories record exists
@@ -544,6 +605,7 @@ router.put('/story', blockExternal, async (req, res) => {
     if (!storyId || !sprintId || !projectId) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId, assignedTo }))) return;
 
     const client = await pool.connect();
     try {
@@ -579,6 +641,7 @@ router.post('/story', blockExternal, async (req, res) => {
     if (!sprintId || !projectId || !title) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, assignedTo }))) return;
 
     const client = await pool.connect();
     try {
@@ -616,6 +679,7 @@ router.post('/task', blockExternal, async (req, res) => {
     if (!sprintId || !projectId || !title) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId, assignedTo }))) return;
 
     const client = await pool.connect();
     try {
@@ -658,6 +722,7 @@ router.post('/task/update', blockExternal, async (req, res) => {
     const userId = user?.id;
 
     if (role === 'external') return res.status(403).json({ message: 'Forbidden' });
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, taskId: finalTaskId, assignedTo }))) return;
 
     const client = await pool.connect();
     try {
@@ -747,6 +812,7 @@ router.post('/story/update', blockExternal, async (req, res) => {
     const userId = user?.id;
 
     if (role === 'external') return res.status(403).json({ message: 'Forbidden' });
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, storyId, assignedTo }))) return;
 
     // Developers and Admins can edit all stories (already blocked external users above)
 
@@ -809,6 +875,7 @@ router.get('/stories/available', requireAuth, async (req, res) => {
     if (!projectId || !sprintId) {
         return res.status(400).json({ message: 'Missing projectId or sprintId' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId }))) return;
 
     try {
         let query = `
@@ -842,6 +909,7 @@ router.get('/tasks/available', requireAuth, async (req, res) => {
     if (!projectId || !sprintId) {
         return res.status(400).json({ message: 'Missing projectId or sprintId' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId }))) return;
 
     try {
         let query = `
@@ -881,6 +949,7 @@ router.post('/story/reuse', blockExternal, async (req, res) => {
     if (!sprintId || !projectId || !storyId) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId, assignedTo }))) return;
 
     try {
         await pool.query(
@@ -901,6 +970,7 @@ router.post('/task/reuse', blockExternal, async (req, res) => {
     if (!sprintId || !projectId || !taskId) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId, taskId, assignedTo }))) return;
 
     try {
         await pool.query(
@@ -939,6 +1009,7 @@ router.post('/story/delete', blockExternal, async (req, res) => {
     if (!projectId || !storyId) {
         return res.status(400).json({ message: 'Missing required fields: projectId and storyId' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId }))) return;
 
     const client = await pool.connect();
     try {
@@ -1001,6 +1072,7 @@ router.post('/task/delete', blockExternal, async (req, res) => {
     if (!projectId || !storyId || !taskId) {
         return res.status(400).json({ message: 'Missing required fields: projectId, storyId, and taskId' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId, storyId, taskId }))) return;
 
     const client = await pool.connect();
     try {
@@ -1039,9 +1111,10 @@ router.post('/task/delete', blockExternal, async (req, res) => {
 });
 
 // Get Story History
-router.get('/story/:id/history', async (req, res) => {
+router.get('/story/:id/history', requireAuth, async (req, res) => {
     const { id } = req.params;
     try {
+        if (!(await ensureStoryInScope(req, res, id))) return;
         const result = await pool.query(`
             SELECT
                 sp.sprint_number,
@@ -1063,12 +1136,14 @@ router.get('/story/:id/history', async (req, res) => {
 });
 
 // Move Task to another Sprint (including Backlog)
-router.post('/task/move', async (req, res) => {
+router.post('/task/move', blockExternal, async (req, res) => {
     const { taskId, fromSprintId, toSprintId, storyId, projectId } = req.body;
 
     if (taskId === undefined || toSprintId === undefined || !storyId || !projectId) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (fromSprintId !== undefined && !(await ensureWorkbenchScope(req, res, { sprintId: fromSprintId, projectId, storyId, taskId }))) return;
+    if (!(await ensureWorkbenchScope(req, res, { sprintId: toSprintId, projectId, storyId, taskId }))) return;
 
     const client = await pool.connect();
     try {
@@ -1120,12 +1195,14 @@ router.post('/task/move', async (req, res) => {
 });
 
 // Move entire Story (and all its Tasks) to another Sprint
-router.post('/story/move', async (req, res) => {
+router.post('/story/move', blockExternal, async (req, res) => {
     const { storyId, fromSprintId, toSprintId, projectId } = req.body;
 
     if (!storyId || toSprintId === undefined || !projectId) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (fromSprintId !== undefined && !(await ensureWorkbenchScope(req, res, { sprintId: fromSprintId, projectId, storyId }))) return;
+    if (!(await ensureWorkbenchScope(req, res, { sprintId: toSprintId, projectId, storyId }))) return;
 
     const client = await pool.connect();
     try {
@@ -1207,12 +1284,13 @@ router.post('/story/move', async (req, res) => {
 });
 
 // Reorder Stories within a Sprint
-router.post('/stories/reorder', async (req, res) => {
+router.post('/stories/reorder', blockExternal, async (req, res) => {
     const { sprintId, projectId, orders } = req.body;
     // orders: [{ id: 123, order: 1 }, { id: 124, order: 2 }, ...]
     if (!sprintId || !projectId || !orders || !Array.isArray(orders)) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId, projectId }))) return;
 
     const client = await pool.connect();
     try {
@@ -1237,12 +1315,13 @@ router.post('/stories/reorder', async (req, res) => {
 });
 
 // Reorder Tasks within a Story
-router.post('/tasks/reorder', async (req, res) => {
+router.post('/tasks/reorder', blockExternal, async (req, res) => {
     const { sprintId, orders } = req.body;
     // orders: [{ id: 456, order: 1 }, { id: 457, order: 2 }, ...]
     if (!sprintId || !orders || !Array.isArray(orders)) {
         return res.status(400).json({ message: 'Missing required fields' });
     }
+    if (!(await ensureWorkbenchScope(req, res, { sprintId }))) return;
 
     const client = await pool.connect();
     try {
@@ -1267,11 +1346,13 @@ router.post('/tasks/reorder', async (req, res) => {
 });
 
 // Get Story by ID (for direct URL access)
-router.get('/story/:id', async (req, res) => {
+router.get('/story/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const { sprintId } = req.query;
 
     try {
+        if (!(await ensureStoryInScope(req, res, id))) return;
+        if (sprintId && !(await ensureSprintInScope(req, res, sprintId))) return;
         let query = `
             SELECT
                 s.*,
@@ -1325,11 +1406,13 @@ router.get('/story/:id', async (req, res) => {
 });
 
 // Get Task by ID (for direct URL access)
-router.get('/task/:id', async (req, res) => {
+router.get('/task/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const { sprintId } = req.query;
 
     try {
+        if (!(await ensureTaskInScope(req, res, id))) return;
+        if (sprintId && !(await ensureSprintInScope(req, res, sprintId))) return;
         let query = `
             SELECT
                 t.*,
@@ -1378,7 +1461,7 @@ router.get('/task/:id', async (req, res) => {
 
 // Get Story by Snapshot ID (sprint_stories.id)
 // This allows direct URL access and auto-switches to correct sprint
-router.get('/sprint-story/:snapshotId', async (req, res) => {
+router.get('/sprint-story/:snapshotId', requireAuth, async (req, res) => {
     const { snapshotId } = req.params;
 
     try {
@@ -1399,6 +1482,7 @@ router.get('/sprint-story/:snapshotId', async (req, res) => {
                 (SELECT COUNT(*) FROM sprint_tasks st WHERE st.story_id = s.id AND st.sprint_id = ss.sprint_id) as task_count
             FROM sprint_stories ss
             JOIN stories s ON ss.story_id = s.id
+            JOIN projects p ON p.id = ss.project_id
             LEFT JOIN users u ON ss.assigned_to = u.id
             WHERE ss.id = $1
         `, [snapshotId]);
@@ -1408,6 +1492,7 @@ router.get('/sprint-story/:snapshotId', async (req, res) => {
         }
 
         const row = result.rows[0];
+        if (!(await ensureWorkbenchScope(req, res, { sprintId: row.sprint_id, projectId: row.project_id, storyId: row.id }))) return;
         const story = {
             ...row,
             status: row.status || 'not_started',
@@ -1429,7 +1514,7 @@ router.get('/sprint-story/:snapshotId', async (req, res) => {
 
 // Get Task by Snapshot ID (sprint_tasks.id)
 // This allows direct URL access and auto-switches to correct sprint
-router.get('/sprint-task/:snapshotId', async (req, res) => {
+router.get('/sprint-task/:snapshotId', requireAuth, async (req, res) => {
     const { snapshotId } = req.params;
 
     try {
@@ -1438,6 +1523,8 @@ router.get('/sprint-task/:snapshotId', async (req, res) => {
                 t.*,
                 st.id as snapshot_id,
                 st.sprint_id,
+                st.project_id,
+                st.story_id,
                 st.status,
                 st.progress,
                 st.risk_and_countermeasure,
@@ -1454,6 +1541,7 @@ router.get('/sprint-task/:snapshotId', async (req, res) => {
         }
 
         const row = result.rows[0];
+        if (!(await ensureWorkbenchScope(req, res, { sprintId: row.sprint_id, projectId: row.project_id, storyId: row.story_id, taskId: row.id }))) return;
         const task = {
             ...row,
             status: row.status || 'not_started',
@@ -1474,7 +1562,7 @@ router.get('/sprint-task/:snapshotId', async (req, res) => {
 
 // Get Project by Snapshot ID (sprint_projects.id)
 // This allows direct URL access and auto-switches to correct sprint
-router.get('/sprint-project/:snapshotId', async (req, res) => {
+router.get('/sprint-project/:snapshotId', requireAuth, async (req, res) => {
     const { snapshotId } = req.params;
 
     try {
@@ -1498,6 +1586,7 @@ router.get('/sprint-project/:snapshotId', async (req, res) => {
         }
 
         const row = result.rows[0];
+        if (!(await ensureWorkbenchScope(req, res, { sprintId: row.sprint_id, projectId: row.id }))) return;
         const project = {
             ...row,
             name: row.software_name
@@ -1521,6 +1610,7 @@ router.get('/sprint-project/:snapshotId', async (req, res) => {
 router.get('/task/:taskId/comments', requireAuth, async (req, res) => {
     try {
         const { taskId } = req.params;
+        if (!(await ensureTaskInScope(req, res, taskId))) return;
 
         const result = await pool.query(
             `SELECT
@@ -1550,21 +1640,23 @@ router.get('/task/:taskId/comments', requireAuth, async (req, res) => {
  * Add a new comment to a task (with @mention support and notifications)
  */
 router.post('/task/:taskId/comments', blockExternal, async (req, res) => {
+    const { taskId } = req.params;
+    const { content } = req.body;
+    const userId = (req as any).session?.user?.id;
+
+    if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: 'Comment content is required' });
+    }
+
+    if (!userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    if (!(await ensureTaskInScope(req, res, taskId))) return;
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        const { taskId } = req.params;
-        const { content } = req.body;
-        const userId = (req as any).session?.user?.id;
-
-        if (!content || content.trim().length === 0) {
-            return res.status(400).json({ message: 'Comment content is required' });
-        }
-
-        if (!userId) {
-            return res.status(401).json({ message: 'User not authenticated' });
-        }
 
         // Insert comment
         const result = await client.query(
@@ -1587,8 +1679,10 @@ router.post('/task/:taskId/comments', blockExternal, async (req, res) => {
         if (mentions.length > 0) {
             // Find user IDs for mentioned usernames
             const mentionedUsersResult = await client.query(
-                'SELECT id, user_name FROM users WHERE user_name = ANY($1::text[])',
-                [mentions]
+                getCurrentGroupId(req)
+                    ? 'SELECT id, user_name FROM users WHERE user_name = ANY($1::text[]) AND group_id = $2'
+                    : 'SELECT id, user_name FROM users WHERE user_name = ANY($1::text[])',
+                getCurrentGroupId(req) ? [mentions, getCurrentGroupId(req)] : [mentions]
             );
 
             // Insert comment_mentions and create notifications
@@ -1667,13 +1761,14 @@ router.delete('/task/comment/:commentId', blockExternal, async (req, res) => {
 
         // Check if comment exists and user has permission
         const commentCheck = await pool.query(
-            'SELECT user_id FROM task_comments WHERE id = $1',
+            'SELECT user_id, task_id FROM task_comments WHERE id = $1',
             [commentId]
         );
 
         if (commentCheck.rows.length === 0) {
             return res.status(404).json({ message: 'Comment not found' });
         }
+        if (!(await ensureTaskInScope(req, res, commentCheck.rows[0].task_id))) return;
 
         const commentOwnerId = commentCheck.rows[0].user_id;
 
@@ -1707,6 +1802,8 @@ router.get('/priority-list', requireAuth, async (req, res) => {
         if (!sprintId) {
             return res.status(400).json({ message: 'Missing sprintId' });
         }
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
+        if (memberId && memberId !== '0' && !(await ensureUserInScope(req, res, memberId))) return;
 
         let query = `
             SELECT
@@ -1771,6 +1868,7 @@ router.post('/story/reorder', blockExternal, async (req, res) => {
         if (!sprintId) {
             return res.status(400).json({ message: 'Missing sprintId' });
         }
+        if (!(await ensureSprintInScope(req, res, sprintId))) return;
 
         // Support batch update: orders = [{ id: storyId, order: orderIndex }, ...]
         if (orders && Array.isArray(orders)) {
