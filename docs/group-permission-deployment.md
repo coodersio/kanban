@@ -28,14 +28,14 @@
 
 建议顺序：
 
-1. 先执行 `0. Pre-migration audit`。
-2. 再执行 `1. Core schema migration`。
-3. 执行 `2. Post-migration validation` 并确认结果。
-4. 暂时不要执行 `3. Optional hard constraints`，除非已经确认没有空 `group_id` 和跨组异常关联。
+1. 先执行 `0. 迁移前检查`。
+2. 再执行 `1. 核心表结构迁移`。
+3. 执行 `2. 迁移后校验` 并确认结果。
+4. 暂时不要执行 `3. 可选强约束`，除非已经确认没有空 `group_id` 和跨组异常关联。
 
 ## 验证标准
 
-执行 `2. Post-migration validation` 后需要确认：
+执行 `2. 迁移后校验` 后需要确认：
 
 - `users_without_group = 0`
 - `projects_without_group = 0`

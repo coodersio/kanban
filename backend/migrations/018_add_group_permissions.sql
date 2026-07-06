@@ -1,9 +1,9 @@
--- Group permission migration
--- Execute section by section before deploying the group-scoped application code.
--- The core migration section is intentionally idempotent and backfills existing data to 默认小组.
+-- 小组权限隔离数据库迁移
+-- 在部署小组权限隔离代码前，建议按下面分段逐段执行。
+-- 核心迁移部分是幂等的，会把存量数据回填到“默认小组”。
 
 -- ============================================================
--- 0. Pre-migration audit
+-- 0. 迁移前检查
 -- ============================================================
 
 SELECT COUNT(*) AS user_count FROM users;
@@ -16,7 +16,7 @@ GROUP BY sprint_number
 HAVING COUNT(*) > 1;
 
 -- ============================================================
--- 1. Core schema migration
+-- 1. 核心表结构迁移
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS groups (
@@ -67,7 +67,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sprints_group_number
   ON sprints(group_id, sprint_number);
 
 -- ============================================================
--- 2. Post-migration validation
+-- 2. 迁移后校验
 -- ============================================================
 
 SELECT COUNT(*) AS users_without_group FROM users WHERE group_id IS NULL;
@@ -99,9 +99,8 @@ JOIN projects p ON p.id = sp.project_id
 WHERE s.group_id <> p.group_id;
 
 -- ============================================================
--- 3. Optional hard constraints
--- Run this section only after validation returns no NULL group_id
--- and no cross-group sprint/project associations.
+-- 3. 可选强约束
+-- 只有在确认没有空 group_id 且没有跨小组迭代/项目关联后，才执行本段。
 -- ============================================================
 
 -- ALTER TABLE users ALTER COLUMN group_id SET NOT NULL;
